@@ -91,6 +91,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         const { memory, version } = await held(known(entry.name.slice(0, -3)));
         memories.push({ memory, version });
       } catch (problem) {
+        // A file that cannot be opened is reported, not thrown, so a session or status still answers.
+        if (!(problem instanceof Refused) && problem?.code) { problems.push(`memory/${entry.name} cannot be read: ${problem.code}`); continue; }
         if (!(problem instanceof Refused)) throw problem;
         problems.push(`memory/${entry.name}: ${problem.message}`);
       }
@@ -331,7 +333,15 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       };
     },
 
-    identity: async () => readIdentity(await text(at('identity.md'))),
+    async identity() {
+      let content;
+      try { content = await text(at('identity.md')); } catch (problem) {
+        if (!problem?.code) throw problem;
+        const empty = await readIdentity(null);
+        return { ...empty, problems: [`identity.md cannot be read: ${problem.code}`] };
+      }
+      return readIdentity(content);
+    },
 
     // The person names the vault this cortex reads. It is opened and read once to check it answers.
     async connectVault(config) {
@@ -385,7 +395,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return {
         connected: true,
         sections: shape.sections.map(({ section, posts }) => ({ section, posts, ...(map.get(section)?.meaning ? { meaning: map.get(section).meaning } : {}), ...(map.get(section)?.conventions ? { conventions: map.get(section).conventions } : {}) })),
-        changes: changes.length, noted, broken, ...(shape.problems?.length ? { problems: shape.problems } : {}),
+        changes: changes.length, noted, broken, gone: gone(shape, map), ...(shape.problems?.length ? { problems: shape.problems } : {}),
       };
     },
 

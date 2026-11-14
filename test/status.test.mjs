@@ -129,3 +129,74 @@ test('status is read-only even when the vault changed, and the CLI returns text 
   assert.match(execFileSync(process.execPath, [cli, 'status', dir], { encoding: 'utf8' }), /undescribed-section: notes/);
   assert.deepEqual(await snapshot(base), before);
 });
+
+const asRoot = process.getuid?.() === 0;
+test('an unreadable memory or identity.md is a problem, and status and cortex_start still answer', { skip: asRoot && 'root reads every file' }, async t => {
+  const { dir, cortex } = await fresh(t);
+  const { chmod } = await import('node:fs/promises');
+  await writeFile(join(dir, 'memory/locked.md'), 'not readable');
+  await chmod(join(dir, 'memory/locked.md'), 0o000);
+  await chmod(join(dir, 'identity.md'), 0o000);
+  t.after(async () => { await chmod(join(dir, 'identity.md'), 0o644).catch(() => {}); await chmod(join(dir, 'memory/locked.md'), 0o644).catch(() => {}); });
+  const problems = await has(cortex, 'problem');
+  assert.deepEqual(problems.map(item => item.what).sort(), ['identity.md cannot be read: EACCES', 'memory/locked.md cannot be read: EACCES']);
+  assert.ok(problems.every(item => item.clear === "Fix the file's permissions or contents"));
+  assert.ok((await openCortex(dir, { actor: 'codex' }).start()).problems.includes('memory/locked.md cannot be read: EACCES'));
+  const out = execFileSync(process.execPath, [cli, 'status', dir], { encoding: 'utf8' });
+  assert.match(out, /problem: memory\/locked\.md cannot be read: EACCES/);
+  await chmod(join(dir, 'identity.md'), 0o644);
+  await rm(join(dir, 'memory/locked.md'));
+  await has(cortex, 'problem', false);
+});
+
+test('a folder with no cortex in it is a problem, not "Nothing is waiting."', async t => {
+  const base = await mkdtemp(join(tmpdir(), 'cortex-status-'));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const missing = join(base, 'no-such-cortex');
+  const items = await cortexStatus(openCortex(missing));
+  assert.deepEqual(items, [{ kind: 'problem', what: `There is no cortex at ${missing}: it has no agents/AGENTS.md and no .cortex/`, clear: 'Check the path, or start one with cortex init <dir>' }]);
+  const out = execFileSync(process.execPath, [cli, 'status', missing], { encoding: 'utf8' });
+  assert.match(out, /^problem: There is no cortex at /);
+  assert.deepEqual(JSON.parse(execFileSync(process.execPath, [cli, 'status', '--json', missing], { encoding: 'utf8' })), items);
+});
+
+test('cortex_start tells an agent which sections left the vault', async t => {
+  const { base, cortex } = await fresh(t);
+  const vault = join(base, 'vault');
+  await mkdir(join(vault, 'notes'), { recursive: true });
+  await mkdir(join(vault, 'essays'), { recursive: true });
+  await writeFile(join(vault, 'notes/map.md'), '---\nid: map\n---\nA map.');
+  await writeFile(join(vault, 'essays/one.md'), '---\nid: one\n---\nOne.');
+  await cortex.connectVault({ kind: 'folder', path: vault });
+  await cortex.describeSection({ section: 'notes', meaning: 'Reading notes' });
+  assert.equal((await cortex.start()).vault.gone, undefined);
+  await rm(join(vault, 'notes'), { recursive: true });
+  const agent = openCortex(cortex.dir, { actor: 'codex' });
+  assert.deepEqual((await agent.syncVault()).gone, ['notes']);
+  assert.deepEqual((await agent.start()).vault.gone, ['notes']);
+});
+
+test('a problem says what is wrong once, and its clear says only what to do', async t => {
+  const { base, dir, cortex } = await fresh(t);
+  await writeFile(join(dir, 'memory/broken.md'), 'not a memory');
+  await writeFile(join(dir, 'identity.md'), '---\ntimezone: nowhere\n---\n');
+  const vault = join(base, 'missing-vault');
+  await writeFile(join(dir, '.cortex/vault.json'), JSON.stringify({ kind: 'folder', path: vault }));
+  const problems = await has(openCortex(dir), 'problem');
+  for (const item of problems) assert.ok(!item.clear.includes(item.what), item.clear);
+  const clearFor = pattern => problems.find(item => pattern.test(item.what)).clear;
+  assert.equal(clearFor(/^vault: /), 'Reconnect with cortex vault connect <folder>');
+  assert.equal(clearFor(/^memory\/broken\.md/), "Fix the file's permissions or contents");
+  assert.equal(clearFor(/^identity\.md: /), 'Fix what the message names');
+});
+
+test('a proposed birthdate shows neither its value nor its evidence in status', async t => {
+  const { dir, cortex } = await fresh(t);
+  const agent = openCortex(dir, { actor: 'codex' });
+  await agent.proposeIdentity({ field: 'birthdate', value: '1990-03-14', source: { kind: 'person', quote: 'I was born on 1990-03-14.' } });
+  const state = await cortex.inspect();
+  assert.deepEqual(state.waiting.identity.map(({ value, source }) => ({ value, source })), [{ value: '(hidden)', source: { kind: 'person', hidden: true } }]);
+  const [item] = await has(cortex, 'identity-proposal');
+  assert.doesNotMatch(JSON.stringify(item), /1990|born/);
+  assert.doesNotMatch(execFileSync(process.execPath, [cli, 'status', '--json', dir], { encoding: 'utf8' }), /1990|born/);
+});
