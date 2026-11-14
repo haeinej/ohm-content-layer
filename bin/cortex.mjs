@@ -22,6 +22,7 @@ import { cortexSessions, ENDPOINT, httpTransport, listen, makeToken, readToken }
 import { createTools, INSTRUCTIONS, TOOLS } from '../src/tools.mjs';
 import { getPrompt, PROMPTS } from '../src/prompts.mjs';
 import { createResources } from '../src/resources.mjs';
+import { cortexStatus } from '../src/status.mjs';
 
 const template = fileURLToPath(new URL('../template', import.meta.url));
 const [command, ...rest] = process.argv.slice(2);
@@ -100,8 +101,16 @@ try {
   } else if (command === 'event' && rest[0]) {
     const { id } = await openCortex(folder(rest[1]), { actor: process.env.CORTEX_SOURCE ?? 'host' }).addNote({ id: randomUUID(), note: rest[0], session: 'event' });
     console.log(`Recorded ${id}`);
+  } else if (command === 'status') {
+    const json = rest.includes('--json');
+    const items = await cortexStatus(openCortex(folder(rest.filter(arg => arg !== '--json')[0])));
+    if (json) console.log(JSON.stringify(items, null, 2));
+    else if (!items.length) console.log('Nothing is waiting.');
+    else for (const kind of [...new Set(items.map(item => item.kind))]) {
+      for (const item of items.filter(item => item.kind === kind)) console.log(`${kind}: ${item.what} — ${item.clear}`);
+    }
   } else {
-    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir]');
+    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json]');
     process.exitCode = command ? 1 : 0;
   }
 } catch (problem) {
