@@ -399,6 +399,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     // The playbook, as the person keeps it, their own rules included.
     rules: async () => (await text(at('agents', 'AGENTS.md'))) ?? '',
     vaultMap: () => text(at('vault.md')),
+    // The vault this cortex reads, or null. For operations that only read it, such as filing advice.
+    connectedVault: () => theVault(),
 
     // Every proposal, confirmation, rejection and clearing, in the order it happened.
     async identityLog() {

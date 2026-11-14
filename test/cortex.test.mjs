@@ -31,7 +31,9 @@ test('a new cortex has the rulebook, an identity, one starting memory and an ind
   assert.deepEqual(start.identity, { about: '' });
   assert.deepEqual(start.waiting.identity, []);
   assert.deepEqual(start.always.map(item => item.memory.name), ['working-style']);
-  assert.deepEqual([start.memories, start.skills, start.tools, start.notes], [[], [], [], []]);
+  assert.deepEqual([start.memories, start.tools, start.notes], [[], [], []]);
+  // The one skill a new cortex has is the filing skill the template ships.
+  assert.deepEqual(start.skills.map(skill => skill.name), ['file-a-source']);
   assert.match(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /\[working-style\]\(working-style\.md\)/);
   await assert.rejects(initCortex(dir, template), refused('NameTaken'));
 });
@@ -117,17 +119,17 @@ test('a skill an agent wrote is not used until the person approves it', async ()
   const text = '---\nname: publish-an-essay\ndescription: The steps for publishing an essay\n---\n1. Check the title.\n';
   const proposed = await cortex.proposeSkill({ text, files: [{ path: 'checklist.md', text: 'Title, date.' }] });
   assert.equal(proposed.approved, false);
-  assert.deepEqual(await readdir(join(dir, 'skills')), []);
+  assert.deepEqual(await readdir(join(dir, 'skills')), ['file-a-source']);
   await assert.rejects(cortex.getSkill('publish-an-essay'), refused('SkillNotApproved'));
   const start = await cortex.start();
-  assert.deepEqual([start.skills, start.waiting.skills], [[], ['publish-an-essay']]);
+  assert.deepEqual([start.skills.map(skill => skill.name), start.waiting.skills], [['file-a-source'], ['publish-an-essay']]);
   await assert.rejects(cortex.proposeSkill({ text, files: [{ path: '../outside.md', text: 'x' }] }), refused('InvalidSkill'));
 
   await cortex.approveSkill('publish-an-essay');
   const read = await cortex.getSkill('publish-an-essay');
   assert.equal(read.skill.text, text);
   assert.deepEqual(read.skill.files, [{ path: 'checklist.md', text: 'Title, date.' }]);
-  assert.deepEqual((await cortex.start()).skills, [{ name: 'publish-an-essay', description: 'The steps for publishing an essay' }]);
+  assert.deepEqual((await cortex.start()).skills.find(skill => skill.name === 'publish-an-essay'), { name: 'publish-an-essay', description: 'The steps for publishing an essay' });
 });
 
 test('an agent can ask for a tool, and cannot add one or switch one on', async () => {

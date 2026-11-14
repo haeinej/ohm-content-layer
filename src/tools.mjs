@@ -2,6 +2,7 @@
 // no tool that approves a skill, adds a tool, or switches one on: those are the person's.
 import { randomUUID } from 'node:crypto';
 import { Refused } from './core.mjs';
+import { adviseFiling } from './filing.mjs';
 
 // What a client is told when it connects. Clients read the start of this first (Codex reads the
 // first 512 characters as self-contained), so it says only what makes an agent call cortex_start;
@@ -63,6 +64,9 @@ export const TOOLS = [
     inputSchema: object({ text, files: { type: 'array', maxItems: 20, items: object({ path: text, text }, ['path', 'text']) } }, ['text']) },
   { name: 'cortex_propose_tool', description: 'Write down a tool that ought to exist: what it is for, what it would take and what it would give. It does nothing and cannot be switched on.',
     inputSchema: object({ name, description: text, inputs: text, outputs: text }, ['name', 'description', 'inputs', 'outputs']) },
+  { name: 'cortex_file_advice', description: 'Ask how to file a source the person handed you: up to three likely sections from vault.md, each with what it means, its conventions and why it fits; the approved skill for that kind of source, if one fits; up to five related posts; and one question to put to them. It writes nothing. Propose once, and on their yes save through the vault\'s own tools, with their words as given.',
+    inputSchema: object({ kind: { type: 'string', maxLength: 200, description: 'What the source is, in your words: "meeting transcript", "reading note", "link"' }, title: { type: 'string', maxLength: 500 }, text: { type: 'string', description: 'The source as given, or enough of it to tell what it is about' } }, ['kind']),
+    annotations: { readOnlyHint: true } },
 ];
 
 const refuse = (message, code = 'InvalidRequest') => { throw new Refused(code, message); };
@@ -120,6 +124,7 @@ export function createTools(cortex) {
     cortex_skill: ({ name }) => cortex.getSkill(name),
     cortex_propose_skill: args => cortex.proposeSkill(args),
     cortex_propose_tool: args => cortex.proposeTool(args),
+    cortex_file_advice: args => adviseFiling(cortex, args),
   };
 
   return {
