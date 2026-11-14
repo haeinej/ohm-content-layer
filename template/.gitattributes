@@ -14,3 +14,6 @@ agents/secrets/** -diff
 
 # Identity changes are only ever added to, one line each, so two machines' lines are both kept.
 .cortex/identity.jsonl merge=union
+
+# Session starts, asks and distills are only ever added to, one line each.
+.cortex/sessions.jsonl merge=union
