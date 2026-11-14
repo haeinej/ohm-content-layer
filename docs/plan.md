@@ -285,6 +285,7 @@ Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are bu
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
+| `cortex status [dir] [--json]`: proposals, observations, broken pointers, undescribed or gone sections, problems and working memory over 30 days old; each item says how to clear it | All | Done (step 5). Uses a read-only folder inspection, without syncing or generating files |
 | The folder store (`src/folder.mjs`) | Memories, history, notes, skill proposals, tool proposals, identity, the vault | |
 | The vault contract (`src/vault.mjs`), a folder vault, and `vault.md` (`src/vaultmap.mjs`): counts kept in step, meanings and conventions written by the agent with `cortex_describe_section`, the person's words outranking them, notes for what moved or left, broken pointers reported, `posts` on memories, `cortex vault connect` and `cortex vault sync` | All | Done (step 2). Only the folder kind is built; ohm's comes with sync |
 | Strict identity (`src/identity.mjs`): fixed typed fields, proposals with evidence in `.cortex/identity.jsonl`, `cortex confirm`, `reject`, `clear` and `identity`, `init --account` | History of changes | Done (step 1). With a vault connected, vault evidence is checked against the post |
@@ -301,7 +302,7 @@ Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are bu
 2. **Vault contract and `vault.md`.** *Done.* The contract as an interface, a folder vault that implements it for tests, structured events, and `vault.md` kept in step. Done when removing a post in the test vault flags the memory that pointed at it.
 3. **Working memory.** *Done.* One file per agent, a tool to update its own, refresh at start and distill and merge at end, with the rules for when something becomes a memory in the playbook. Callable without hooks. Done when something noticed in two sessions becomes a memory in the third, with nobody asked.
 4. **Filing rules and advice.** The rulebook rewritten, a filing skill template, and a "how should I file this" answer built from `vault.md` and skills. Done when the answer for a source names a section, its conventions and related posts, and nothing is written to the vault.
-5. **`cortex status`.** Everything waiting or broken, in one answer. Done when every item it lists has a way to clear it.
+5. **`cortex status`.** *Done.* Everything waiting or broken, in one answer. Every item it lists has a way to clear it.
 6. **Remote MCP over HTTP,** with sign-in, so ChatGPT and browser clients can reach a cortex. Done when a client connected over HTTP reads the playbook as its instructions and calls `cortex_start`.
 7. **The hooks adapter.** `cortex hook <moment>` for Claude Code, then Codex, answering from the folder with no network wait. Done when, with neither model calling a tool, a session starts with working memory refreshed and ends with it distilled.
 8. **Sync with a host.** The folder kept in step with ohm's service, folder first. Done when a cortex removed from the host is restored from the folder unchanged, and the other way round.

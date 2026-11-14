@@ -284,6 +284,29 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         return { connected: true, reachable: false, problem: problem.message };
       });
       await reindex();
+      return cortex.inspect(vault);
+    },
+
+    // A read-only view for the person. Unlike starting an agent session, inspecting must not
+    // sync the vault, regenerate the index, or record observations just by looking at them.
+    async inspect(synced) {
+      let vault = synced;
+      if (!vault) {
+        try {
+          const connected = await theVault();
+          vault = { connected: Boolean(connected) };
+          if (connected) {
+            const shape = await connected.shape();
+            const map = parseMap(await text(at('vault.md')), new Set(shape.sections.map(item => item.section)));
+            const { memories } = await all();
+            const pointed = memories.flatMap(({ memory }) => memory.posts ?? []);
+            const where = pointed.length ? await connected.exists(pointed) : {};
+            vault = { connected: true, sections: shape.sections.map(item => ({ ...item, meaning: map.get(item.section)?.meaning, conventions: map.get(item.section)?.conventions })), gone: gone(shape, map), broken: memories.flatMap(({ memory }) => (memory.posts ?? []).filter(id => !where[id]?.exists).map(post => ({ memory: memory.name, post }))), problems: shape.problems };
+          }
+        } catch (problem) {
+          vault = { connected: true, reachable: false, problem: problem.message };
+        }
+      }
       const { memories, problems } = await all();
       const identity = await cortex.identity();
       const pending = [...(await notes()).values()].filter(note => !note.settledAt);
@@ -291,7 +314,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return {
         rules: await cortex.rules(),
         identity: forAgent(identity),
-        vault: vault.connected && vault.reachable !== false ? { connected: true, sections: vault.sections, ...(vault.broken.length ? { broken: vault.broken } : {}) } : { connected: vault.connected, ...(vault.reachable === false ? { reachable: false } : {}) },
+        vault: vault.connected && vault.reachable !== false ? { connected: true, sections: vault.sections, ...(vault.broken.length ? { broken: vault.broken } : {}), ...(vault.gone?.length ? { gone: vault.gone } : {}) } : { connected: vault.connected, ...(vault.reachable === false ? { reachable: false } : {}) },
         always: memories.filter(({ memory }) => memory.always),
         memories: memories.filter(({ memory }) => !memory.always).map(({ memory: { name, description, kind } }) => ({ name, description, kind })),
         // Only what the person has approved or switched on is handed over as usable.
