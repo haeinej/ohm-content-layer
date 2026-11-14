@@ -42,7 +42,11 @@ The tint on a hovered or selected tree row covers the whole row. It runs out to 
 
 ## Cortex and vault
 
-They use their own icons, a brain and a vault, not folders. Closed, the glyph is forest. Open, it sits on a small forest tile and turns the panel's tone, so open and closed read at a glance. Filling the glyph itself does not work for the brain: its lines are open strokes, and filled they blot.
+They have their own icons, drawn in ohm-ux (`src/workspace/PrimeIcon.tsx`), not folders and not Lucide's:
+- **Cortex:** a minimal brain, two lobes with a seam.
+- **Vault:** a minimal rounded box with a dot.
+
+Each is one closed shape and one inner mark, on Lucide's 24 grid with a stroke of 2, so it sits with the other icons. Closed, the icon is an outline in forest. Open, the shape is filled forest and the mark is cut out in the panel's tone. Lucide's brain is drawn from open strokes, which blot when filled. That is why these are drawn here.
 
 ## Graph colours
 

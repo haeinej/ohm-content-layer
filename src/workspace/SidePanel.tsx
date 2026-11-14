@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
-  AtSignIcon, BrainIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon, VaultIcon,
+  AtSignIcon, BrainIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { cortex, inbox, posts, sees, titleOf, type Audience, type Doc, type Inbo
 import { cn } from "@/lib/cn"
 import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
+import { PrimeIcon } from "./PrimeIcon"
 import { SETTINGS_TABS } from "./settings-tabs"
 import { panelTitle, SidePanelFrame } from "./Surface"
 import {
@@ -112,20 +113,15 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
 }
 
 /**
- * One of the repo's two prime folders: its own icon (a brain, a vault) and its name, bold forest. Open, the
- * icon fills: it sits on a forest tile and turns the panel's tone, so open and closed read at a glance.
+ * One of the repo's two prime folders: its own icon (PrimeIcon) and its name, bold forest. The icon is an
+ * outline when closed and filled when open, so open and closed read at a glance.
  */
 function PrimeRow({ prime, open: isOpen, onOpen, locked }: { prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean }) {
-  const glyph = prime === "cortex" ? BrainIcon : VaultIcon
   return (
     <button type="button" aria-expanded={isOpen} onClick={onOpen} disabled={locked}
       className="flex min-h-9 w-full items-center gap-1.5 rounded-lg px-1.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-[color-mix(in_oklab,var(--ohm-ink)_5%,var(--ohm-card))] disabled:hover:bg-transparent">
       <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground", locked && "invisible")} />
-      {/* Closed: the glyph in forest. Open: the glyph on a forest tile, in the panel's tone. */}
-      <span className={cn("flex size-5 items-center justify-center rounded-sm transition-colors duration-(--ohm-duration-state) ease-(--ohm-ease-out)",
-        isOpen ? "bg-primary text-primary-foreground dark:bg-foreground dark:text-background" : "text-primary dark:text-foreground")}>
-        <Icon icon={glyph} size="xs" strokeWidth={2.25} />
-      </span>
+      <PrimeIcon kind={prime} filled={isOpen} className="text-primary dark:text-foreground" />
       <span className="text-body font-bold text-primary dark:text-foreground">{prime}</span>
       {locked && <Icon icon={LockIcon} size="xs" className="ms-auto text-muted-foreground" aria-label="Only you see your cortex" />}
     </button>
