@@ -8,7 +8,7 @@ Cortex is how an agent reads and edits a person's vault for them: who they are, 
 
 ## The rules
 
-1. **Cortex does not run an agent; agents read it over MCP.** ChatGPT, Claude and coding agents never open the folder, so anything an agent must know is served: the playbook as the server's instructions, the files as resources.
+1. **Cortex does not run an agent; agents read it over MCP.** ChatGPT, Claude and coding agents never open the folder. The server's instructions are one paragraph under 512 characters that sends an agent to `cortex_start`; that call returns the playbook. Keep the instructions short, and put anything else an agent must know in the playbook.
 2. **Folder first.** The files are the cortex. Do not add a database, a hidden second copy, or anything a person could not read by opening the folder.
 3. **Cortex never writes to a vault.** It reads through the vault contract in the plan. Saving content is the vault's job.
 4. **Standalone.** Do not import from ohm-content-layer or any host. No runtime dependencies without a reason written in the commit message; today there are none.
@@ -23,6 +23,7 @@ src/core.mjs       memory rules, versions, the Markdown property format, the Ref
 src/identity.mjs   identity fields, their types, and what counts as evidence
 src/folder.mjs     the folder store: every operation on a cortex
 src/tools.mjs      the MCP tools an agent is given, built only from folder operations, and the server's instructions
+src/prompts.mjs    the prompts a person can pick, such as start
 src/resources.mjs  what a client may read without a tool: the playbook, identity, vault.md, memories, skills, tools
 src/protocol.mjs   MCP over standard input and output
 bin/cortex.mjs     the command line: init, mcp, identity, confirm, reject, clear, approve, event

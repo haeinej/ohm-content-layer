@@ -29,14 +29,31 @@ const withBirthdate = async dir => {
   await person.confirmIdentity('city');
 };
 
-test('the playbook is what a client is told when it connects, the person\'s own rules included', async () => {
+test('a client is told to start with cortex_start, in under 512 characters, and gets the playbook from it', async () => {
   const dir = await fresh();
   await appendFile(join(dir, 'agents', 'AGENTS.md'), '\n- Always answer me in Portuguese.\n');
-  const { 0: hello } = session(dir, []);
-  assert.deepEqual(Object.keys(hello.result.capabilities).sort(), ['resources', 'tools']);
-  assert.match(hello.result.instructions, /^Call cortex_start before anything else/);
-  assert.match(hello.result.instructions, /# How to keep this cortex/);
-  assert.match(hello.result.instructions, /Always answer me in Portuguese/);
+  const answers = session(dir, [{ method: 'tools/call', params: { name: 'cortex_start', arguments: {} } }]);
+  const { instructions, capabilities } = answers[0].result;
+  assert.deepEqual(Object.keys(capabilities).sort(), ['prompts', 'resources', 'tools']);
+  assert.ok(instructions.length <= 512, `${instructions.length} characters`);
+  assert.match(instructions, /Call cortex_start before anything else/);
+  const rules = JSON.parse(answers[1].result.content[0].text).rules;
+  assert.match(rules, /# How to keep this cortex/);
+  assert.match(rules, /Always answer me in Portuguese/);
+});
+
+test('the person can pick a prompt to start with their cortex', async () => {
+  const dir = await fresh();
+  const answers = session(dir, [
+    { method: 'prompts/list' },
+    { method: 'prompts/get', params: { name: 'start' } },
+    { method: 'prompts/get', params: { name: 'nothing' } },
+  ]);
+  assert.deepEqual(answers[1].result.prompts.map(prompt => prompt.name), ['start']);
+  const [message] = answers[2].result.messages;
+  assert.equal(message.role, 'user');
+  assert.match(message.content.text, /Call cortex_start now/);
+  assert.equal(answers[3].error.code, -32602);
 });
 
 test('a client can read the cortex as resources, and never a secret', async () => {

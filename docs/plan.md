@@ -235,7 +235,10 @@ What each part can do, in plain words. Tool names are given where they exist.
 
 Cortex does not run an agent. It is read by one: ChatGPT, Claude, a coding agent, or anything else that speaks MCP. Those clients do not open the folder, so everything an agent must know is served to it over MCP.
 
-- **The playbook is the server's instructions.** When a client connects, the server answers with the cortex's own `agents/AGENTS.md`, the person's added rules included. Every client reads it before it calls a tool, so the rules reach an agent that never sees the file.
+- **The instructions send an agent to `cortex_start`.** When a client connects, the server answers with one self-contained paragraph, under 512 characters, because clients read the start of it first: what this server is, call `cortex_start` first and follow the playbook it returns, never guess identity, and keep it private. Codex and Claude Code read these instructions; ChatGPT's handling is not documented.
+- **The playbook comes back from `cortex_start`.** Tools are the one MCP feature every client supports, so the cortex's own `agents/AGENTS.md`, the person's added rules included, is returned by that call and read from disk each time.
+- **A prompt for the person.** `start` appears where a client shows prompts, such as a slash command in Claude Code, for when the person wants to begin from their cortex explicitly.
+- **Hooks are the only way that does not depend on the model.** In Claude Code and Codex the adapter (step 7) puts the playbook in front of the model at session start, whether or not it calls a tool. Nothing in MCP itself does that. Rules guide the agent; what it cannot do is enforced by the tools.
 - **The files are resources.** The playbook, identity, `vault.md`, the memory index and each memory, approved skills, and the tool list can be read as `cortex://` resources. Secrets, birthdate, proposals and history are never served.
 - **The tools change things.** Everything that writes goes through a tool, so the limits are enforced in code.
 - **Two ways to connect.** Over standard input and output, for agents on the person's machine (`cortex mcp`). Over HTTP, for clients that connect to a remote server, such as ChatGPT and Claude in the browser. The HTTP transport is not built yet, and needs a way to sign in.
@@ -269,14 +272,14 @@ Cortex reads through this contract and never writes. Saving goes through the vau
 
 ## What exists now, and what changes
 
-Built in the `ohm-cortex` repository and tested (27 tests). Step 1, strict identity, is on the `identity` branch:
+Built in the `ohm-cortex` repository and tested (28 tests). Step 1, strict identity, is on the `identity` branch:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
 | The folder store (`src/folder.mjs`) | Memories, history, notes, skill proposals, tool proposals | Add `vault.md`, working memory, identity fields and proposals |
 | Strict identity (`src/identity.mjs`): fixed typed fields, proposals with evidence in `.cortex/identity.jsonl`, `cortex confirm`, `reject`, `clear` and `identity`, `init --account` | History of changes | Done (step 1). Vault evidence is checked for shape only until the vault contract exists |
 | Memory kinds `person`, `preference`, `project`, `reference` | Rules for names, descriptions, versions | Drop `project` |
-| Ten MCP tools, with `cortex_propose_identity` in place of `cortex_identity`; the playbook as the server's instructions; the files as `cortex://` resources; birthdate hidden from agents | All | Add working memory and filing advice; serve over HTTP |
+| Ten MCP tools, with `cortex_propose_identity` in place of `cortex_identity`; short instructions that send an agent to `cortex_start`, which returns the playbook; a `start` prompt; the files as `cortex://` resources; birthdate hidden from agents | All | Add working memory and filing advice; serve over HTTP |
 | Commands `init`, `mcp`, `identity`, `confirm`, `reject`, `clear`, `approve`, `event` | All | `event` takes structured vault events; add `status` |
 | The rulebook in `agents/AGENTS.md`, with the identity policy | Secrets, git and identity sections | Rewrite around filing and working memory |
 | Git policy files, with `.cortex/identity.jsonl` as append-only | Both | |
@@ -294,7 +297,7 @@ Built in the `ohm-cortex` repository and tested (27 tests). Step 1, strict ident
 
 Steps 1 to 5 need only the cortex folder and a test vault. Step 6 needs a place to host the server and a sign-in. Step 7 needs Claude Code and Codex signed in to verify. Step 8 needs ohm.
 
-Already done outside this order: the playbook is served as the MCP server's instructions, and the cortex's files as resources, over standard input and output.
+Already done outside this order: short MCP instructions that send an agent to `cortex_start`, the playbook returned from it, a `start` prompt, and the cortex's files as resources, over standard input and output.
 
 ## Outside cortex
 
@@ -311,7 +314,7 @@ On 14 November 2026:
 - **The agent writes `vault.md` meanings without the person.** The person can edit them, and their words outrank the agent's.
 - **Birthdate is hidden from agents.** An agent knows one is on file, and asks the person when a task needs it.
 - **When something becomes a memory is in the playbook,** as judgement, not a session count in code.
-- **The playbook reaches agents over MCP,** as the server's instructions, because cortex does not run the agent and clients do not read its files.
+- **The playbook reaches agents over MCP,** because cortex does not run the agent and clients do not read its files: short instructions send the agent to `cortex_start`, which returns it. Hooks make it certain where a client has them.
 
 ## Open decisions
 

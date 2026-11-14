@@ -7,7 +7,8 @@ const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 // `onClient` is told the connecting agent's name, so a save can say which agent made it.
 // `instructions` may be a function, read when a client connects, so the playbook served is the one on disk.
 // `resources`, when given, lists and reads what a client may read without calling a tool.
-export function createServer({ tools, list, name = 'cortex', version = '0.0.0', instructions, resources, onClient }) {
+// `prompts`, when given, lists and gets the prompts a person can pick to start with.
+export function createServer({ tools, list, name = 'cortex', version = '0.0.0', instructions, resources, prompts, onClient }) {
   let ready;
   const made = () => (ready ??= Promise.resolve(typeof tools === 'function' ? tools() : tools).catch(problem => { ready = undefined; throw problem; }));
   const answer = (id, result) => ({ jsonrpc: '2.0', id, result });
@@ -25,13 +26,18 @@ export function createServer({ tools, list, name = 'cortex', version = '0.0.0', 
       if (typeof params.clientInfo?.name === 'string' && params.clientInfo.name) onClient?.(params.clientInfo.name.slice(0, 100));
       return answer(id, {
         protocolVersion: VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : VERSIONS[0],
-        capabilities: { tools: {}, ...(resources ? { resources: {} } : {}) },
+        capabilities: { tools: {}, ...(resources ? { resources: {} } : {}), ...(prompts ? { prompts: {} } : {}) },
         serverInfo: { name, version },
         instructions: typeof instructions === 'function' ? await instructions() : instructions,
       });
     }
     if (method === 'ping') return answer(id, {});
     if (method === 'tools/list') return answer(id, { tools: list });
+    if (prompts && method === 'prompts/list') return answer(id, { prompts: prompts.list });
+    if (prompts && method === 'prompts/get') {
+      const found = typeof params.name === 'string' ? prompts.get(params.name) : null;
+      return found ? answer(id, found) : failure(id, -32602, `There is no prompt named ${params.name}`);
+    }
     if (resources && method === 'resources/list') return answer(id, { resources: await resources.list() });
     if (resources && method === 'resources/templates/list') return answer(id, { resourceTemplates: [] });
     if (resources && method === 'resources/read') {

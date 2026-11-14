@@ -39,7 +39,7 @@ A cortex also carries `.gitignore` and `.gitattributes`, so that one kept in git
 node bin/cortex.mjs init ~/cortex
 ```
 
-Then connect an agent to it over MCP, with this as the server's command. The agent is told the cortex's playbook when it connects, and can read the cortex's files as `cortex://` resources; secrets and birthdate are never served.
+Then connect an agent to it over MCP, with this as the server's command. When it connects, the agent is told to call `cortex_start`, which returns the cortex's playbook. It can also read the cortex's files as `cortex://` resources; secrets and birthdate are never served. In Claude Code, the `start` prompt appears as a slash command for beginning a session from your cortex.
 
 ```bash
 node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
