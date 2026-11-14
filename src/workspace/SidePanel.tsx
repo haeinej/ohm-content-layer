@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
-  AtSignIcon, BrainIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, FolderIcon,
-  FolderOpenIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
+  AtSignIcon, BrainIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon, VaultIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -112,13 +111,21 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
   }, deps) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/** One of the repo's two prime folders: a forest folder, bold, that opens in place. */
+/**
+ * One of the repo's two prime folders: its own icon (a brain, a vault) and its name, bold forest. Open, the
+ * icon fills: it sits on a forest tile and turns the panel's tone, so open and closed read at a glance.
+ */
 function PrimeRow({ prime, open: isOpen, onOpen, locked }: { prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean }) {
+  const glyph = prime === "cortex" ? BrainIcon : VaultIcon
   return (
     <button type="button" aria-expanded={isOpen} onClick={onOpen} disabled={locked}
-      className="flex min-h-9 w-full items-center gap-1.5 rounded-lg px-1.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted disabled:hover:bg-transparent">
-      <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground transition-transform", locked && "invisible")} />
-      <Icon icon={isOpen ? FolderOpenIcon : FolderIcon} size="sm" strokeWidth={2.5} className="text-primary dark:text-foreground" />
+      className="flex min-h-9 w-full items-center gap-1.5 rounded-lg px-1.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-[color-mix(in_oklab,var(--ohm-ink)_5%,var(--ohm-card))] disabled:hover:bg-transparent">
+      <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground", locked && "invisible")} />
+      {/* Closed: the glyph in forest. Open: the glyph on a forest tile, in the panel's tone. */}
+      <span className={cn("flex size-5 items-center justify-center rounded-sm transition-colors duration-(--ohm-duration-state) ease-(--ohm-ease-out)",
+        isOpen ? "bg-primary text-primary-foreground dark:bg-foreground dark:text-background" : "text-primary dark:text-foreground")}>
+        <Icon icon={glyph} size="xs" strokeWidth={2.25} />
+      </span>
       <span className="text-body font-bold text-primary dark:text-foreground">{prime}</span>
       {locked && <Icon icon={LockIcon} size="xs" className="ms-auto text-muted-foreground" aria-label="Only you see your cortex" />}
     </button>
@@ -191,14 +198,14 @@ function RepoPanel() {
           {showCortex && <>
             <PrimeRow prime="cortex" locked={cortexLocked} open={!cortexLocked && expanded.has("prime:cortex")} onOpen={() => flip("prime:cortex")} />
             {!cortexLocked && expanded.has("prime:cortex") && (
-              <FileTree aria-label="cortex" className="ms-4 animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={cortexTree}
+              <FileTree aria-label="cortex" className="ms-4 [--tree-inset:1rem] animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={cortexTree}
                 expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(id)} />
             )}
           </>}
           {showVault && <>
             <PrimeRow prime="vault" open={expanded.has("prime:vault")} onOpen={() => flip("prime:vault")} />
             {expanded.has("prime:vault") && (
-              <FileTree aria-label="vault" className="ms-4 animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={vaultTree}
+              <FileTree aria-label="vault" className="ms-4 [--tree-inset:1rem] animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={vaultTree}
                 expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(id)} />
             )}
           </>}

@@ -46,6 +46,18 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 /** Labels that always show: the person and the hierarchy's upper layers. */
 const structural = (n: GraphNode) => n.layer === 0 || n.type === "label" || n.type === "sublabel"
 
+/**
+ * What a node is, by colour, from ohm's palette only: the person forest; the cortex light green;
+ * the vault's labels in ink and its sublabels a step lighter; posts grey; other people hollow.
+ */
+const kindFill = (n: GraphNode) =>
+  n.layer === 0 ? "fill-primary stroke-primary dark:fill-foreground dark:stroke-foreground"
+    : n.type === "memory" ? "fill-(--ohm-green-light) stroke-(--ohm-green-light)"
+    : n.type === "label" ? "fill-foreground stroke-foreground"
+    : n.type === "sublabel" ? "fill-foreground/60 stroke-foreground/0"
+    : n.layer === 5 ? "fill-card stroke-muted-foreground"
+    : "fill-muted-foreground stroke-muted-foreground/0"
+
 /** A floating control over the graph: the popover surface, solid in dark. */
 const floating = "rounded-2xl bg-popover text-popover-foreground shade-3"
 
@@ -247,12 +259,10 @@ export function GraphView() {
                 onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), activate(n))}>
                 {/* A larger, invisible target: small nodes are easy to hit. */}
                 <circle r={Math.max(r + 6, 12)} className="fill-transparent" />
-                {/* Plain grey dots, sized by connections, as in Obsidian; the person and the lit node are forest. */}
-                <circle r={r}
-                  className={cn(
-                    "transition-[fill] duration-(--ohm-duration-open) ease-(--ohm-ease-out)",
-                    isLit || n.layer === 0 ? "fill-primary dark:fill-foreground" : "fill-muted-foreground",
-                  )} />
+                {/* Dots sized by connections, as in Obsidian, coloured by what they are (KIND_FILL). */}
+                {isLit && n.layer !== 0 && <circle r={r + 3.5} className="fill-none stroke-primary dark:stroke-foreground" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
+                <circle r={r} strokeWidth={1.5} vectorEffect="non-scaling-stroke"
+                  className={cn("transition-[fill,stroke] duration-(--ohm-duration-open) ease-(--ohm-ease-out)", kindFill(n))} />
               </g>
             )
           })}
@@ -309,7 +319,13 @@ export function GraphView() {
       </div>
 
       <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
-        <span />
+        <ul aria-label="Key" className={cn(floating, "pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1 text-small text-muted-foreground")}>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-primary dark:bg-foreground" />You</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-(--ohm-green-light)" />Cortex</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-foreground" />Vault</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted-foreground" />Post</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full border-[1.5px] border-muted-foreground" />People</li>
+        </ul>
         <div className={cn(floating, "pointer-events-auto flex flex-col p-0.5")} role="group" aria-label="Zoom">
           <Button size="icon-sm" variant="ghost" aria-label="Zoom in" onClick={() => zoomBy(1.3)}><Icon icon={PlusIcon} size="sm" /></Button>
           <Button size="icon-sm" variant="ghost" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.3)}><Icon icon={MinusIcon} size="sm" /></Button>

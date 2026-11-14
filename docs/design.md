@@ -38,7 +38,15 @@ The rules are slot-level (`[data-slot=dropdown-menu-item]` and so on) and unlaye
 
 ## Tree rows
 
-The tint on a hovered or selected tree row covers the nearest guide line, as in Obsidian: it starts just before that line and is opaque, mixed from ink and the panel's own tone. The guide lines sit under it, and the row's text sits above it. Its corners are the row radius, the same as the cortex and vault folder rows.
+The tint on a hovered or selected tree row covers the whole row. It runs out to the same left edge as the cortex and vault rows (`--tree-inset` is how far the tree is indented under them), whatever the row's depth, so every tint has the same clean left edge. It is opaque, mixed from ink and the panel's own tone, so it covers the guide lines, and it sits under the chevron and the text. Its corners and tones are the cortex and vault rows'. Focus shows as a forest ring on the same shape.
+
+## Cortex and vault
+
+They use their own icons, a brain and a vault, not folders. Closed, the glyph is forest. Open, it sits on a small forest tile and turns the panel's tone, so open and closed read at a glance. Filling the glyph itself does not work for the brain: its lines are open strokes, and filled they blot.
+
+## Graph colours
+
+Nodes are coloured by kind, from ohm's palette only: the person forest, the cortex light green, vault labels ink, sublabels ink at 60%, posts grey, other people hollow. Red is never used here; it means destructive.
 
 ## Upstream
 

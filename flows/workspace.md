@@ -27,7 +27,7 @@ The rack sits on the page itself. The side panel and the main panel are separate
 | ohm dot | Nothing. The brand mark, at icon size |
 | Search (⌘K) | Unchanged. Search opens over everything |
 | New post (⌘N) | Unchanged. A private draft opens in the editor |
-| **Personal repository** | The repository, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders are bold forest folders that open in place. A chevron-all button opens or closes everything, and a Tree/Graph switch shows the same scope as a graph inside the panel. Drag a page from the tree onto the main panel to open it, or onto a vault folder to file it there. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device |
+| **Personal repository** | The repository, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders, **cortex** (a brain) and **vault** (a vault), are bold forest rows that open in place. Open, the icon sits on a filled forest tile. A chevron-all button opens or closes everything, and a Tree/Graph switch shows the same scope as a graph inside the panel. Drag a page from the tree onto the main panel to open it, or onto a vault folder to file it there. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device |
 | **Visibility** | *View as* Only you, Friends or Public, with a check beside the current one. The repository, the graph and the page then show only what that audience can see, with a "Viewing as…" bar and Back to you |
 | **Inbox** | Replies, mentions, friend requests and cortex notes, newest first, with new ones marked. One about a post opens that post; the others open in the main panel |
 | You (avatar) | Your name and handle, then the settings sections: Your profile, Identity, Agents, Vault, Cortex, Appearance, and Sign out |
@@ -53,9 +53,9 @@ The cortex is the closest layer, and it connects the person to their vault. Acro
 
 How it looks and behaves, as Obsidian's graph view does (from the screen recordings):
 
-- **Look:** plain grey dots, sized by how connected they are. Every edge is the same thin, solid grey line: no dashes, rings or key. The person is forest.
+- **Look:** dots sized by how connected they are, coloured by what they are, from ohm's palette only: you in forest, the cortex in light green, vault labels in ink, sublabels a step lighter, posts grey, and other people hollow. A small key names the colours. Every edge is the same thin, solid grey line, with no dashes or rings.
 - **Motion:** a force layout (d3-force) with soft springs, moderate friction and very slow cooling, so nodes drift and settle over seconds like soft rubber, never snapping or stopping short. A soft radial force keeps each layer at its distance, and a gentle pull toward each label's own direction gives every branch its own sector, while links still tug across.
-- **Hover** lights the node and its edges in forest, and fades everything else over ohm's open duration.
+- **Hover** rings the node and lights its edges in forest, and fades everything else over ohm's open duration.
 - **Drag** pins a node under the pointer, and its neighbours follow on soft springs. Release it and they ease back.
 - **Pan and zoom** (d3-zoom). Labels for the upper layers always show. Labels for posts and memories fade in as you zoom, and for the hovered node's neighbours.
 - **Fit:** the graph stays fitted to the panel as the panel resizes and the layout settles, until you pan or zoom yourself.

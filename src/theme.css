@@ -99,9 +99,11 @@
 [data-slot=dropdown-menu-separator] { margin: 4px var(--ux-menu-row-x); }
 [data-slot=dropdown-menu-shortcut] { color: var(--ohm-muted); letter-spacing: .04em; }
 
-/* ─── Tree rows: the tint covers the nearest guide line, as Obsidian's does ────────
-   It starts just before that line, is opaque (mixed with the panel's own tone) so the line
-   disappears under it, and sits under the row's text. */
+/* ─── Tree rows: one clean, full-width tint ─────────────────────────────────────
+   Every row's tint spans the whole row, out to the same left edge as the cortex and vault rows
+   (--tree-inset is how far the tree is indented under them), whatever its depth. It is opaque
+   (mixed from ink and the panel's own tone), so it covers the guide lines and sits under the
+   chevron and the text. Same radius and same tones as the cortex and vault rows. */
 
 [data-slot=file-tree-item] {
   isolation: isolate;
@@ -114,11 +116,14 @@
   position: absolute;
   inset-block: 1px;
   inset-inline-end: 0;
-  inset-inline-start: max(0.25rem, calc((var(--depth, 0) - 1) * 1.25rem + 0.6rem));
+  inset-inline-start: calc(-1 * var(--tree-inset, 0px));
   z-index: -1;
   border-radius: var(--ohm-radius-row);
+  background-color: transparent;
   transition: background-color var(--ohm-duration-state) var(--ohm-ease-out);
 }
 [data-slot=file-tree-item]:hover::before { background-color: color-mix(in oklab, var(--ohm-ink) 5%, var(--ohm-card)); }
 [data-slot=file-tree-item][aria-selected=true]::before { background-color: color-mix(in oklab, var(--ohm-ink) 9%, var(--ohm-card)); }
 [data-slot=file-tree-item][data-drop]::before { background-color: color-mix(in oklab, var(--ohm-forest) 14%, var(--ohm-card)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ohm-forest) 40%, transparent); }
+[data-slot=file-tree-item]:focus-visible { box-shadow: none; }
+[data-slot=file-tree-item]:focus-visible::before { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ohm-forest) 45%, transparent); }
