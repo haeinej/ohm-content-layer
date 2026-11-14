@@ -104,6 +104,21 @@ test/       run with npm test
 
 ## Status
 
-Built: the folder store, strict identity, the vault contract with a folder vault and `vault.md`, working memory for each agent, the thirteen tools and the commands above, tested against temporary folders. No real agent has been connected yet. See [docs/plan.md](docs/plan.md) for what comes next.
+Built:
+- the folder store and strict identity;
+- the vault contract, with a folder vault and `vault.md`;
+- working memory for each agent;
+- filing advice and `cortex status`;
+- MCP over standard input and output, and over HTTP with a token;
+- the hooks adapter for Claude Code and Codex;
+- the fourteen tools and the commands above.
 
-Not built: the hooks adapter for Claude Code and Codex, turns, syncing a cortex to a host, and switching tools on from anywhere but the file itself.
+97 tests run against temporary folders, and CI runs them on Node 20 and 22 for every pull request.
+
+Not yet tried: the hooks in a real Claude Code or Codex session.
+
+Not built: OAuth for ChatGPT and Claude's web connectors, fitting memories to each prompt, and switching tools on from anywhere but the file itself.
+
+Not planned: syncing a cortex with ohm. A cortex stays a folder of its own. The older cortex inside ohm-content-layer is separate and is not connected to this one.
+
+See [docs/plan.md](docs/plan.md) for the decisions behind this.
