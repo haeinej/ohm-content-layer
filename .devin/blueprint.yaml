@@ -1,0 +1,10 @@
+# No dependencies to install. Surfaced to the agent at session start.
+maintenance: |
+  node --version
+knowledge:
+  - name: test
+    contents: npm test
+  - name: runtime
+    contents: Node.js 20 or newer is required. There are no dependencies and no install step.
+  - name: specification
+    contents: docs/plan.md is the specification. Its build order says what to build next; AGENTS.md says the rules.
