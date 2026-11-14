@@ -18,6 +18,8 @@ export function createResources(cortex) {
       ];
       if (await cortex.vaultMap() !== null) listed.splice(2, 0, { uri: 'cortex://vault.md', name: 'How to read the vault', description: 'Each section, what it means, and what goes where', mimeType: 'text/markdown' });
       for (const memory of (await cortex.list()).memories) listed.push({ uri: `cortex://memory/${memory.name}`, name: memory.name, description: memory.description, mimeType: 'text/markdown' });
+      const { mine, others } = await cortex.working();
+      for (const item of [mine, ...others].filter(item => item.version)) listed.push({ uri: `cortex://working/${item.agent}`, name: `Working memory: ${item.agent}`, description: `What ${item.agent} was working on, and left open`, mimeType: 'text/markdown' });
       for (const skill of await cortex.listSkills()) listed.push({ uri: `cortex://skills/${skill.name}`, name: skill.name, description: skill.description, mimeType: 'text/markdown' });
       return listed;
     },
@@ -35,6 +37,12 @@ export function createResources(cortex) {
         return markdown(uri, `${lines.join('\n')}\n`);
       }
       if (uri === 'cortex://tools') return json(uri, (await cortex.listTools()).filter(tool => tool.on).map(({ name, description }) => ({ name, description })));
+      const working = /^cortex:\/\/working\/([a-z0-9-]+)$/.exec(uri);
+      if (working) {
+        const { mine, others } = await cortex.working();
+        const item = [mine, ...others].find(each => each.agent === working[1] && each.version);
+        if (item) return markdown(uri, item.text);
+      }
       const found = /^cortex:\/\/(memory|skills)\/([^/]+)$/.exec(uri);
       if (found && NAME.test(found[2])) {
         if (found[1] === 'memory') return markdown(uri, memoryFile((await cortex.read(found[2])).memory));

@@ -27,7 +27,7 @@ const memory = object({
 const change = object({ memory, version }, ['memory']);
 
 export const TOOLS = [
-  { name: 'cortex_start', description: 'Call first in every session. Returns the playbook for keeping this cortex (follow it), the person\'s own added rules included, the identity in full, how to read the vault (each section, its posts, what it means and how it is filed, and memories pointing at posts no longer there), the memories marked always, a line for every other memory and approved skill, the tools switched on, and the notes waiting to be settled.',
+  { name: 'cortex_start', description: 'Call first in every session. Returns the playbook for keeping this cortex (follow it), the person\'s own added rules included, the identity in full, how to read the vault (each section, its posts, what it means and how it is filed, and memories pointing at posts no longer there), the memories marked always, a line for every other memory and approved skill, the tools switched on, the notes waiting to be settled, and working memory: yours from last time and every other agent\'s.',
     inputSchema: object({}), annotations: { readOnlyHint: true } },
   { name: 'cortex_propose_identity', description: 'Propose one identity fact: kind, name, preferredName, pronouns, emails, websites, city, timezone, languages, birthdate, occupation, organization or position. It changes nothing until the person confirms it. Give its source: the person\'s own words ({kind: "person", quote}), or a vault post that states it ({kind: "vault", post, passage}). Something you worked out is not a source, and an empty field is a valid answer. Pronouns only ever come from the person\'s words; never infer them from a name. Propose a birthdate only when the passage states the date outright.',
     inputSchema: object({
@@ -35,6 +35,15 @@ export const TOOLS = [
       value: { description: 'Text for most fields. emails: a list of {label, address}. websites and languages: lists of text. birthdate: YYYY-MM-DD, or --MM-DD with no year.' },
       source: object({ kind: { type: 'string', enum: ['person', 'vault'] }, quote: text, post: text, passage: text }, ['kind']),
     }, ['field', 'value', 'source']) },
+  { name: 'cortex_working', description: 'Rewrite your own working memory, in full: how the person is working today, corrections they made, and threads still open. Write freely, as often as you like; nothing waits for anyone. Pass the version cortex_start or your last write returned. You can read other agents\' working memory in cortex_start, and never write theirs.',
+    inputSchema: object({ text: { type: 'string', description: 'Markdown, at most 8 KB' }, version }, ['text']) },
+  { name: 'cortex_distill', description: 'End a session. Read every agent\'s working memory together (cortex_start gives them), record as notes what you judge was seen in more than one session or by more than one agent, and leave your own working memory as what is still open for next time. The working memory it replaces is kept.',
+    inputSchema: object({
+      session: { type: 'string', description: 'The session being distilled' },
+      notes: { type: 'array', maxItems: 50, items: object({ id: { type: 'string', description: 'Made once, reused on retry' }, note: { type: 'string', maxLength: 500 }, project: text }, ['id', 'note']) },
+      working: { type: 'string', description: 'Your working memory for next time, in full. Empty to clear it' },
+      version,
+    }, ['session', 'working']) },
   { name: 'cortex_describe_section', description: 'Write what a vault section means and how posts there are filed, one line each, from what you see in the vault and what the person says. No need to ask. If the person has written it themselves, theirs stands and this is refused: suggest a change to them instead.',
     inputSchema: object({ section: { type: 'string', description: 'A section as cortex_start lists it: label, or label/sublabel' }, meaning: text, conventions: text }, ['section']) },
   { name: 'cortex_note', description: 'Record in one line something you noticed about the person. It changes no memory. Make the ID once and reuse it if you retry; name the real session.',
@@ -64,6 +73,8 @@ export function createTools(cortex) {
     cortex_propose_identity: args => cortex.proposeIdentity(args),
     cortex_describe_section: args => cortex.describeSection(args),
     cortex_note: args => cortex.addNote(args),
+    cortex_working: ({ text, version }) => cortex.writeWorking(text, { replaces: version ?? null }),
+    cortex_distill: args => cortex.distill(args),
     async cortex_settle({ changes, notes }) {
       if (notes === undefined) {
         if (changes?.length) refuse('Every rewrite comes with the notes it was made from');
