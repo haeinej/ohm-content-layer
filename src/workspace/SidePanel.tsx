@@ -14,10 +14,11 @@ import { cn } from "@/lib/cn"
 import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
 import { PrimeIcon } from "./PrimeIcon"
+import { RowMenu } from "./RowMenu"
 import { SETTINGS_TABS } from "./settings-tabs"
 import { panelTitle, SidePanelFrame } from "./Surface"
 import {
-  me, moveDoc, open, openInbox, openSettings, setAudience, setRepoMode, setScope, useWorkspace,
+  marks, me, moveDoc, open, openInbox, openSettings, setAudience, setRepoMode, setScope, useWorkspace,
 } from "./store"
 
 /** label › sublabel › item, as folders. Folder ids are prefixed so they never collide with docs. */
@@ -131,10 +132,14 @@ function PrimeRow({ prime, open: isOpen, onOpen, locked }: { prime: "cortex" | "
 function RepoPanel() {
   const { view, rev, repoMode, scope, audience } = useWorkspace()
   const cortexTree = useMemo(() => toTree("cortex", cortex, ["memories", "notes", "skills", "tools"]), [rev])
-  const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p)), [rev, audience]) // eslint-disable-line react-hooks/exhaustive-deps
+  const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p) && !marks.archived.has(p.id)), [rev, audience]) // eslint-disable-line react-hooks/exhaustive-deps
+  const pinned = posts.concat(cortex).filter(d => marks.pinned.has(d.id) && (d.kind !== "post" || sees(audience, d)))
+  const archived = posts.filter(d => marks.archived.has(d.id))
+  const [showArchived, setShowArchived] = useState(false)
+  const [rows, setRows] = useState<HTMLDivElement | null>(null)
   const vaultTree = useMemo(() => toTree("vault", vaultDocs), [vaultDocs])
   const showCortex = scope.cortex, showVault = scope.vault
-  const treeRef = useRef<HTMLDivElement>(null)
+  const treeRef = useRef<HTMLDivElement | null>(null)
   useTreeDragDrop(treeRef, [repoMode])
   const cortexLocked = audience !== "personal"
   const allFolders = useMemo(() => [
@@ -187,7 +192,17 @@ function RepoPanel() {
       </>}
     >
       {repoMode === "tree" ? (
-        <div ref={treeRef} className="flex flex-col gap-0.5 [&_[data-drop]]:bg-primary/10 [&_[data-drop]]:ring-1 [&_[data-drop]]:ring-primary/40">
+        <div ref={el => { treeRef.current = el; setRows(el) }} className="relative flex flex-col gap-0.5 [&_[data-drop]]:bg-primary/10 [&_[data-drop]]:ring-1 [&_[data-drop]]:ring-primary/40">
+          {pinned.length > 0 && <>
+            <p className="px-2 pt-1 pb-0.5 text-small text-muted-foreground">Pinned</p>
+            {pinned.map(d => (
+              <button key={d.id} type="button" data-row-id={d.id} aria-current={selected === d.id || undefined} onClick={() => open(d.id)}
+                className="ux-row flex w-full items-center gap-2 px-2.5 pe-8 text-left text-body">
+                <span className="truncate">{d.icon ? `${d.icon} ` : ""}{titleOf(d)}</span>
+              </button>
+            ))}
+            <div className="h-2" />
+          </>}
           {!showCortex && !showVault && (
             <p className="px-2 py-6 text-center text-small text-muted-foreground">Choose Cortex or Vault from the menu above.</p>
           )}
@@ -205,6 +220,19 @@ function RepoPanel() {
                 expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(id)} />
             )}
           </>}
+          {archived.length > 0 && <>
+            <button type="button" onClick={() => setShowArchived(v => !v)} aria-expanded={showArchived}
+              className="ux-row mt-2 flex w-full items-center gap-1.5 px-1.5 text-left text-small text-muted-foreground">
+              <Icon icon={showArchived ? ChevronDownIcon : ChevronRightIcon} size="sm" />Archived · {archived.length}
+            </button>
+            {showArchived && archived.map(d => (
+              <button key={d.id} type="button" data-row-id={d.id} aria-current={selected === d.id || undefined} onClick={() => open(d.id)}
+                className="ux-row ms-4 flex items-center gap-2 px-2.5 pe-8 text-left text-body text-muted-foreground">
+                <span className="truncate">{titleOf(d)}</span>
+              </button>
+            ))}
+          </>}
+          <RowMenu container={rows} />
         </div>
       ) : (
         <div className="-mx-1 flex min-h-0 flex-1 overflow-hidden rounded-2xl bg-background">

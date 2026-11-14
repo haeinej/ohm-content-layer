@@ -144,3 +144,13 @@
 [data-slot=file-tree-item][data-drop]::before { background-color: color-mix(in oklab, var(--ohm-forest) 14%, var(--ohm-card)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ohm-forest) 40%, transparent); }
 [data-slot=file-tree-item]:focus-visible { box-shadow: none; }
 [data-slot=file-tree-item]:focus-visible::before { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ohm-forest) 45%, transparent); }
+
+/* Unread pages: a forest dot at the row's end, and the title in weight. */
+[data-slot=file-tree-item][data-unread] { color: var(--ohm-ink); font-weight: 600; }
+[data-slot=file-tree-item][data-unread]::after {
+  content: ""; position: absolute; inset-inline-end: 10px; top: 50%; translate: 0 -50%;
+  width: 7px; height: 7px; border-radius: 999px; background: var(--ohm-forest);
+}
+:root[data-theme="dark"] [data-slot=file-tree-item][data-unread]::after { background: var(--ohm-green-light); }
+/* While the ⋯ is over a row, the dot steps aside. */
+[data-slot=file-tree-item]:hover[data-unread]::after { opacity: 0; }

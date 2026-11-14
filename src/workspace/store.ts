@@ -1,6 +1,6 @@
 // Workspace state, and the handlers both the UI and the WebMCP tools call (AGENTS.md rule 2).
 import { useSyncExternalStore } from "react"
-import { all, byId, inbox, owner, posts, type Audience, type Doc, type Visibility } from "@/data/sample"
+import { all, byId, inbox, owner, posts, titleOf, type Audience, type Doc, type Visibility } from "@/data/sample"
 import { buildGraph } from "@/graph/model"
 import type { AgentState } from "@/components/agent-status"
 import type { SettingsTab } from "./settings-tabs"
@@ -124,6 +124,7 @@ export const setOffered = (name: ToolName, on: boolean) => set({ offered: { ...s
 export function open(id: string, mode: "read" | "edit" = "read") {
   const doc = byId(id)
   if (!doc) throw new DOMException(`Nothing with id ${id}`, "NotFoundError")
+  marks.unread.delete(id)
   set({ view: { kind: "doc", id, mode }, searchOpen: false, ...sideAfterOpen() })
   return { id, title: doc.title, view: mode, next: mode === "edit" ? "workspace.save-draft" : "workspace.open" }
 }
@@ -203,4 +204,52 @@ export function openFile(name: string, text: string) {
   const draft = createDraft({ title })
   autosave(draft.id, { body: text })
   return draft
+}
+
+// ─── Row actions: the ⋯ menu on a page in the repository ──────────────────────
+
+/** Pinned pages show on top of the repository; unread ones carry a dot until opened; archived ones leave the tree. */
+export const marks = { pinned: new Set<string>(), unread: new Set<string>(["p11"]), archived: new Set<string>() }
+const flip = (set: Set<string>, id: string, on = !set.has(id)) => { if (on) set.add(id); else set.delete(id); set_(bump()) }
+const set_ = (patch: Partial<State>) => set(patch)
+
+export const togglePin = (id: string) => flip(marks.pinned, id)
+export const toggleUnread = (id: string) => flip(marks.unread, id)
+export const toggleArchive = (id: string) => {
+  flip(marks.archived, id)
+  if (marks.archived.has(id)) marks.pinned.delete(id)
+}
+
+/** Renames a page. Its address follows for a draft; a published page keeps its slug. */
+export function renameDoc(id: string, title: string) {
+  const doc = byId(id)
+  if (!doc) return
+  doc.title = title.trim()
+  if (doc.id.startsWith("draft-")) doc.slug = slugify(doc.title) || doc.slug
+  doc.updated = new Date().toISOString().slice(0, 10)
+  set(bump())
+}
+
+/** A private copy beside the original, opened in the editor. */
+export function forkDoc(id: string) {
+  const doc = byId(id)
+  if (!doc) return
+  const draft = createDraft({ label: doc.kind === "post" ? doc.label : "other", title: `${titleOf(doc)} (fork)` })
+  const copy = byId(draft.id)!
+  copy.sublabel = doc.kind === "post" ? doc.sublabel : undefined
+  // Older pages start with "# Title"; the copy has its own title, so that line goes.
+  copy.body = doc.body.replace(new RegExp(`^#\\s+${doc.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n*`), "")
+  copy.icon = doc.icon
+  set(bump())
+  return draft
+}
+
+/** Removes a page from the vault. Taking a published one down from the repository is its own step. */
+export function deleteDoc(id: string) {
+  for (const list of [posts, all]) {
+    const i = list.findIndex(d => d.id === id)
+    if (i >= 0) list.splice(i, 1)
+  }
+  for (const s of Object.values(marks)) s.delete(id)
+  set({ ...bump(), view: state.view.kind === "doc" && state.view.id === id ? { kind: "empty" } : state.view })
 }
