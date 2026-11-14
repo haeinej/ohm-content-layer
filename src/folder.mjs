@@ -3,7 +3,7 @@
 //
 //   agents/  identity.md  memory/  skills/  tools/      what is in force
 //   .cortex/                                             what is waiting, and what was replaced
-import { appendFile, cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
 import { checkField, checkSource, FIELDS, forAgent, IDENTITY, readIdentity, shownValue, statesValue, writeIdentity } from './identity.mjs';
 import { sectionOf, vaultFrom } from './vault.mjs';
@@ -26,6 +26,14 @@ async function put(path, content) {
   const partial = `${path}.${process.pid}.tmp`;
   await writeFile(partial, content);
   await rename(partial, path);
+}
+
+// What makes a note a note. Checked before anything is written, so a batch is refused whole.
+function checkNote({ id, note, session, project } = {}) {
+  if (typeof id !== 'string' || !id || id.length > 200) throw new Refused('InvalidRequest', 'A note has an ID made where it was seen, at most 200 characters');
+  if (typeof note !== 'string' || !note.trim() || [...note].length > 500 || /[\r\n]/.test(note)) throw new Refused('InvalidRequest', `A note is one line, at most 500 characters${typeof id === 'string' ? ` (${id})` : ''}`);
+  if (typeof session !== 'string' || !session || session.length > 200) throw new Refused('InvalidRequest', 'A note names the session it was seen in');
+  if (project !== undefined && (typeof project !== 'string' || project.length > 2000)) throw new Refused('InvalidRequest', 'project is text, at most 2,000 characters');
 }
 
 // Names that mean the person, or the signed-in account. An agent never writes under one of them.
@@ -201,8 +209,74 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     throw new Refused('NotFound', `No identity proposal is waiting for ${ref}`);
   }
 
+  // Working memory: one file for each agent, named for it, so two agents never write over each other.
+  const fileName = agent => String(agent).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'agent';
+  const workingPath = agent => at('.cortex', 'working', `${fileName(agent)}.md`);
+  async function workingOf(agent) {
+    const content = await text(workingPath(agent));
+    if (content === null) return null;
+    const { mtime } = await stat(workingPath(agent));
+    return { agent: fileName(agent), text: content, version: await cortexVersion({ working: content }), updated: mtime.toISOString() };
+  }
+  async function putWorking(textGiven, replaces, { keepEarlier = false } = {}) {
+    if (typeof textGiven !== 'string' || bytes(textGiven) > 8192) throw new Refused('InvalidRequest', 'Working memory is Markdown, at most 8 KB');
+    const held = await workingOf(actor);
+    if (held && held.text === textGiven) return { agent: held.agent, version: held.version, unchanged: true };
+    if (held && replaces !== held.version) throw changed('working memory', held.version);
+    if (held && keepEarlier) await keep('working', held.agent, held.text, held.version);
+    // Empty is cleared: the file goes, so other agents see nothing rather than a blank entry.
+    if (!textGiven.trim()) {
+      if (!held) return { agent: fileName(actor), version: null, unchanged: true };
+      if (!keepEarlier) await keep('working', held.agent, held.text, held.version);
+      await rm(workingPath(actor));
+      return { agent: fileName(actor), version: null, cleared: true };
+    }
+    await put(workingPath(actor), textGiven);
+    return { agent: fileName(actor), version: (await workingOf(actor)).version };
+  }
+
   const cortex = {
     dir, reindex,
+
+    // This agent's working memory, and every other agent's, newest first.
+    async working() {
+      const mine = await workingOf(actor);
+      const others = [];
+      for (const entry of await names(at('.cortex', 'working'))) {
+        if (!entry.isFile() || !entry.name.endsWith('.md') || entry.name === `${fileName(actor)}.md`) continue;
+        const other = await workingOf(entry.name.slice(0, -3));
+        if (other) others.push(other);
+      }
+      return { mine: mine ?? { agent: fileName(actor), text: '', version: null }, others: others.sort((a, b) => b.updated.localeCompare(a.updated) || a.agent.localeCompare(b.agent)) };
+    },
+
+    // Rewrites this agent's own working memory, as it works. Another agent's is never written.
+    writeWorking: (given, { replaces = null } = {}) => putWorking(given, replaces),
+
+    // The end of a session: the agent has read every agent's working memory together and records,
+    // as notes for this session, what it judges seen often enough to become memory. Then it leaves
+    // its own working memory as "last time" for the next session; the one it replaces is kept.
+    async distill({ session, notes: seen = [], working, version } = {}) {
+      if (typeof session !== 'string' || !session || session.length > 200) throw new Refused('InvalidRequest', 'Name the session being distilled');
+      if (!Array.isArray(seen) || seen.length > 50) throw new Refused('InvalidRequest', 'notes is up to 50 things seen');
+      const held = await workingOf(actor);
+      if (held && version !== held.version) throw changed('working memory', held.version);
+      if (typeof working !== 'string' || bytes(working) > 8192) throw new Refused('InvalidRequest', 'Leave working memory as Markdown, at most 8 KB');
+      // Every note is checked first, against the others and against what is kept, so a refused
+      // distill writes nothing.
+      const kept = await notes();
+      const ids = new Set();
+      for (const item of seen) {
+        checkNote({ ...item, session });
+        if (ids.has(item.id)) throw new Refused('InvalidRequest', `Two notes have the ID ${item.id}`);
+        ids.add(item.id);
+        if (kept.has(item.id) && kept.get(item.id).text !== item.note) throw new Refused('Changed', `Another note already has the ID ${item.id}`);
+      }
+      const recorded = [];
+      for (const item of seen) recorded.push(await cortex.addNote({ id: item.id, note: item.note, session, ...(item.project ? { project: item.project } : {}) }));
+      const left = await putWorking(working, held?.version ?? null, { keepEarlier: true });
+      return { session, noted: recorded.map(item => item.id), working: left };
+    },
 
     async start() {
       const vault = await cortex.syncVault().catch(problem => {
@@ -224,6 +298,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         skills: (await skillsIn(at('skills'))).map(({ name, description }) => ({ name, description })),
         tools: (await toolsIn(at('tools'))).filter(tool => tool.on).map(({ name, description }) => ({ name, description })),
         notes: pending,
+        working: await cortex.working(),
         waiting: {
           identity: (await cortex.identityProposals()).map(({ id, field, value, source }) => ({ id, field, value: shownValue(field, value), source })),
           skills: (await skillsIn(at('.cortex', 'proposed', 'skills'))).map(skill => skill.name),
@@ -481,10 +556,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
 
     // `source` says where a note came from: the agent that noticed it, or a host reporting a change.
     async addNote({ id, note, session, project, source } = {}) {
-      if (typeof id !== 'string' || !id || id.length > 200) throw new Refused('InvalidRequest', 'A note has an ID made where it was seen, at most 200 characters');
-      if (typeof note !== 'string' || !note.trim() || [...note].length > 500 || /[\r\n]/.test(note)) throw new Refused('InvalidRequest', 'A note is one line, at most 500 characters');
-      if (typeof session !== 'string' || !session || session.length > 200) throw new Refused('InvalidRequest', 'A note names the session it was seen in');
-      if (project !== undefined && (typeof project !== 'string' || project.length > 2000)) throw new Refused('InvalidRequest', 'project is text, at most 2,000 characters');
+      checkNote({ id, note, session, project });
       const before = (await notes()).get(id);
       if (before) {
         if (before.text !== note) throw new Refused('Changed', 'Another note already has this ID');

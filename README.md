@@ -72,6 +72,6 @@ test/       run with npm test
 
 ## Status
 
-Built: the folder store, strict identity, the vault contract with a folder vault and `vault.md`, the eleven tools and the commands above, tested against temporary folders. No real agent has been connected yet. See [docs/plan.md](docs/plan.md) for what comes next.
+Built: the folder store, strict identity, the vault contract with a folder vault and `vault.md`, working memory for each agent, the thirteen tools and the commands above, tested against temporary folders. No real agent has been connected yet. See [docs/plan.md](docs/plan.md) for what comes next.
 
 Not built: the hooks adapter for Claude Code and Codex, turns, syncing a cortex to a host, and switching tools on from anywhere but the file itself.

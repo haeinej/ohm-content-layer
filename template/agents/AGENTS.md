@@ -9,16 +9,19 @@ This folder is what you know about the person you work for, and what you can do 
 | `identity.md` | Who this person or organization is: a few fixed facts | Propose a fact, with its source. Only they confirm it |
 | `vault.md` | How to read their vault: each section, what it means, how posts there are filed | Write the meanings and conventions. What they write stands |
 | `memory/` | One thing learned per file | Write, rewrite and remove |
+| Working memory | This session, and what was left open. One for each agent | Write your own freely. Read the others'. Never write theirs |
 | `skills/` | How to do a task they repeat | Propose. It is not used until they approve it |
 | `tools/` | What you are able to use | Propose. Only they add one or switch one on |
 | `agents/` | These rules, and `agents/secrets/` | Read the rules. Never write here |
 
 ## Every session
 
-1. Read `identity.md` in full.
-2. Read `memory/MEMORY.md`, the skill descriptions and the tool list.
-3. Settle whatever is waiting before other work: observations, events and turns.
+1. Read who they are, how to read their vault, the memory index, the skill descriptions and the tool list. `cortex_start` gives you all of it.
+2. **Refresh working memory.** Read yours from last time and every other agent's beside long-term memory. Rewrite yours for today with `cortex_working`: keep the threads still open, take up any another agent left, and drop what was only about that day.
+3. Settle whatever is waiting before other work: observations and what the vault reported.
 4. Read a memory or a skill in full only when its description fits the task.
+5. **As you work,** keep your working memory current: a correction goes there at once.
+6. **Before you finish, distill** with `cortex_distill`. Read every agent's working memory together. Record as notes what has now been seen in more than one session, or by more than one agent. Leave yours as what is still open for next time.
 
 ## When something happens
 
@@ -27,7 +30,7 @@ This folder is what you know about the person you work for, and what you can do 
 | They tell you a fact about who they are, such as their name, city or job | Propose it as an identity fact, quoting what they said |
 | They tell you something else about themselves, or how they want work done | Write it as a memory now, marked as stated |
 | A post in their vault states a fact about who they are | Propose it as an identity fact, with the post and the passage |
-| You notice something they did not say | Record an observation. It is not a memory yet |
+| You notice something they did not say | Put it in your working memory. If you have seen it before, record an observation. It is not a memory yet |
 | An observation has been seen in more than one session | Write it as a memory, marked as inferred |
 | An observation agrees with a memory | Count it as seen again. Do not rewrite the memory |
 | An observation contradicts what they stated | Keep what they stated |
@@ -35,6 +38,18 @@ This folder is what you know about the person you work for, and what you can do 
 | They have done one task the same way three times, or said "always do it like this" | Propose a skill |
 | The work needs something you cannot do | Propose a tool |
 | Something is true of one session only | Drop it |
+
+## When something becomes a memory
+
+This is your judgement. Use these as the guide, and say what you did when you settle.
+
+- **Seen once** is working memory, not a note.
+- **Seen again,** in another session or by another agent, is a note.
+- **Notes from more than one session** that agree become a memory, marked as inferred.
+- **Said by them outright** is a memory at once, marked as stated, whatever the count.
+- **A correction they make** counts for more than something you noticed: once they have corrected the same thing twice, it is a memory.
+- **Something that only held that day,** such as being in a hurry, is dropped at distill.
+- **When you are unsure,** leave it in working memory one more session. Nothing is lost by waiting.
 
 ## What you may not do
 

@@ -37,6 +37,7 @@ test('a client is told to start with cortex_start, in under 512 characters, and 
   assert.deepEqual(Object.keys(capabilities).sort(), ['prompts', 'resources', 'tools']);
   assert.ok(instructions.length <= 512, `${instructions.length} characters`);
   assert.match(instructions, /Call cortex_start before anything else/);
+  assert.match(instructions, /Before you finish, call cortex_distill/);
   const rules = JSON.parse(answers[1].result.content[0].text).rules;
   assert.match(rules, /# How to keep this cortex/);
   assert.match(rules, /Always answer me in Portuguese/);
