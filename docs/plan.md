@@ -241,7 +241,7 @@ Cortex does not run an agent. It is read by one: ChatGPT, Claude, a coding agent
 - **Hooks are the only way that does not depend on the model.** In Claude Code and Codex the adapter (step 7) puts the playbook in front of the model at session start, whether or not it calls a tool. Nothing in MCP itself does that. Rules guide the agent; what it cannot do is enforced by the tools.
 - **The files are resources.** The playbook, identity, `vault.md`, the memory index and each memory, approved skills, and the tool list can be read as `cortex://` resources. Secrets, birthdate, proposals and history are never served.
 - **The tools change things.** Everything that writes goes through a tool, so the limits are enforced in code.
-- **Two ways to connect.** Over standard input and output, for agents on the person's machine (`cortex mcp`). Over HTTP, for clients that connect to a remote server, such as ChatGPT and Claude in the browser. The HTTP transport is not built yet, and needs a way to sign in.
+- **Two ways to connect.** Over standard input and output, for agents on the person's machine (`cortex mcp`). Over HTTP, for clients that connect to a remote server, such as ChatGPT and Claude in the browser. Over HTTP it is `cortex serve`, signed in with a bearer token from `cortex token`; ChatGPT and Claude's web connectors need OAuth, which is not built.
 
 ## What cortex needs from a vault
 

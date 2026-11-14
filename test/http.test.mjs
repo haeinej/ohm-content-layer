@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { chmod, mkdtemp, readdir, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -217,4 +217,33 @@ test('cortex serve answers over HTTP, never prints the token, and asks for it', 
   assert.equal(answer.status, 200);
   assert.ok(answer.headers.get('mcp-session-id'));
   assert.doesNotMatch(output, new RegExp(token));
+});
+
+test('cortex token --replace leaves a token file only the person can read, whatever the old one allowed', async () => {
+  const dir = await fresh();
+  const old = await makeToken(dir);
+  const path = join(dir, 'agents', 'secrets', 'mcp-token');
+  await chmod(path, 0o644);
+  const replaced = await makeToken(dir, { replace: true });
+  assert.notEqual(replaced, old);
+  assert.equal((await readFile(path, 'utf8')).trim(), replaced);
+  assert.equal((await stat(path)).mode & 0o777, 0o600);
+  assert.deepEqual((await readdir(join(dir, 'agents', 'secrets'))).filter(name => name.endsWith('.tmp')), []);
+});
+
+test('a message over the size limit is answered 413, whether its length is given or not', async t => {
+  const { initialize, url, secret } = await served(t);
+  const { session } = await initialize();
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${secret}`, 'Mcp-Session-Id': session };
+  const huge = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping', params: { padding: 'x'.repeat(5 * 1024 * 1024) } });
+  const given = await fetch(url, { method: 'POST', headers, body: huge });
+  assert.equal(given.status, 413);
+  assert.match((await given.json()).error.message, /too large/);
+  // Sent in pieces, with no Content-Length, so the server finds out only as it reads.
+  const piece = new TextEncoder().encode('x'.repeat(1024 * 1024));
+  let sent = 0;
+  const body = new ReadableStream({ pull(controller) { if (sent++ < 6) controller.enqueue(piece); else controller.close(); } });
+  const streamed = await fetch(url, { method: 'POST', headers, body, duplex: 'half' });
+  assert.equal(streamed.status, 413);
+  assert.match((await streamed.json()).error.message, /too large/);
 });

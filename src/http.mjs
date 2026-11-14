@@ -15,7 +15,7 @@
 // - With a token, every request needs `Authorization: Bearer <token>`, or it is answered 401 and
 //   nothing else. An Origin header that is not this machine is answered 403, against DNS rebinding.
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { stat, readFile, writeFile } from 'node:fs/promises';
+import { chmod, link, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
 import { join } from 'node:path';
 import { Refused } from './core.mjs';
@@ -40,9 +40,18 @@ export async function makeToken(dir, { replace = false } = {}) {
   const secrets = join(dir, 'agents', 'secrets');
   if (!(await stat(secrets).catch(() => null))?.isDirectory()) throw new Refused('NotFound', `${dir} is not a cortex: it has no agents/secrets/. Start one with cortex init.`);
   const token = randomBytes(32).toString('base64url');
+  const path = tokenPath(dir);
+  if (!replace && await stat(path).catch(() => null)) throw new Refused('NameTaken', 'This cortex already has a token. To make a new one, and stop the old one working, run cortex token --replace.');
+  // Written whole to a new file only the person can read, then moved over the old one, so a
+  // replaced token never keeps the old file's permissions and is never half written.
+  const fresh = join(secrets, `.mcp-token-${randomUUID()}.tmp`);
   try {
-    await writeFile(tokenPath(dir), `${token}\n`, { mode: 0o600, flag: replace ? 'w' : 'wx' });
+    await writeFile(fresh, `${token}\n`, { mode: 0o600, flag: 'wx' });
+    await chmod(fresh, 0o600);
+    if (replace) await rename(fresh, path);
+    else await link(fresh, path).finally(() => rm(fresh, { force: true }));
   } catch (problem) {
+    await rm(fresh, { force: true });
     if (problem.code === 'EEXIST') throw new Refused('NameTaken', 'This cortex already has a token. To make a new one, and stop the old one working, run cortex token --replace.');
     throw problem;
   }
@@ -110,19 +119,32 @@ export function httpTransport({ open, token, origins = [], endpoint = ENDPOINT, 
     if (!expected) return true;
     return typeof header === 'string' && timingSafeEqual(digest(header), expected);
   };
+  // Stops keeping the body once it passes the limit, and still reads it to the end, so the client
+  // is answered 413 rather than finding its connection cut.
   const read = req => new Promise((done, fail) => {
     const chunks = [];
     let size = 0;
     req.on('data', chunk => {
       size += chunk.length;
-      if (size > LIMIT) {
-        fail(Object.assign(new Error('Too large'), { tooLarge: true }));
-        req.destroy();
-      } else chunks.push(chunk);
+      if (size <= LIMIT) chunks.push(chunk);
+      else if (size > 16 * LIMIT) req.destroy();
     });
-    req.on('end', () => done(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => (size > LIMIT ? fail(Object.assign(new Error('Too large'), { tooLarge: true })) : done(Buffer.concat(chunks).toString('utf8'))));
     req.on('error', fail);
+    req.on('close', () => fail(new Error('Closed before the end')));
   });
+  // Answered 413 and the rest of the body read and dropped, so the client, which may still be
+  // sending, gets the answer rather than a cut connection. Past sixteen times the limit the
+  // connection is closed, so nobody can keep one busy by sending forever.
+  const tooLarge = (req, res) => {
+    let dropped = 0;
+    req.on('data', chunk => {
+      dropped += chunk.length;
+      if (dropped > 16 * LIMIT) req.destroy();
+    });
+    req.resume();
+    send(res, 413, failure(null, -32600, `The message is too large: at most ${LIMIT} bytes`));
+  };
   const session = req => {
     const id = req.headers['mcp-session-id'];
     if (typeof id !== 'string' || !id) return { status: 400, message: 'Send initialize first, then the Mcp-Session-Id header its answer gave, with every request' };
@@ -143,11 +165,12 @@ export function httpTransport({ open, token, origins = [], endpoint = ENDPOINT, 
     if (!/^application\/json\b/i.test(req.headers['content-type'] ?? '')) return send(res, 415, failure(null, -32600, 'Send the message as Content-Type: application/json'));
     const accept = req.headers.accept;
     if (accept && !/application\/json|application\/\*|\*\/\*/i.test(accept)) return send(res, 406, failure(null, -32600, 'Accept application/json: answers are sent as JSON'));
+    if (Number(req.headers['content-length']) > LIMIT) return tooLarge(req, res);
     let message;
     try {
       message = JSON.parse(await read(req));
     } catch (problem) {
-      if (problem.tooLarge) return send(res, 413, failure(null, -32600, 'The message is too large'));
+      if (problem.tooLarge) return tooLarge(req, res);
       return send(res, 400, failure(null, -32700, 'Not JSON'));
     }
     if (Array.isArray(message)) return send(res, 400, failure(null, -32600, 'Send one JSON-RPC message in each request'));
