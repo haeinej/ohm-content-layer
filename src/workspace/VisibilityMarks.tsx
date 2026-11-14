@@ -65,7 +65,7 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
       const pill = cn(
         // Icon only: the label is in the tooltip and for screen readers.
         "pointer-events-auto absolute right-8 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full transition-colors duration-(--ohm-duration-press)",
-        v === "public" ? "bg-[color-mix(in_oklab,var(--ohm-green-light)_40%,transparent)] text-primary dark:bg-(--ohm-green-light)/15 dark:text-(--ohm-green-light)"
+        v === "public" ? "bg-primary/10 text-primary dark:bg-(--ohm-green-light)/15 dark:text-(--ohm-green-light)"
           : v === "friends" ? "bg-foreground/8 text-foreground" : "text-muted-foreground",
       )
       return (
