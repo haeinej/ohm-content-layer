@@ -1,4 +1,4 @@
-// The toolbar that floats over selected text: ask for a change, marks, turn into, comment.
+// The toolbar that floats over selected text: ask for a change, marks, turn into.
 import { useEffect, useRef, useState } from "react"
 import { useEditorState, type Editor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
@@ -15,7 +15,6 @@ import { notify } from "@/components/ui/notice"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/cn"
 import { BLOCK_TYPES, currentBlock } from "./commands"
-import { addComment } from "./comments"
 
 const bar = "flex items-center gap-0.5 rounded-full bg-popover p-1 text-popover-foreground shade-4 backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-(--ohm-duration-open) ease-(--ohm-ease-out)"
 const sep = <span aria-hidden className="mx-1 h-4 w-px bg-border" />
@@ -52,7 +51,7 @@ function InlineField({ placeholder, onSend, onCancel, mic }: { placeholder: stri
 }
 
 export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: string }) {
-  const [mode, setMode] = useState<"tools" | "ask" | "comment">("tools")
+  const [mode, setMode] = useState<"tools" | "ask">("tools")
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -72,14 +71,7 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
         {mode === "ask" ? (
           <InlineField placeholder="Ask for a change…" onCancel={() => setMode("tools")}
             onSend={() => { notify({ message: "Asking an agent arrives once one is connected through WebMCP", tone: "info" }); setMode("tools") }} />
-        ) : mode === "comment" ? (
-          <InlineField placeholder="Add a comment…" mic onCancel={() => setMode("tools")}
-            onSend={text => {
-              const { from, to } = editor.state.selection
-              addComment(docId, { quote: editor.state.doc.textBetween(from, to, " "), text })
-              editor.chain().focus().setHighlight().setTextSelection(to).run()
-              setMode("tools")
-            }} />
+
         ) : <>
           <Button size="sm" variant="ghost" className="h-7 gap-1.5 rounded-full px-2.5 font-normal" onClick={() => setMode("ask")}>
             <Icon icon={ScanTextIcon} size="sm" /> Ask for change
@@ -106,10 +98,6 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          {sep}
-          <Button size="sm" variant="ghost" className="h-7 gap-1.5 rounded-full px-2.5 font-normal" onClick={() => setMode("comment")}>
-            <Icon icon={MessageSquareIcon} size="sm" /> Comment
-          </Button>
           </>}
         </>}
       </div>

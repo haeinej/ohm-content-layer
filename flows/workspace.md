@@ -43,22 +43,22 @@ person ── cortex (memories, skills, notes) ── vault labels ── sublab
 | Layer | Nodes | Hangs from |
 | --- | --- | --- |
 | 0 | The person (forest, pinned at the centre) | none |
-| 1 · cortex | Memories, notes, skills and tools, evenly spaced on a dotted ring close to the person | the person |
-| 2 | Vault labels | the memories that know about them (dashed edges in the key: *Knows*); the person when none does |
+| 1 · cortex | Memories, notes, skills and tools, spread evenly close to the person | the person |
+| 2 | Vault labels | the memories that know about them; the person when none does |
 | 3 | Sublabels | their label |
 | 4 | Posts | their sublabel or label |
 | 5 | People mentioned | each post that mentions them |
 
 The cortex is the closest layer, and it connects the person to their vault. Across the hierarchy, `[[links]]` between posts and memories about particular posts tie branches together.
 
-How it behaves, as Obsidian's graph view does (from the screen recording):
+How it looks and behaves, as Obsidian's graph view does (from the screen recordings):
 
-- **Force layout** (d3-force): low friction and slow cooling, so nodes overshoot slightly and settle with a wobble. A soft radial force keeps each layer at its distance. A gentle pull toward each label's own direction gives every branch its own sector, while links can still tug across.
-- **Hover** lights the node and its edges in forest and fades everything else.
-- **Drag** pins a node under the pointer. Its neighbours follow on springs and spring back when it is released.
+- **Look:** plain grey dots, sized by how connected they are. Every edge is the same thin, solid grey line: no dashes, rings or key. The person is forest.
+- **Motion:** a force layout (d3-force) with soft springs, moderate friction and very slow cooling, so nodes drift and settle over seconds like soft rubber, never snapping or stopping short. A soft radial force keeps each layer at its distance, and a gentle pull toward each label's own direction gives every branch its own sector, while links still tug across.
+- **Hover** lights the node and its edges in forest, and fades everything else over ohm's open duration.
+- **Drag** pins a node under the pointer, and its neighbours follow on soft springs. Release it and they ease back.
 - **Pan and zoom** (d3-zoom). Labels for the upper layers always show. Labels for posts and memories fade in as you zoom, and for the hovered node's neighbours.
-- **Size** follows how connected a node is.
-- **Fit:** the graph stays fitted to the panel as the panel widens and the layout settles, until you pan or zoom yourself.
+- **Fit:** the graph stays fitted to the panel as the panel resizes and the layout settles, until you pan or zoom yourself.
 - **Popover:** turns links between posts and people mentioned on or off, and lays the graph out again.
 - **Clicking:** a post or memory opens it in the main panel. Clicking a person re-centres on them, showing the posts that mention them; "Back to me" returns.
 - **What it draws:** the repository's scope (all, cortex or vault) and the audience. The cortex is only ever yours.
@@ -71,7 +71,7 @@ Every page opens in the main panel in one block editor, built after the referenc
 - **Path.** The toolbar starts with the page's path in a pill, such as `vault / writing / journal / Monday, rain`.
   - **Save by dragging:** drag the pill out of the window to save the page as a `.md` file, or onto a vault folder in the side panel to file it there.
   - **Its menu:** Open file… (a `.md` or `.txt` file becomes a new private page), Save as Markdown, and Move to (a vault folder).
-- **Toolbar.** After the path, a pill of inserts: Text, Image, Table, and + for everything. On the right: History, Comments (with a dot when there are some), you, and **Share**, which opens Visibility. Toolbar inserts go after the block the caret is in, never inside a table or list.
+- **Toolbar.** After the path, a pill of inserts: Text, Image, Table, and + for everything. On the right: History and you. Toolbar inserts go after the block the caret is in, never inside a table or list.
 - **Dropping.**
   - **Images** dropped or pasted onto the page go in where they land. Image in the toolbar or `/` opens a file picker.
   - **Pages and files:** dropping a `.md` or `.txt` file, or a page from the tree, opens it. A veil says what the drop will do.
@@ -87,11 +87,11 @@ Every page opens in the main panel in one block editor, built after the referenc
   - **"+" bars** below and to the right add a row or a column.
   - Columns resize by dragging their edges.
   - **Cells:** the cell with the caret is outlined in forest, and a selection of cells is tinted. Over a cell selection, the floating bar keeps only Ask for change and the marks.
-- **Selected text** brings up the floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), Bold, Italic, Underline, Strikethrough, Code, **Text ▾** to turn the block into another kind (with a check on the current one), and **Comment** (an inline field with dictation and send; it highlights the text).
+- **Selected text** brings up the floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), Bold, Italic, Underline, Strikethrough, Code, and **Text ▾** to turn the block into another kind (with a check on the current one).
 - **Links.** `[[slug]]` and `@handle` read as links. Click to follow them on a read-only page, or ⌘-click while editing. They stay plain text in the Markdown, so search and the graph still find them.
 - **Saving.** A private page saves as you type, and it stays private. A page other people can see opens read-only, with "changing it asks first". The `workspace.save-draft` tool takes Markdown and writes into the open page.
 - **Motion.** Menus, handles and the floating bar fade and scale in on ohm's durations and easing. Reduced motion turns this off.
-- **Not in the editor:** templates, and the image placeholder with Generate and Attach. Both were removed on request.
+- **Not in the editor:** templates, the image placeholder with Generate and Attach, comments, and Share. All were removed on request; who a page is for is set in Visibility.
 - **Code:** in `src/editor/`.
   - `PageEditor.tsx`: the page, the path pill and the block menu.
   - `TableControls.tsx`: row and column handles and the add bars.

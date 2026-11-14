@@ -21,9 +21,9 @@
   --ohm-radius-panel: 12px;
   --ohm-radius-sheet: 14px;  /* dialogs, sheets */
   --ux-menu-pad: 5px;
-  --ux-menu-row-y: 3px;
+  --ux-menu-row-y: 4px;
   --ux-menu-row-x: 10px;
-  --ux-menu-row-min: 26px;
+  --ux-menu-row-min: 28px;
 }
 :root[data-density="comfortable"] {
   --ohm-radius-chip: 8px;
@@ -58,6 +58,7 @@
 
 :where([data-slot=dropdown-menu-content], [data-slot=dropdown-menu-sub-content]) {
   padding: var(--ux-menu-pad);
+  display: flex; flex-direction: column; gap: 1px;
   border-radius: var(--ohm-radius-card);
 }
 [data-slot=dropdown-menu-content], [data-slot=dropdown-menu-sub-content],

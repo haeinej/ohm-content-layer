@@ -22,7 +22,7 @@ Settings › Appearance › Density, stored on this device (`localStorage`), set
 
 | Density | Surface (card) | Row | Item | Menu row height |
 | --- | --- | --- | --- | --- |
-| **Compact** (default) | 12 | 8 | 6 | 26 |
+| **Compact** (default) | 12 | 8 | 6 | 28 |
 | Comfortable | 16 | 10 | 8 | 32 |
 | Rounded (ohm-ui's own values) | 24 | 14 | 12 | 36 |
 

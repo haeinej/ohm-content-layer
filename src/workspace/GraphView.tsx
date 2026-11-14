@@ -26,14 +26,13 @@ type SimLink = SimulationLinkDatum<SimNode> & { kind: EdgeKind }
 /** How far out each kind of node settles. The cortex is the closest layer to the person. */
 const DISTANCE: Record<NodeType, number> = { person: 0, memory: 110, label: 220, sublabel: 300, post: 385 }
 const OTHER_PEOPLE = 490
-const CORTEX_RING = DISTANCE.memory
 const ringOf = (n: GraphNode) => (n.layer === 5 ? OTHER_PEOPLE : DISTANCE[n.type])
 const SPRING: Record<EdgeKind, { length: number; strength: number }> = {
-  hierarchy: { length: 90, strength: 0.6 },
-  knows: { length: 120, strength: 0.35 },
-  about: { length: 170, strength: 0.05 },
-  link: { length: 110, strength: 0.18 },
-  mention: { length: 120, strength: 0.08 },
+  hierarchy: { length: 90, strength: 0.35 },
+  knows: { length: 120, strength: 0.22 },
+  about: { length: 170, strength: 0.04 },
+  link: { length: 110, strength: 0.12 },
+  mention: { length: 120, strength: 0.06 },
 }
 
 /** Where each node was last, so re-centring or filtering moves nodes instead of re-scattering them. */
@@ -56,7 +55,6 @@ export function GraphView() {
   const include = useMemo(() => scopeFolders(scope), [scope])
   const [filters, setFilters] = useState({ people: DEFAULT_FILTERS.people, links: DEFAULT_FILTERS.links })
   const graph = useMemo(() => buildGraph({ center, ...include, audience, ...filters }), [center, include, audience, filters, rev]) // eslint-disable-line react-hooks/exhaustive-deps
-  const hasCortex = graph.nodes.some(n => n.type === "memory")
 
   const svgRef = useRef<SVGSVGElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -110,15 +108,17 @@ export function GraphView() {
       .force("radial", forceRadial<SimNode>(ringOf, 0, 0).strength(n => (n.layer === 0 ? 0 : n.type === "memory" ? 0.8 : n.layer === 4 ? 0.12 : 0.3)))
       .force("aimX", forceX<SimNode>(n => aim.get(n.id)?.x ?? 0).strength(n => (aim.has(n.id) ? (n.type === "post" ? 0.03 : 0.08) : 0)))
       .force("aimY", forceY<SimNode>(n => aim.get(n.id)?.y ?? 0).strength(n => (aim.has(n.id) ? (n.type === "post" ? 0.03 : 0.08) : 0)))
-      // Low friction and slow cooling: nodes overshoot a little and wobble into place.
-      .velocityDecay(0.22)
-      .alphaDecay(0.012)
+      // Soft springs, moderate friction and very slow cooling: nodes drift and settle like soft
+      // rubber, over seconds, never snapping or stopping short.
+      .velocityDecay(0.3)
+      .alphaDecay(0.005)
+      .alphaMin(0.0008)
     simRef.current = sim
-    sim.stop().tick(reducedMotion() ? 400 : 220)
+    sim.stop().tick(reducedMotion() ? 500 : 160)
     const remember = () => nodes.forEach(n => last.set(n.id, { x: n.x!, y: n.y! }))
     remember()
     setFrame(f => f + 1)
-    if (!reducedMotion()) sim.on("tick", () => { remember(); setFrame(f => f + 1) }).alpha(0.25).restart()
+    if (!reducedMotion()) sim.on("tick", () => { remember(); setFrame(f => f + 1) }).alpha(0.2).restart()
     return () => { sim.stop() }
   }, [nodes, links, aim])
 
@@ -194,7 +194,7 @@ export function GraphView() {
     if (!d.moved) { d.moved = true; setDragging(n.id) }
     const [x, y] = toGraph(e)
     n.fx = x; n.fy = y
-    if (!reducedMotion()) simRef.current?.alphaTarget(0.35).restart()
+    if (!reducedMotion()) simRef.current?.alphaTarget(0.12).restart()
     else { simRef.current?.tick(1); setFrame(f => f + 1) }
   }
   const onUp = (n: SimNode) => {
@@ -220,22 +220,17 @@ export function GraphView() {
       <svg ref={svgRef} role="img" aria-label={`Graph centred on @${graph.center.handle}`}
         className={cn("absolute inset-0 size-full touch-none select-none", dragging ? "cursor-grabbing" : "cursor-grab")}>
         <g transform={t.toString()}>
-          {/* The cortex is a layer, not a node: a quiet ring its memories sit on. */}
-          {hasCortex && (
-            <circle r={CORTEX_RING} vectorEffect="non-scaling-stroke" strokeDasharray="2 5"
-              className={cn("fill-none stroke-muted-foreground transition-opacity", lit ? "opacity-10" : "opacity-40")} />
-          )}
           {links.map((l, i) => {
             const a = l.source as SimNode, b = l.target as SimNode
             const on = lit ? a.id === lit || b.id === lit : null
             return (
               <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} vectorEffect="non-scaling-stroke"
-                strokeWidth={on ? 1.5 : 1}
-                strokeDasharray={l.kind === "about" ? "3 4" : undefined}
+                strokeWidth={on ? 1.4 : 1}
                 className={cn(
-                  "transition-[opacity,stroke] duration-(--ohm-duration-state)",
-                  on ? "stroke-primary dark:stroke-foreground" : l.kind === "hierarchy" ? "stroke-muted-foreground" : "stroke-muted-foreground",
-                  on === false ? "opacity-[.06]" : on ? "opacity-100" : l.kind === "hierarchy" ? "opacity-40" : "opacity-25",
+                  // Every edge the same thin grey line, as in Obsidian; the lit node's edges turn forest.
+                  "transition-[opacity,stroke] duration-(--ohm-duration-open) ease-(--ohm-ease-out)",
+                  on ? "stroke-primary dark:stroke-foreground" : "stroke-muted-foreground",
+                  on === false ? "opacity-[.07]" : on ? "opacity-100" : "opacity-35",
                 )} />
             )
           })}
@@ -243,26 +238,20 @@ export function GraphView() {
             const r = radiusOf(n)
             const isLit = n.id === lit
             const faded = near && !near.has(n.id)
-            const priv = n.doc?.visibility === "private"
             return (
               <g key={n.id} data-node transform={`translate(${n.x},${n.y})`} role="button" tabIndex={0} aria-label={n.name}
-                className={cn("cursor-pointer outline-none transition-opacity duration-(--ohm-duration-state)", faded && "opacity-20")}
+                className={cn("cursor-pointer outline-none transition-opacity duration-(--ohm-duration-open) ease-(--ohm-ease-out)", faded && "opacity-20")}
                 onPointerEnter={() => setHover(n.id)} onPointerLeave={() => setHover(h => (h === n.id ? null : h))}
                 onFocus={() => setHover(n.id)} onBlur={() => setHover(null)}
                 onPointerDown={e => onDown(e, n)} onPointerMove={e => onMove(e, n)} onPointerUp={() => onUp(n)}
                 onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), activate(n))}>
                 {/* A larger, invisible target: small nodes are easy to hit. */}
                 <circle r={Math.max(r + 6, 12)} className="fill-transparent" />
-                <circle r={r} vectorEffect="non-scaling-stroke" strokeWidth={1.5}
+                {/* Plain grey dots, sized by connections, as in Obsidian; the person and the lit node are forest. */}
+                <circle r={r}
                   className={cn(
-                    "transition-[fill,stroke] duration-(--ohm-duration-state)",
-                    isLit || n.layer === 0 ? "fill-primary stroke-primary dark:fill-foreground dark:stroke-foreground"
-                      : n.type === "memory" ? "fill-card stroke-foreground"
-                      : n.type === "label" || n.type === "sublabel" ? "fill-foreground stroke-foreground"
-                      : n.layer === 5 ? "fill-card stroke-muted-foreground"
-                      : priv ? "fill-card stroke-muted-foreground"
-                      : n.doc?.visibility === "friends" ? "fill-muted-foreground/60 stroke-muted-foreground/60"
-                      : "fill-muted-foreground stroke-muted-foreground",
+                    "transition-[fill] duration-(--ohm-duration-open) ease-(--ohm-ease-out)",
+                    isLit || n.layer === 0 ? "fill-primary dark:fill-foreground" : "fill-muted-foreground",
                   )} />
               </g>
             )
@@ -270,10 +259,6 @@ export function GraphView() {
         </g>
         {/* Labels in screen space, so they stay one size at any zoom. */}
         <g className="pointer-events-none">
-          {hasCortex && (() => {
-            const [x, y] = t.apply([0, -CORTEX_RING])
-            return <text x={x} y={y - 8} textAnchor="middle" className="fill-muted-foreground text-small font-semibold">cortex</text>
-          })()}
           {nodes.map(n => {
             const show = structural(n) ? 1 : near?.has(n.id) ? 1 : detail
             if (!show) return null
@@ -282,7 +267,7 @@ export function GraphView() {
             const faded = near && !near.has(n.id)
             return (
               <text key={n.id} x={x} y={y + r + 13} textAnchor="middle" opacity={faded ? 0.15 : show}
-                className={cn("text-small transition-opacity duration-(--ohm-duration-state)",
+                className={cn("text-small transition-opacity duration-(--ohm-duration-open) ease-(--ohm-ease-out)",
                   n.id === lit || structural(n) ? "fill-foreground" : "fill-muted-foreground",
                   (n.layer === 0 || n.type === "label") && "font-semibold")}>
                 {n.name.length > 32 ? `${n.name.slice(0, 31)}…` : n.name}
@@ -324,12 +309,7 @@ export function GraphView() {
       </div>
 
       <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
-        <ul aria-label="Key" className={cn(floating, "pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1 text-small text-muted-foreground")}>
-          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full border-[1.5px] border-foreground" />Memory</li>
-          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-foreground" />Label</li>
-          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted-foreground" />Post</li>
-          <li className="flex items-center gap-1.5"><span className="h-0 w-3 border-t-[1.5px] border-dashed border-muted-foreground" />Knows</li>
-        </ul>
+        <span />
         <div className={cn(floating, "pointer-events-auto flex flex-col p-0.5")} role="group" aria-label="Zoom">
           <Button size="icon-sm" variant="ghost" aria-label="Zoom in" onClick={() => zoomBy(1.3)}><Icon icon={PlusIcon} size="sm" /></Button>
           <Button size="icon-sm" variant="ghost" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.3)}><Icon icon={MinusIcon} size="sm" /></Button>

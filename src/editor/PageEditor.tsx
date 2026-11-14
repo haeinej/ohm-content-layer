@@ -16,7 +16,7 @@ import { Markdown } from "@tiptap/markdown"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import {
   ChevronDownIcon, ClockIcon, CopyIcon, DownloadIcon, FileTextIcon, FolderInputIcon, FolderOpenIcon, GripVerticalIcon, ImageIcon,
-  LockIcon, MessageSquareIcon, PlusIcon, SmilePlusIcon, TableIcon, Trash2Icon, TypeIcon,
+  LockIcon, PlusIcon, SmilePlusIcon, TableIcon, Trash2Icon, TypeIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -32,10 +32,9 @@ import { bySlug, posts, titleOf, type Doc } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
-import { autosave, me, moveDoc, open, openFile, saveDraft, setIcon, showGraph, toggleSide, useWorkspace } from "@/workspace/store"
+import { autosave, me, moveDoc, open, openFile, saveDraft, setIcon, showGraph, useWorkspace } from "@/workspace/store"
 import { withAgent } from "@/workspace/tools"
 import { insertImage, insertImageFiles, insertTable, insertText } from "./commands"
-import { useComments } from "./comments"
 import { ActiveCell, References, SlashCommand } from "./extensions"
 import { IconPicker } from "./IconPicker"
 import { PlusMenu, SlashMenu } from "./InsertMenu"
@@ -124,8 +123,6 @@ function PathPill({ doc, markdown, editable, onPickFile }: { doc: Doc; markdown:
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}
-        <DropdownMenuSeparator />
-        <p className="px-3 py-1.5 text-small text-muted-foreground">Drag the path out to save it, or onto a folder to file it.</p>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -182,7 +179,6 @@ export function PageEditor({ doc }: { doc: Doc }) {
   const imageInput = useRef<HTMLInputElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   useAutoHeight(titleRef, title)
-  const comments = useComments(doc.id)
   const save = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const editor = useEditor({
@@ -321,30 +317,8 @@ export function PageEditor({ doc }: { doc: Doc }) {
         <div className="flex flex-none items-center gap-1.5">
           <div className={pill}>
             <ToolButton label="History" icon={ClockIcon} onClick={() => notify({ message: `Last edited ${updated}. Earlier versions are not part of this wireframe`, tone: "info" })} />
-            <Popover>
-              <PopoverTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`Comments, ${comments.length}`} className={cn(pillButton, "relative")} />}>
-                <Icon icon={MessageSquareIcon} size="sm" />
-                {comments.length > 0 && <span className="absolute top-1 right-1 size-1.5 rounded-full bg-primary dark:bg-foreground" />}
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-80">
-                <p className="text-small text-muted-foreground">Comments</p>
-                {comments.length ? (
-                  <ul className="flex flex-col gap-3">
-                    {comments.map(c => (
-                      <li key={c.id} className="flex flex-col gap-1">
-                        <span className="line-clamp-2 border-s-2 border-border ps-2 text-small text-muted-foreground">{c.quote}</span>
-                        <span className="text-body">{c.text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className="text-body text-muted-foreground">Select text and choose Comment.</p>}
-              </PopoverContent>
-            </Popover>
           </div>
-          <div className={cn(pill, "pe-1")}>
-            <Avatar className="ms-0.5 size-7"><AvatarFallback className="bg-primary text-small text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
-            <Button size="sm" variant="ghost" className="h-8 rounded-full px-3 font-normal hover:bg-background" onClick={() => toggleSide("visibility")}>Share</Button>
-          </div>
+          <Avatar className="size-8"><AvatarFallback className="bg-primary text-small text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
         </div>
       </div>
 
