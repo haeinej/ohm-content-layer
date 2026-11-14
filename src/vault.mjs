@@ -11,6 +11,8 @@
 //                    { changes: [{ type, id, title, label, sublabel, from? }], cursor }. With no
 //                    cursor, it returns none and a cursor to start from
 //   profile()        identity facts the vault itself holds: [{ field, value, source }]
+//   search(words, limit)  optional: posts whose title or body holds any of the words, best first:
+//                    [{ id, title, label, sublabel }]. A vault without it gives no related posts
 //
 // A cursor is the vault's own: cortex keeps it and hands it back, and never looks inside.
 import { createHash } from 'node:crypto';
@@ -19,11 +21,27 @@ import { join, relative, sep } from 'node:path';
 import { Refused, splitFront } from './core.mjs';
 
 export const OPERATIONS = ['shape', 'read', 'exists', 'changes', 'profile'];
+// Operations a vault may leave out. Cortex does without what they would answer.
+export const OPTIONAL = ['search'];
 
 export function checkVault(vault) {
   const missing = OPERATIONS.filter(operation => typeof vault?.[operation] !== 'function');
   if (missing.length) throw new Refused('InvalidVault', `A vault answers ${OPERATIONS.join(', ')}. This one is missing ${missing.join(', ')}`);
+  const wrong = OPTIONAL.filter(operation => vault[operation] !== undefined && typeof vault[operation] !== 'function');
+  if (wrong.length) throw new Refused('InvalidVault', `${wrong.join(', ')} is an operation; leave it out if this vault does not answer it`);
   return vault;
+}
+
+// The words of a text, for matching by words: lowercase, letters and digits, a plural's s dropped.
+// Words that say nothing about what a text is about are left out.
+const COMMON = new Set('a about after all also an and any are as at be been before but by can could did do does for from had has have he her his how i if in into is it its just me more my no not of on one or our out over she so some than that the their them then there these they this to up us very was we were what when where which who why will with would you your'.split(' '));
+export function wordsOf(text) {
+  const found = new Set();
+  for (const [word] of String(text ?? '').toLowerCase().matchAll(/[\p{L}\p{N}]+/gu)) {
+    if (word.length < 2 || COMMON.has(word)) continue;
+    found.add(word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word);
+  }
+  return found;
 }
 
 // A section is a label, or a label and a sublabel, written as `label/sublabel`.
@@ -109,6 +127,23 @@ export function folderVault(root) {
     },
 
     profile: async () => [],
+
+    // A word in the title counts twice what a word in the body does. Ties go by title.
+    async search(words, limit = 10) {
+      const wanted = wordsOf(Array.isArray(words) ? words.join(' ') : words);
+      const most = Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 50) : 10;
+      if (!wanted.size) return [];
+      const scored = [];
+      for (const post of (await posts()).values()) {
+        const title = wordsOf(post.title);
+        const body = wordsOf(post.body);
+        let score = 0;
+        for (const word of wanted) score += (title.has(word) ? 2 : 0) + (body.has(word) ? 1 : 0);
+        if (score) scored.push({ score, post });
+      }
+      scored.sort((a, b) => b.score - a.score || a.post.title.localeCompare(b.post.title));
+      return scored.slice(0, most).map(({ post }) => ({ id: post.id, ...place(post) }));
+    },
   });
 }
 
