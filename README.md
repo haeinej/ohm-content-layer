@@ -48,6 +48,7 @@ node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
 
 | Command | Who runs it | What it does |
 | --- | --- | --- |
+| `cortex status [dir] [--json]` | The person | Lists everything waiting or broken, with how to clear each item; reads without changing files |
 | `cortex init [dir] [--account <did>]` | The person | Starts a cortex in an empty folder, optionally with the signed-in account |
 | `cortex vault connect <folder> [dir]` | The person | Connects the vault kept in that folder, and writes `vault.md` |
 | `cortex vault [sync] [dir]` | The person or a host | Brings the cortex in step with the vault: counts, what moved or left, memories pointing at posts no longer there |
@@ -56,10 +57,39 @@ node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
 | `cortex reject <field or id> [dir]` | The person | Turns one down; that value is not proposed again |
 | `cortex clear <field> [dir]` | The person | Removes an identity field |
 | `cortex mcp [dir]` | An agent | Serves the ten `cortex_*` tools over standard input and output |
+| `cortex serve [dir] [--port 8765] [--host 127.0.0.1]` | The person | Serves the same tools over HTTP at `/mcp`, for clients that connect to a server |
+| `cortex token [dir] [--replace]` | The person | Makes the token HTTP clients sign in with, saves it in `agents/secrets/mcp-token`, and prints it once |
 | `cortex approve <skill> [dir]` | The person | Moves a skill an agent proposed into `skills/` |
 | `cortex event <text> [dir]` | A host | Records a change from outside, for the agent to settle |
 | `cortex hook <moment> [dir] --agent <name>` | Claude Code or Codex, as a hook | Answers `session-start`, `prompt`, `stop` or `session-end` from the folder: the playbook and working memory at the start, a request to distill when working memory changed and was not distilled, once for each change. Exits 0 and writes nothing on any error |
 | `cortex install-hooks claude-code\|codex` | The person | Prints the hooks to add to that client's settings. Writes nothing |
+
+### Over HTTP
+
+For a client that connects to a server rather than starting one, such as a coding agent on another machine. Make a token, then serve:
+
+```bash
+node bin/cortex.mjs token ~/cortex      # prints the token once; it is kept in agents/secrets/mcp-token
+node bin/cortex.mjs serve ~/cortex      # http://127.0.0.1:8765/mcp
+```
+
+Every request must carry `Authorization: Bearer <token>`, or it is answered 401. `cortex serve` binds to 127.0.0.1 unless given `--host`, and with no token it refuses any other host. It does not do TLS: to reach it from another machine, put it behind something that does. Restart it after `cortex token --replace`.
+
+Claude Code:
+
+```bash
+claude mcp add --transport http cortex http://127.0.0.1:8765/mcp --header "Authorization: Bearer $CORTEX_TOKEN"
+```
+
+Codex, in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.cortex]
+url = "http://127.0.0.1:8765/mcp"
+http_headers = { Authorization = "Bearer <token>" }
+```
+
+ChatGPT and Claude's web connectors sign in with OAuth, which is not built yet.
 
 The folder is the one named, or `CORTEX_DIR`, or `~/cortex`. Files a person edits by hand are what the agent is given next.
 

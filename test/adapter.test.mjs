@@ -85,10 +85,13 @@ test('session-start gives the playbook and working memory within each client\'s 
     assert.doesNotMatch(context, /1988|03-09|9 March/, 'the birthdate is never shown');
     assert.doesNotMatch(context, /Utrecht|moved to/, 'no proposal and no evidence');
     assert.match(context, /### working-style/, 'memories marked always, in full');
-    assert.match(context, /## Memory index/);
+    // With the playbook in full, Claude Code's budget has no room left for the index or other agents'
+    // working memory; Codex's pointer leaves room for both.
+    if (agent === 'codex') assert.match(context, /## Memory index/);
     const [mine, other] = agent === 'claude-code' ? ['Answering in Dutch today', 'Refactoring the map renderer'] : ['Refactoring the map renderer', 'Answering in Dutch today'];
     assert.match(context, new RegExp(`working memory from last time \\(${agent}\\)\\n\\n${mine}`));
-    assert.match(context, new RegExp(`### [a-z-]+, updated \\d{4}-\\d\\d-\\d\\dT[^\\n]+\\n${other}`));
+    if (agent === 'codex') assert.match(context, new RegExp(`### [a-z-]+, updated \\d{4}-\\d\\d-\\d\\dT[^\\n]+\\n${other}`));
+    else assert.doesNotMatch(context, new RegExp(other), 'cut before the playbook');
   }
   assert.deepEqual((await lines(dir)).map(entry => [entry.agent, entry.session, typeof entry.started, entry.version.startsWith('c')]), [['claude-code', 'claude-code-s1', 'string', true], ['codex', 'codex-s1', 'string', true]]);
 });

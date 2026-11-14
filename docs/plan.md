@@ -241,7 +241,7 @@ Cortex does not run an agent. It is read by one: ChatGPT, Claude, a coding agent
 - **Hooks are the only way that does not depend on the model.** In Claude Code and Codex the adapter (step 7) puts the playbook in front of the model at session start, whether or not it calls a tool. Nothing in MCP itself does that. Rules guide the agent; what it cannot do is enforced by the tools.
 - **The files are resources.** The playbook, identity, `vault.md`, the memory index and each memory, approved skills, and the tool list can be read as `cortex://` resources. Secrets, birthdate, proposals and history are never served.
 - **The tools change things.** Everything that writes goes through a tool, so the limits are enforced in code.
-- **Two ways to connect.** Over standard input and output, for agents on the person's machine (`cortex mcp`). Over HTTP, for clients that connect to a remote server, such as ChatGPT and Claude in the browser. The HTTP transport is not built yet, and needs a way to sign in.
+- **Two ways to connect.** Over standard input and output, for agents on the person's machine (`cortex mcp`). Over HTTP, for clients that connect to a remote server, such as ChatGPT and Claude in the browser. Over HTTP it is `cortex serve`, signed in with a bearer token from `cortex token`; ChatGPT and Claude's web connectors need OAuth, which is not built.
 
 ## What cortex needs from a vault
 
@@ -285,9 +285,11 @@ Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are bu
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
+| `cortex status [dir] [--json]`: proposals, observations, broken pointers, undescribed or gone sections, problems and working memory over 30 days old; each item says how to clear it | All | Done (step 5). Uses a read-only folder inspection, without syncing or generating files |
 | The folder store (`src/folder.mjs`) | Memories, history, notes, skill proposals, tool proposals, identity, the vault | |
 | The vault contract (`src/vault.mjs`), a folder vault, and `vault.md` (`src/vaultmap.mjs`): counts kept in step, meanings and conventions written by the agent with `cortex_describe_section`, the person's words outranking them, notes for what moved or left, broken pointers reported, `posts` on memories, `cortex vault connect` and `cortex vault sync` | All | Done (step 2). Only the folder kind is built; ohm's comes with sync |
 | Strict identity (`src/identity.mjs`): fixed typed fields, proposals with evidence in `.cortex/identity.jsonl`, `cortex confirm`, `reject`, `clear` and `identity`, `init --account` | History of changes | Done (step 1). With a vault connected, vault evidence is checked against the post |
+| Filing advice (`src/filing.mjs`): `cortex_file_advice` answers "how should I file this?" with up to three sections from `vault.md` (meaning, conventions, why it fits, matched by words), the approved skill that fits the kind, up to five related posts from the vault's optional `search`, and one question to ask; it writes nothing. A `file-a-source` skill in the template, and a Filing section in the rulebook | All | Done (step 4). Matching is by words, not meaning |
 | Memory kinds `person`, `preference`, `project`, `reference` | Rules for names, descriptions, versions | Drop `project` |
 | Ten MCP tools, with `cortex_propose_identity` in place of `cortex_identity`; short instructions that send an agent to `cortex_start`, which returns the playbook; a `start` prompt; the files as `cortex://` resources; birthdate hidden from agents | All | Add working memory and filing advice; serve over HTTP |
 | Working memory: one file per agent in `.cortex/working/`, `cortex_working` to rewrite your own, `cortex_distill` to record what was seen again and leave what is open, given in `cortex_start` and as `cortex://working/<agent>` resources; when something becomes a memory is in the playbook | All | Done (step 3). The working memory a distill replaces, or a clear removes, is kept; rewrites during a session are not |
@@ -295,15 +297,16 @@ Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are bu
 | Commands `init`, `mcp`, `identity`, `confirm`, `reject`, `clear`, `approve`, `event` | All | `event` takes structured vault events; add `status` |
 | The rulebook in `agents/AGENTS.md`, with the identity policy | Secrets, git and identity sections | Rewrite around filing and working memory |
 | Git policy files, with `.cortex/identity.jsonl` as append-only | Both | |
+| MCP over HTTP (`src/http.mjs`): the Streamable HTTP transport of the initialize-based revisions at `/mcp`, a session ID from `initialize`, tools and agent name for each session, answers as JSON, a bearer token from `cortex token` in `agents/secrets/mcp-token`, `cortex serve` bound to 127.0.0.1 unless told otherwise | All | Done (step 6), with a token. OAuth for ChatGPT and Claude's web connectors, TLS and hosting are not built |
 
 ## Build order
 
 1. **Identity.** *Done.* Fixed fields, validation, `.cortex/identity.jsonl`, proposals with evidence, `cortex confirm`. Done when a proposal without a post and passage is refused, a confirmed field is not overwritten by a proposal, and pronouns cannot be proposed from anything but the person's own words.
 2. **Vault contract and `vault.md`.** *Done.* The contract as an interface, a folder vault that implements it for tests, structured events, and `vault.md` kept in step. Done when removing a post in the test vault flags the memory that pointed at it.
 3. **Working memory.** *Done.* One file per agent, a tool to update its own, refresh at start and distill and merge at end, with the rules for when something becomes a memory in the playbook. Callable without hooks. Done when something noticed in two sessions becomes a memory in the third, with nobody asked.
-4. **Filing rules and advice.** The rulebook rewritten, a filing skill template, and a "how should I file this" answer built from `vault.md` and skills. Done when the answer for a source names a section, its conventions and related posts, and nothing is written to the vault.
-5. **`cortex status`.** Everything waiting or broken, in one answer. Done when every item it lists has a way to clear it.
-6. **Remote MCP over HTTP,** with sign-in, so ChatGPT and browser clients can reach a cortex. Done when a client connected over HTTP reads the playbook as its instructions and calls `cortex_start`.
+4. **Filing rules and advice.** *Done.* The rulebook rewritten, a filing skill template, and a "how should I file this" answer built from `vault.md` and skills. Done when the answer for a source names a section, its conventions and related posts, and nothing is written to the vault.
+5. **`cortex status`.** *Done.* Everything waiting or broken, in one answer. Every item it lists has a way to clear it.
+6. **Remote MCP over HTTP,** *Done, with a bearer token; OAuth waits for a decision.* With sign-in, so ChatGPT and browser clients can reach a cortex. Done when a client connected over HTTP reads the playbook as its instructions and calls `cortex_start`.
 7. **The hooks adapter.** *Built; the run in a real client is still to do.* `cortex hook <moment>` for Claude Code, then Codex, answering from the folder with no network wait. Done when, with neither model calling a tool, a session starts with working memory refreshed and ends with it distilled.
 8. **Sync with a host.** The folder kept in step with ohm's service, folder first. Done when a cortex removed from the host is restored from the folder unchanged, and the other way round.
 
