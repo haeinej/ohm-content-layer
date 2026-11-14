@@ -8,3 +8,7 @@ agents/secrets/*
 *.tmp
 .DS_Store
 Thumbs.db
+
+# Which vault this machine reads, and how far it has read it. Each machine connects its own.
+.cortex/vault.json
+.cortex/vault-cursor.json

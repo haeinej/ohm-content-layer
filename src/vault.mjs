@@ -2,9 +2,11 @@
 // only reads through it. Saving content is the vault's own job, done by the agent through the
 // vault's own API on the person's say-so.
 //
-//   shape()          the sections and subsections, with counts and recent posts
+//   shape()          the sections and subsections, with counts, and any problems reading the vault
 //   read(id)         one post: { id, title, label, sublabel, body }, or null
-//   exists(id)       whether a post is still there, and where: { exists, label, sublabel, title }
+//   exists(ids)      for each of a list of IDs, whether the post is still there, and where:
+//                    { [id]: { exists, label, sublabel, title } }. One call, so a vault is read once
+//                    however many posts the memories point at
 //   changes(cursor)  what was saved, moved or removed since a cursor an earlier call returned:
 //                    { changes: [{ type, id, title, label, sublabel, from? }], cursor }. With no
 //                    cursor, it returns none and a cursor to start from
@@ -33,8 +35,10 @@ export const sectionOf = ({ label, sublabel }) => sublabel ? `${label}/${sublabe
 export function folderVault(root) {
   const hash = text => createHash('sha256').update(text).digest('hex').slice(0, 16);
 
+  let problems = [];
   async function posts() {
     const found = new Map();
+    problems = [];
     async function walk(folder) {
       let entries;
       try { entries = await readdir(join(root, folder), { withFileTypes: true }); } catch (problem) {
@@ -51,7 +55,8 @@ export function folderVault(root) {
           const parts = path.split(sep);
           const [label, sublabel] = parts.length === 1 ? ['other'] : parts.length === 2 ? [parts[0]] : [parts[0], parts.slice(1, -1).join('-')];
           const id = typeof properties.id === 'string' && properties.id.trim() ? properties.id.trim() : `path:${parts.join('/')}`;
-          if (found.has(id)) continue;
+          // Two files with one ID: the first stands, and the clash is reported so the person can fix it.
+          if (found.has(id)) { problems.push(`${found.get(id).path} and ${parts.join('/')} have the same id, ${id}. Only the first is read`); continue; }
           found.set(id, { id, title: typeof properties.title === 'string' && properties.title.trim() ? properties.title.trim() : entry.name.slice(0, -3), label, ...(sublabel ? { sublabel } : {}), body, path: relative(root, join(root, path)), hash: hash(text) });
         }
       }
@@ -74,7 +79,7 @@ export function folderVault(root) {
           sections.get(key).posts += 1;
         }
       }
-      return { posts: all.length, sections: [...sections.values()].sort((a, b) => a.section.localeCompare(b.section)) };
+      return { posts: all.length, sections: [...sections.values()].sort((a, b) => a.section.localeCompare(b.section)), ...(problems.length ? { problems: [...problems] } : {}) };
     },
 
     async read(id) {
@@ -82,9 +87,9 @@ export function folderVault(root) {
       return post ? { id: post.id, ...place(post), body: post.body } : null;
     },
 
-    async exists(id) {
-      const post = (await posts()).get(id);
-      return post ? { exists: true, ...place(post) } : { exists: false };
+    async exists(ids) {
+      const all = await posts();
+      return Object.fromEntries([...new Set(ids)].map(id => [id, all.has(id) ? { exists: true, ...place(all.get(id)) } : { exists: false }]));
     },
 
     async changes(cursor) {

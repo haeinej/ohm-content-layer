@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -40,7 +41,7 @@ test('a folder vault answers the contract', async () => {
   assert.deepEqual(await folder.shape(), { posts: 4, sections: [{ section: 'essays', posts: 2 }, { section: 'notes', posts: 1 }, { section: 'notes/reading', posts: 1 }, { section: 'other', posts: 1 }] });
   assert.deepEqual(await folder.read('p3'), { id: 'p3', title: 'Reading: an atlas', label: 'notes', sublabel: 'reading', body: '' });
   assert.equal((await folder.read('path:loose.md')).label, 'other');
-  assert.deepEqual(await folder.exists('p9'), { exists: false });
+  assert.deepEqual(await folder.exists(['p9', 'p1', 'p9']), { p9: { exists: false }, p1: { exists: true, title: 'On maps', label: 'essays' } });
 
   const { changes: none, cursor } = await folder.changes(null);
   assert.deepEqual(none, []);
@@ -149,4 +150,47 @@ test('the person connects a vault from the command line', async () => {
   assert.match(execFileSync('node', [cli, 'vault', 'connect', join(base, 'vault'), dir], { encoding: 'utf8' }), /1 sections/);
   assert.equal(JSON.parse(execFileSync('node', [cli, 'vault', 'sync', dir], { encoding: 'utf8' })).sections[0].section, 'essays');
   assert.match(await readFile(join(dir, 'vault.md'), 'utf8'), /## essays\n1 post\./);
+});
+
+test('a heading the person writes in vault.md is kept as theirs', async () => {
+  const { dir, agent } = await setup();
+  await writeFile(join(dir, 'vault.md'), (await map(dir)).replace('## essays\n2 posts.', '## essays\n2 posts.\n### Examples\nThe best one is On maps.'));
+  const start = await agent.start();
+  assert.match(await map(dir), /## essays\n2 posts\.\n### Examples\nThe best one is On maps\.\n\n## notes/);
+  assert.equal(start.notes.some(note => /Examples/.test(note.text)), false);
+  assert.deepEqual(start.vault.sections.map(section => section.section), ['essays', 'notes', 'notes/reading']);
+});
+
+test('a damaged cursor is started again, and the machine-local files stay out of git', async () => {
+  const { dir, agent } = await setup();
+  await writeFile(join(dir, '.cortex', 'vault-cursor.json'), '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n');
+  assert.equal((await agent.start()).vault.connected, true);
+  assert.doesNotThrow(() => JSON.parse(readFileSync(join(dir, '.cortex', 'vault-cursor.json'), 'utf8')));
+  await writeFile(join(dir, '.cortex', 'vault.json'), 'not json');
+  const start = await openCortex(dir).start();
+  assert.equal(start.vault.reachable, false);
+  assert.match(start.problems.join(), /vault\.json cannot be read/);
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
+  git('init', '-q');
+  git('add', '-A');
+  const tracked = git('ls-files');
+  assert.doesNotMatch(tracked, /vault\.json|vault-cursor\.json/);
+  assert.match(tracked, /vault\.md/);
+});
+
+test('two posts with one ID: the first stands and the clash is reported', async () => {
+  const { vault, agent } = await setup();
+  await writePost(vault, 'notes/copy.md', { id: 'p1', title: 'A copy' });
+  const start = await agent.start();
+  assert.ok(start.problems.some(problem => /essays\/on-maps\.md and notes\/copy\.md have the same id, p1/.test(problem)), start.problems.join('\n'));
+});
+
+test('one session start reads the vault a fixed number of times, however many pointers there are', async () => {
+  const { dir, vault, agent } = await setup();
+  for (const name of ['ref-a', 'ref-b', 'ref-c', 'ref-d', 'ref-e', 'ref-f']) await agent.write({ name, description: 'x', kind: 'reference', stated: false, body: 'x', posts: ['p1', 'p2'] });
+  const real = folderVault(vault);
+  let calls = 0;
+  const counted = Object.fromEntries(Object.entries(real).map(([key, value]) => [key, typeof value === 'function' ? (...args) => { calls += 1; return value(...args); } : value]));
+  await openCortex(dir, { vault: counted }).start();
+  assert.equal(calls, 3);
 });

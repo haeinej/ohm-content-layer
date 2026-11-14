@@ -23,13 +23,17 @@ const counted = line => /^\d+ posts?\.$/.test(line.trim()) || line.trim() === GO
 const INTRO = '';
 const headerLines = new Set(HEADER.split('\n').filter(Boolean));
 
-export function parseMap(text) {
+// `known` names the sections the vault has now. A heading starts a section when it names one of
+// them, or when cortex wrote it (its count line follows). Any other heading is the person's own,
+// and is kept as part of the text under the section it sits in.
+export function parseMap(text, known = new Set()) {
   const sections = new Map();
   let current = { meaning: '', conventions: '', extra: [] };
   sections.set(INTRO, current);
-  for (const line of (text ?? '').split(/\r?\n/)) {
+  const lines = (text ?? '').split(/\r?\n/);
+  for (const [index, line] of lines.entries()) {
     const heading = /^#{2,3} (.+)$/.exec(line);
-    if (heading) {
+    if (heading && (known.has(heading[1].trim()) || counted(lines[index + 1] ?? ''))) {
       current = { meaning: '', conventions: '', extra: [] };
       sections.set(heading[1].trim(), current);
       continue;

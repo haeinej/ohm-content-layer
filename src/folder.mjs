@@ -5,7 +5,7 @@
 //   .cortex/                                             what is waiting, and what was replaced
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
-import { checkField, checkSource, FIELDS, forAgent, IDENTITY, readIdentity, shownValue, writeIdentity } from './identity.mjs';
+import { checkField, checkSource, FIELDS, forAgent, IDENTITY, readIdentity, shownValue, statesValue, writeIdentity } from './identity.mjs';
 import { sectionOf, vaultFrom } from './vault.mjs';
 import { checkWords, gone, parseMap, writeMap } from './vaultmap.mjs';
 import { createHash } from 'node:crypto';
@@ -156,7 +156,11 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     if (givenVault) return givenVault;
     if (openedVault !== undefined) return openedVault;
     const config = await text(at('.cortex', 'vault.json'));
-    openedVault = config ? vaultFrom(JSON.parse(config)) : null;
+    let parsed = null;
+    if (config) {
+      try { parsed = JSON.parse(config); } catch { throw new Refused('InvalidVault', '.cortex/vault.json cannot be read. Connect the vault again with cortex vault connect'); }
+    }
+    openedVault = parsed ? vaultFrom(parsed) : null;
     return openedVault;
   }
   const short = value => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
@@ -209,7 +213,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const { memories, problems } = await all();
       const identity = await cortex.identity();
       const pending = [...(await notes()).values()].filter(note => !note.settledAt);
-      const found = [...identity.problems, ...problems, ...(vault.problem ? [`vault: ${vault.problem}`] : [])];
+      const found = [...identity.problems, ...problems, ...(vault.problem ? [`vault: ${vault.problem}`] : []), ...(vault.problems ?? []).map(problem => `vault: ${problem}`)];
       return {
         rules: await cortex.rules(),
         identity: forAgent(identity),
@@ -247,11 +251,15 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const vault = await theVault();
       if (!vault) return { connected: false };
       const cursorPath = at('.cortex', 'vault-cursor.json');
-      const before = await text(cursorPath);
-      const { changes, cursor } = await vault.changes(before ? JSON.parse(before) : null);
+      // A cursor that cannot be read, say after a merge, is started again: the vault is read afresh
+      // and nothing that happened before is reported.
+      let before = null;
+      try { before = JSON.parse(await text(cursorPath) ?? 'null'); } catch {}
+      const { changes, cursor } = await vault.changes(before);
       const shape = await vault.shape();
       const content = await text(at('vault.md'));
-      const written = parseMap(content);
+      const known = new Set(shape.sections.map(item => item.section));
+      const written = parseMap(content, known);
       const next = writeMap(shape, written);
       if (next !== content) await put(at('vault.md'), next);
 
@@ -271,16 +279,15 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       for (const { section } of shape.sections) if (!written.has(section)) await note(['section', section], `The vault has a section, ${section}, that vault.md does not describe yet`);
       for (const key of gone(shape, written)) await note(['gone', key], `The section ${key} is no longer in the vault. What vault.md said about it is kept`);
 
-      const broken = [];
-      for (const { memory } of memories) {
-        for (const id of memory.posts ?? []) if (!(await vault.exists(id)).exists) broken.push({ memory: memory.name, post: id });
-      }
-      if (before === null || JSON.stringify(JSON.parse(before)) !== JSON.stringify(cursor)) await put(cursorPath, JSON.stringify(cursor));
-      const map = parseMap(next);
+      const pointed = memories.flatMap(({ memory }) => memory.posts ?? []);
+      const where = pointed.length ? await vault.exists(pointed) : {};
+      const broken = memories.flatMap(({ memory }) => (memory.posts ?? []).filter(id => !where[id]?.exists).map(id => ({ memory: memory.name, post: id })));
+      if (JSON.stringify(before) !== JSON.stringify(cursor)) await put(cursorPath, JSON.stringify(cursor));
+      const map = parseMap(next, known);
       return {
         connected: true,
         sections: shape.sections.map(({ section, posts }) => ({ section, posts, ...(map.get(section)?.meaning ? { meaning: map.get(section).meaning } : {}), ...(map.get(section)?.conventions ? { conventions: map.get(section).conventions } : {}) })),
-        changes: changes.length, noted, broken,
+        changes: changes.length, noted, broken, ...(shape.problems?.length ? { problems: shape.problems } : {}),
       };
     },
 
@@ -291,7 +298,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       if (!vault) throw new Refused('NoVault', 'No vault is connected to this cortex');
       const shape = await vault.shape();
       const content = await text(at('vault.md'));
-      const written = parseMap(content);
+      const written = parseMap(content, new Set(shape.sections.map(item => item.section)));
       if (typeof section !== 'string' || !section || (!shape.sections.some(item => item.section === section) && !written.has(section))) throw new Refused('NotFound', `There is no section ${section} in the vault`);
       const given = Object.entries({ meaning, conventions }).filter(([, value]) => value !== undefined);
       if (!given.length) throw new Refused('InvalidRequest', 'Give a meaning, conventions, or both');
@@ -342,6 +349,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       if (!Object.hasOwn(IDENTITY, field)) throw new Refused('InvalidIdentity', `${field} is not an identity field. The fields are: ${FIELDS.join(', ')}`);
       const evidence = checkSource(field, source);
       const checked = checkField(field, value);
+      if (!statesValue(field, checked, evidence.quote ?? evidence.passage)) throw new Refused('NoEvidence', `The ${evidence.kind === 'person' ? 'quote' : 'passage'} does not say ${JSON.stringify(checked)}. Quote where it is stated`);
       // With a vault connected, the post must be there and must say what is quoted from it.
       if (evidence.kind === 'vault') {
         const vault = await theVault();

@@ -112,6 +112,19 @@ export function writeIdentity(properties, body) {
   return writeFront(ordered, body.startsWith('\n') ? body : `\n${body}`).replace(/^---\n---\n/, '---\n\n---\n');
 }
 
+// For fields written in words, the evidence must say the value itself: a quote about Lisbon is not
+// evidence for Porto. Fields that cannot be read off word for word (kind, timezone, languages,
+// birthdate) rest on the person confirming them.
+const plain = words => String(words).toLowerCase().replace(/\s+/g, ' ').trim();
+const site = address => plain(address).replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+export function statesValue(field, value, said) {
+  const words = plain(said);
+  if (['name', 'preferredName', 'pronouns', 'city', 'occupation', 'organization', 'position'].includes(field)) return words.includes(plain(value));
+  if (field === 'emails') return value.every(email => words.includes(plain(email.address)));
+  if (field === 'websites') return value.every(address => words.includes(site(address)));
+  return true;
+}
+
 // Evidence is what makes a proposal more than a guess: the person's own words, or a passage of
 // one of their posts that states the fact. Cortex cannot yet check that the post says it.
 export function checkSource(field, source) {

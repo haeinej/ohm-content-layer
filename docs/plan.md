@@ -251,7 +251,7 @@ A small contract, so any vault can sit beside a cortex: ohm's service, an Obsidi
 | --- | --- |
 | Shape | The sections and subsections, with counts and recent posts |
 | Read | One post by its ID |
-| Exists | Whether a post ID still exists, and where it is now |
+| Exists | For a list of post IDs, whether each still exists, and where it is now, in one call |
 | Changes since | What was saved, moved or removed since a point |
 | Profile | Identity facts the vault itself holds, such as its account and published profile, each with where it came from |
 
@@ -281,7 +281,7 @@ A post saved in a known section needs nothing and is not noted. With a vault con
 
 ## What exists now, and what changes
 
-Built in the `ohm-cortex` repository and tested (36 tests). Steps 1 and 2 are built:
+Built in the `ohm-cortex` repository and tested (41 tests). Steps 1 and 2 are built:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
