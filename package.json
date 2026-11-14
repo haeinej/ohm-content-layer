@@ -1,0 +1,7 @@
+{
+  "name": "cortex",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "What an agent knows about the person it works for, kept as a folder that person can read."
+}
