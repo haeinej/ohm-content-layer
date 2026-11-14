@@ -19,10 +19,11 @@ Cortex is how an agent reads and edits a person's vault for them: who they are, 
 
 ```
 src/core.mjs       memory rules, versions, the Markdown property format, the Refused error
+src/identity.mjs   identity fields, their types, and what counts as evidence
 src/folder.mjs     the folder store: every operation on a cortex
 src/tools.mjs      the MCP tools an agent is given, built only from folder operations
 src/protocol.mjs   MCP over standard input and output
-bin/cortex.mjs     the command line: init, mcp, approve, event
+bin/cortex.mjs     the command line: init, mcp, identity, confirm, reject, clear, approve, event
 template/          what a new cortex starts as
 test/              node --test
 docs/plan.md       the specification and build order

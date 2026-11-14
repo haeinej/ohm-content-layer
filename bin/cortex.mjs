@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// cortex init [dir]            start a cortex in an empty folder
+// cortex init [dir] [--account <did-or-handle>]   start a cortex in an empty folder
 // cortex mcp [dir]             serve the cortex's tools to an agent, over standard input and output
 // cortex approve <skill> [dir] approve a skill an agent proposed
 // cortex event <text> [dir]    report a change from outside, for the agent to settle
+// cortex confirm <field|id> [dir]   accept an identity fact an agent proposed
+// cortex reject <field|id> [dir]    turn one down; it is not proposed again from the same evidence
+// cortex clear <field> [dir]        remove an identity field
 // The folder is the one named, or CORTEX_DIR, or ~/cortex.
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -19,7 +22,10 @@ const folder = given => resolve(given ?? process.env.CORTEX_DIR ?? join(homedir(
 
 try {
   if (command === 'init') {
-    const { dir } = await initCortex(folder(rest[0]), template);
+    const at = rest.indexOf('--account');
+    const account = at >= 0 ? rest.splice(at, 2)[1] : undefined;
+    if (at >= 0 && !account) throw new Refused('InvalidRequest', 'Give --account a DID or a handle');
+    const { dir } = await initCortex(folder(rest[0]), template, { account });
     console.log(`A cortex was started in ${dir}`);
   } else if (command === 'mcp') {
     const dir = folder(rest[0]);
@@ -30,11 +36,22 @@ try {
   } else if (command === 'approve' && rest[0]) {
     const done = await openCortex(folder(rest[1])).approveSkill(rest[0]);
     console.log(`${done.name} is approved, and is now in skills/`);
+  } else if (['confirm', 'reject'].includes(command) && rest[0]) {
+    const cortex = openCortex(folder(rest[1]), { actor: 'member' });
+    const done = command === 'confirm' ? await cortex.confirmIdentity(rest[0]) : await cortex.rejectIdentity(rest[0]);
+    console.log(command === 'confirm' ? `${done.field} is now ${JSON.stringify(done.value)}` : `${done.field}: proposal ${done.id} turned down`);
+  } else if (command === 'clear' && rest[0]) {
+    await openCortex(folder(rest[1]), { actor: 'member' }).clearIdentity(rest[0]);
+    console.log(`${rest[0]} is cleared`);
+  } else if (command === 'identity') {
+    const cortex = openCortex(folder(rest[0]));
+    const { fields, problems } = await cortex.identity();
+    console.log(JSON.stringify({ fields, waiting: await cortex.identityProposals(), ...(problems.length ? { problems } : {}) }, null, 2));
   } else if (command === 'event' && rest[0]) {
     const { id } = await openCortex(folder(rest[1]), { actor: process.env.CORTEX_SOURCE ?? 'host' }).addNote({ id: randomUUID(), note: rest[0], session: 'event' });
     console.log(`Recorded ${id}`);
   } else {
-    console.log('cortex init [dir] | mcp [dir] | approve <skill> [dir] | event <text> [dir]');
+    console.log('cortex init [dir] [--account <did>] | mcp [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir]');
     process.exitCode = command ? 1 : 0;
   }
 } catch (problem) {
