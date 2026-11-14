@@ -12,7 +12,7 @@ An agent that clicks through pixels is slow and fragile. It can also do things t
 
 A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/workspace.md)):
 
-- A **rack** on the page: search, new post, **personal repository** (a pill with your picture and name; All, Cortex, Vault), **visibility**, **inbox**, and you.
+- A **rack** on the page: search, new post, **personal repository** (a pill with your picture and name; All, Cortex, Vault; visibility inside it), **inbox**, notifications, and you.
 - A **side panel** card that becomes what the rack chose. The personal repo has cortex and vault as checkable top-level folders, and a **graph** inside it. The graph is centred on you, with the cortex as the closest layer, then labels, sublabels and posts intertwining. It behaves like Obsidian's: springy, with hover highlighting and drag.
 - A **main panel** card where every page opens in a block editor:
   - **Path:** the page's path sits in a pill. Drag it out to save the page as `.md`, or onto a folder to file it.

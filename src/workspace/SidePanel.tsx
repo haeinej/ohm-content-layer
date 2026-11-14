@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
-  AtSignIcon, BrainIcon, EllipsisIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
+  AtSignIcon, BrainIcon, EllipsisIcon, EyeIcon, EyeOffIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -15,10 +15,11 @@ import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
 import { PrimeIcon } from "./PrimeIcon"
 import { RowMenu } from "./RowMenu"
+import { VisibilityMarks } from "./VisibilityMarks"
 import { SETTINGS_TABS } from "./settings-tabs"
 import { panelTitle, SidePanelFrame } from "./Surface"
 import {
-  createDraft, marks, me, moveDoc, open, openInbox, openSettings, setAudience, setRepoMode, setScope, useWorkspace,
+  createDraft, marks, me, moveDoc, open, openInbox, openSettings, setAudience, setRepoMode, setScope, setShowVisibility, useWorkspace,
 } from "./store"
 
 /** label › sublabel › item, as folders. Folder ids are prefixed so they never collide with docs. */
@@ -51,6 +52,12 @@ const folderIds = (nodes: FileTreeNode[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id, ...folderIds(n.children)] : []))
 
 const toggle = "text-muted-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
+
+const AUDIENCES: { id: Audience; label: string; note: string; icon: LucideIcon }[] = [
+  { id: "personal", label: "You", note: "As you: everything, your vault and your cortex.", icon: LockIcon },
+  { id: "friends", label: "Friends", note: "As a friend: posts for friends, and for everyone.", icon: UsersIcon },
+  { id: "public", label: "Public", note: "As anyone: posts for everyone.", icon: GlobeIcon },
+]
 
 // ─── Personal repository ──────────────────────────────────────────────────────
 
@@ -160,7 +167,7 @@ function PrimeRow({ prime, open: isOpen, onOpen, locked, onExpandAll, allOpen, o
 }
 
 function RepoPanel() {
-  const { view, rev, repoMode, scope, audience } = useWorkspace()
+  const { view, rev, repoMode, scope, audience, showVisibility } = useWorkspace()
   const cortexTree = useMemo(() => toTree("cortex", cortex, ["memories", "notes", "skills", "tools"]), [rev])
   const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p) && !marks.archived.has(p.id)), [rev, audience]) // eslint-disable-line react-hooks/exhaustive-deps
   const pinned = posts.concat(cortex).filter(d => marks.pinned.has(d.id) && (d.kind !== "post" || sees(audience, d)))
@@ -221,6 +228,10 @@ function RepoPanel() {
         </DropdownMenu>
       }
       actions={<>
+        <Button size="icon-sm" variant="ghost" className={toggle} aria-label="Show who each page is for" title="Visibility"
+          aria-pressed={showVisibility} onClick={() => setShowVisibility(!showVisibility)}>
+          <Icon icon={showVisibility ? EyeIcon : EyeOffIcon} size="sm" />
+        </Button>
         <div role="group" aria-label="Show as" className="flex">
           <Button size="icon-sm" variant="ghost" className={toggle} aria-label="Tree" aria-pressed={repoMode === "tree"} onClick={() => setRepoMode("tree")}>
             <Icon icon={ListTreeIcon} size="sm" />
@@ -238,7 +249,21 @@ function RepoPanel() {
       </>}
     >
       {repoMode === "tree" ? (
-        <div ref={el => { treeRef.current = el; setRows(el) }} className="relative flex flex-col gap-0.5 [&_[data-drop]]:bg-primary/10 [&_[data-drop]]:ring-1 [&_[data-drop]]:ring-primary/40">
+        <div ref={el => { treeRef.current = el; setRows(el) }} data-show-visibility={showVisibility || undefined} className="relative flex flex-col gap-0.5 [&_[data-drop]]:bg-primary/10 [&_[data-drop]]:ring-1 [&_[data-drop]]:ring-primary/40">
+          {showVisibility && (
+            /* Visibility, inside the repository: look as someone else, and see who each page is for. */
+            <div className="mb-2 flex flex-col gap-1.5 animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)">
+              <div role="radiogroup" aria-label="View as" className="grid grid-cols-3 gap-0.5 rounded-xl bg-muted p-0.5">
+                {AUDIENCES.map(a => (
+                  <button key={a.id} type="button" role="radio" aria-checked={audience === a.id} onClick={() => setAudience(a.id)}
+                    className="flex h-7 items-center justify-center gap-1.5 rounded-lg text-small text-muted-foreground transition-colors duration-(--ohm-duration-state) hover:text-foreground aria-checked:bg-card aria-checked:text-foreground aria-checked:shade-1">
+                    <Icon icon={a.icon} size="xs" />{a.label}
+                  </button>
+                ))}
+              </div>
+              <p className="px-1 text-small text-muted-foreground">{AUDIENCES.find(a => a.id === audience)!.note}</p>
+            </div>
+          )}
           {pinned.length > 0 && <>
             <p className="px-2 pt-1 pb-0.5 text-small text-muted-foreground">Pinned</p>
             {pinned.map(d => (
@@ -282,43 +307,13 @@ function RepoPanel() {
             ))}
           </>}
           <RowMenu container={rows} />
+          <VisibilityMarks container={rows} />
         </div>
       ) : (
         <div className="-mx-1 flex min-h-0 flex-1 overflow-hidden rounded-2xl bg-background">
           <GraphView />
         </div>
       )}
-    </SidePanelFrame>
-  )
-}
-
-// ─── Visibility ───────────────────────────────────────────────────────────────
-
-const AUDIENCES: { id: Audience; label: string; note: string; icon: LucideIcon }[] = [
-  { id: "personal", label: "Only you", note: "Everything: your vault and your cortex", icon: LockIcon },
-  { id: "friends", label: "Friends", note: "Posts for friends, and for everyone", icon: UsersIcon },
-  { id: "public", label: "Public", note: "Posts for everyone", icon: GlobeIcon },
-]
-
-function VisibilityPanel() {
-  const { audience } = useWorkspace()
-  return (
-    <SidePanelFrame label="Visibility"
-      heading={<h1 className={panelTitle}>Visibility</h1>}>
-      <p className="mx-2.5 mb-2 text-small text-muted-foreground">View as</p>
-      <div role="radiogroup" aria-label="View as" className="flex flex-col gap-0.5">
-        {AUDIENCES.map(a => (
-          <button key={a.id} type="button" role="radio" aria-checked={audience === a.id} onClick={() => setAudience(a.id)}
-            className="flex min-h-12 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted aria-checked:bg-muted">
-            <Icon icon={a.icon} size="sm" className="text-muted-foreground" />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-body font-medium">{a.label}</span>
-              <span className="text-small text-muted-foreground">{a.note}</span>
-            </span>
-            <Icon icon={CheckIcon} size="sm" className={cn(audience !== a.id && "invisible")} />
-          </button>
-        ))}
-      </div>
     </SidePanelFrame>
   )
 }
@@ -411,7 +406,6 @@ function ProfilePanel() {
 export function SidePanel() {
   const { side } = useWorkspace()
   if (side === "repo") return <RepoPanel />
-  if (side === "visibility") return <VisibilityPanel />
   if (side === "inbox") return <InboxPanel />
   if (side === "profile") return <ProfilePanel />
   return null

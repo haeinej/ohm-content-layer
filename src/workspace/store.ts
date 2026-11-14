@@ -36,6 +36,8 @@ type State = {
   sideWidth: number
   /** Who you are looking as: yourself, a friend, or anyone. */
   audience: Audience
+  /** The repository shows who each page is for, with a pill to change it. */
+  showVisibility: boolean
   graphCenter: string
   view: View
   searchOpen: boolean
@@ -52,7 +54,7 @@ const narrow = () => typeof window !== "undefined" && window.matchMedia("(max-wi
 const sideAfterOpen = (): Partial<State> => (narrow() ? { side: null } : {})
 
 let state: State = {
-  side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal",
+  side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal", showVisibility: false,
   graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0,
   appearance: "system", density: savedDensity(), agentsAllowed: true,
   offered: { "workspace.search": true, "workspace.open": true, "workspace.graph": true, "workspace.create": true, "workspace.save-draft": true },
@@ -85,6 +87,8 @@ export const scopeFolders = (scope: RepoScope) => scope
 
 // Visibility
 export const setAudience = (audience: Audience) => set({ audience })
+export const setShowVisibility = (showVisibility: boolean) =>
+  set({ showVisibility, side: "repo", repoMode: "tree", ...(showVisibility ? {} : { audience: "personal" as Audience }) })
 /** Marks who a post is for. Marking is not publishing; making a post less private asks first (the panel's dialog). */
 export function setVisibility(id: string, visibility: Visibility) {
   const doc = byId(id)

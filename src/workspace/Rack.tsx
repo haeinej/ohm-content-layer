@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-import { EyeIcon, FolderGitIcon, InboxIcon } from "lucide-react"
+import { FolderGitIcon, InboxIcon } from "lucide-react"
 import { inbox } from "@/data/sample"
 import { NotificationCenter } from "./NotificationCenter"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -47,7 +47,6 @@ export function Rack() {
       <RackButton label="New post" shortcut="⌘N" onClick={() => createDraft()}><RackIcon icon={icons.write} /></RackButton>
       <div className="h-4" />
       <RackButton label="Personal repo" active={side === "repo"} onClick={() => toggleSide("repo")}><RackIcon icon={FolderGitIcon} /></RackButton>
-      <RackButton label="Visibility" active={side === "visibility"} onClick={() => toggleSide("visibility")}><RackIcon icon={EyeIcon} /></RackButton>
       <RackButton label={unread ? `Inbox, ${unread} new` : "Inbox"} active={side === "inbox"} onClick={() => toggleSide("inbox")}>
         <span className="relative flex">
           <RackIcon icon={InboxIcon} />
