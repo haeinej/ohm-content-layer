@@ -2,6 +2,7 @@
 
 export type Visibility = "public" | "friends" | "private"
 export type Kind = "post" | "memory" | "note" | "skill" | "tool"
+export type Platform = "own" | "bluesky" | "instagram" | "x"
 
 export type Doc = {
   id: string
@@ -16,6 +17,8 @@ export type Doc = {
   updated: string
   /** An emoji shown above the title. */
   icon?: string
+  /** Where a post first appeared: "own" for nowhere else, or the platform it was brought in from. */
+  platform?: Platform
   /** Cortex only: the parts of the vault this is about, as `label`, `label/sublabel` or a post's slug. */
   about?: string[]
 }
@@ -38,12 +41,12 @@ export const posts: Doc[] = [
     body: "# Why I keep a garden of notes\n\nA note is a seed. Most stay small; a few grow into [[slow-software]].\n\nI learned this from @june.example, who writes everything twice.",
   },
   {
-    id: "p2", kind: "post", title: "Slow software", slug: "slow-software", label: "writing", sublabel: "essays",
+    id: "p2", kind: "post", platform: "x", title: "Slow software", slug: "slow-software", label: "writing", sublabel: "essays",
     visibility: "public", updated: "2026-10-21",
     body: "# Slow software\n\nTools that wait for you. A draft that is private until you say otherwise.\n\nSee [[garden-of-notes]] and the [[tokyo-walks]] series for the same idea in pictures.",
   },
   {
-    id: "p3", kind: "post", title: "On owning your address", slug: "owning-your-address", label: "writing", sublabel: "essays",
+    id: "p3", kind: "post", platform: "bluesky", title: "On owning your address", slug: "owning-your-address", label: "writing", sublabel: "essays",
     visibility: "friends", updated: "2026-11-09",
     body: "# On owning your address\n\nYour DID is the root. Everything else hangs from it.\n\n@theo.example disagrees, kindly.",
   },
@@ -53,17 +56,17 @@ export const posts: Doc[] = [
     body: "# Monday, rain\n\nNothing shipped. Read for an hour. Thought about [[slow-software]] again.",
   },
   {
-    id: "p5", kind: "post", title: "Tokyo walks, day one", slug: "tokyo-walks", label: "photos", sublabel: "tokyo",
+    id: "p5", kind: "post", platform: "instagram", title: "Tokyo walks, day one", slug: "tokyo-walks", label: "photos", sublabel: "tokyo",
     visibility: "public", updated: "2026-09-14",
     body: "# Tokyo walks, day one\n\nYanaka in the morning, with @sana.example.\n\n![A quiet street](https://example.com/street.jpg)",
   },
   {
-    id: "p6", kind: "post", title: "Tokyo walks, day two", slug: "tokyo-walks-2", label: "photos", sublabel: "tokyo",
+    id: "p6", kind: "post", platform: "instagram", title: "Tokyo walks, day two", slug: "tokyo-walks-2", label: "photos", sublabel: "tokyo",
     visibility: "public", updated: "2026-09-15",
     body: "# Tokyo walks, day two\n\nKiyosumi garden. Continues [[tokyo-walks]].",
   },
   {
-    id: "p7", kind: "post", title: "Film scans", slug: "film-scans", label: "photos",
+    id: "p7", kind: "post", platform: "instagram", title: "Film scans", slug: "film-scans", label: "photos",
     visibility: "friends", updated: "2026-08-30",
     body: "# Film scans\n\nA roll from the summer. @june.example lent the camera.",
   },
@@ -78,7 +81,7 @@ export const posts: Doc[] = [
     body: "# Graph sketches\n\nA person in the middle, their memory around them, then the vault. Notes for [[ohm-workspace]], after [[garden-of-notes]].",
   },
   {
-    id: "p11", kind: "post", title: "Yanaka at dusk", slug: "yanaka-dusk", label: "photos", sublabel: "tokyo",
+    id: "p11", kind: "post", platform: "instagram", title: "Yanaka at dusk", slug: "yanaka-dusk", label: "photos", sublabel: "tokyo",
     visibility: "friends", updated: "2026-09-16",
     body: "# Yanaka at dusk\n\nThe same street as [[tokyo-walks]], later. Shot on the camera from [[film-scans]].",
   },

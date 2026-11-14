@@ -42,10 +42,11 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | B1a | **Reveal the open page** | Automatic: open a page from anywhere | Its folders open in the tree; it scrolls into view, is selected and flashes once | Always know where you are | Any tool that opens a page |
 | B1b | Reveal a folder from the path | Click a folder in the path pill | The panel shows the repository with that folder open, scrolled to, flashing | Jump from where a page lives to its neighbours | *UI only* |
 | B2 | Choose what shows | Your pill (picture and name) → All, or Cortex and/or Vault | The tree and graph show only those | Focus on memory, or on writing | *UI only* |
-| B3 | Open and close folders | Click a folder or the cortex/vault row; the header chevron opens or closes everything | Folders open or closed (cortex, vault, labels, sublabels) | Walk the hierarchy | *UI only* |
+| B3 | Open and close folders | Click a folder or the cortex/vault row (each side's ⋯ also has Expand all) | Folders open or closed (cortex, vault, labels, sublabels) | Walk the hierarchy | *UI only* |
 | B4 | Expand one side | Cortex or vault ⋯ → Expand all / Collapse all (E) | Everything inside that one opens or closes | Survey one side at once | *UI only* |
 | B5 | Show only one side | Cortex or vault ⋯ → Show only… (O) | The scope becomes that one | Same as B2, from the row | *UI only* |
-| B6 | Tree or graph | Header: tree icon / graph icon | The panel shows the tree or the graph of the same scope | Switch between where and how things connect | `workspace.graph` opens the graph |
+| B6 | List or graph | Header: one switch, showing the view it goes to (graph icon in the list, list icon in the graph) | The panel shows the list or the graph of the same scope and filters | Switch between where and how things connect | `workspace.graph` opens the graph |
+| B6a | **Filter** | Header funnel → Platform (your site, Bluesky, Instagram, X), Type (text, photo, table, checklist; memory, note, skill, tool), Who it is for, Edited (any time, past week, month, year), Status (unread, pinned); Clear | The list and the graph show only matching pages; folders open so matches are in view; a dot on the funnel while any filter is on; "Nothing matches" with Clear when empty | Find a kind of page across folders | *UI only* |
 | B7 | Resize the panel | Drag its right edge (or arrows on the handle; double-click resets) | Width 220–640 px, remembered on this device | More room for names or the graph | *UI only* |
 | B8 | **New page** | Rack New post, ⌘N, vault ⋯ → New page (N), or folder ⋯ → New page here (N) | A new **private** page open in the editor, title focused, in that folder if chosen | Start writing | `workspace.create` |
 | B9 | Pin | Row ⋯ → Pin (P) | The page shows under Pinned at the top; press again to unpin | Keep what you return to close | *UI only* |
@@ -61,10 +62,10 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 
 | # | Path | Entry → steps | End state | For | Agent |
 | --- | --- | --- | --- | --- | --- |
-| C1 | Show who each page is for | Repository header eye | Each page shows an icon at its end: globe (Everyone), people (Friends), lock (Only you); the label is on hover | See at a glance what is shared | *UI only* |
+| C1 | Show who each page is for | Click the eye in the repository header | Each page shows an icon at its end: globe (Everyone), people (Friends), lock (Only you); the label is on hover | See at a glance what is shared | *UI only* |
 | C2 | **Make a page less private** | Click a page's icon → Friends or Everyone → **confirm** | The page is *marked* for that audience. It is **not published**: it reaches your site and other apps only when you publish | Decide who a page is for | *UI only* · **asks first** |
 | C3 | Make a page more private | Click its icon → Friends or Only you | Marked at once (no confirmation needed) | Pull something back | *UI only* |
-| C4 | **View as someone else** | With visibility shown: View as You / Friends / Public | The tree, graph and page show only what that audience can see; the cortex is locked; a bar says "Viewing as…" with Back to you. If the open page is one they can't see, the editor says so instead of showing it | Check what others actually see before you publish | *UI only* |
+| C4 | **View as someone else** | Hover the eye → View as You / Friends / Public | The tree, graph and page show only what that audience can see; the cortex is locked; a bar says "Viewing as…" with Back to you. If the open page is one they can't see, the editor says so instead of showing it | Check what others actually see before you publish | *UI only* |
 | C5 | Back to yourself | Back to you, choose You, or hide visibility | Everything is visible again | Return to editing | *UI only* |
 
 ## D. The graph

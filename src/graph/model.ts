@@ -38,6 +38,8 @@ export type GraphFilters = {
   links?: boolean
   /** Who is looking: only what they can see is drawn. The cortex is yours alone. */
   audience?: Audience
+  /** The repository's filters, as a test each page must pass. */
+  keep?: (d: Doc) => boolean
 }
 export const DEFAULT_FILTERS = { cortex: true, vault: true, people: true, links: true, audience: "personal" as Audience }
 
@@ -57,12 +59,12 @@ export function buildGraph(filters: GraphFilters = {}): Graph {
 
   // Someone else at the centre: the owner's posts that mention them, and the owner as a person.
   const docs = !f.vault ? [] : (isOwner ? posts : posts.filter(p => mentions(p).includes(center.handle)))
-    .filter(d => sees(f.audience, d))
+    .filter(d => sees(f.audience, d) && (!filters.keep || filters.keep(d)))
 
   // 1 · The cortex: the owner's alone.
   const withCortex = isOwner && f.cortex && f.audience === "personal"
   if (withCortex) {
-    for (const c of cortex) {
+    for (const c of cortex.filter(c => !filters.keep || filters.keep(c))) {
       add({ id: c.id, layer: 1, type: "memory", name: c.title, branch: "cortex", doc: c })
       edge(center.did, c.id, "hierarchy")
     }

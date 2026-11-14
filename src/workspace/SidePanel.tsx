@@ -15,11 +15,14 @@ import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
 import { PrimeIcon } from "./PrimeIcon"
 import { RowMenu } from "./RowMenu"
+import { FilterMenu } from "./FilterMenu"
+import { activeCount, NO_FILTERS } from "./filters"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { VisibilityMarks } from "./VisibilityMarks"
 import { SETTINGS_TABS } from "./settings-tabs"
 import { panelTitle, SidePanelFrame } from "./Surface"
 import {
-  createDraft, marks, me, moveDoc, open, openInbox, openSettings, setAudience, setRepoMode, setScope, setShowVisibility, useWorkspace,
+  createDraft, kept, marks, me, moveDoc, open, openInbox, openSettings, setAudience, setFilters, setRepoMode, setScope, setShowVisibility, useWorkspace,
 } from "./store"
 
 /** label › sublabel › item, as folders. Folder ids are prefixed so they never collide with docs. */
@@ -168,10 +171,12 @@ function PrimeRow({ prime, open: isOpen, onOpen, locked, onExpandAll, allOpen, o
 
 function RepoPanel() {
   const { view, rev, repoMode, scope, audience, showVisibility } = useWorkspace()
-  const cortexTree = useMemo(() => toTree("cortex", cortex, ["memories", "notes", "skills", "tools"]), [rev])
-  const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p) && !marks.archived.has(p.id)), [rev, audience]) // eslint-disable-line react-hooks/exhaustive-deps
-  const pinned = posts.concat(cortex).filter(d => marks.pinned.has(d.id) && (d.kind !== "post" || sees(audience, d)))
-  const archived = posts.filter(d => marks.archived.has(d.id))
+  const { filters } = useWorkspace()
+  const filtering = activeCount(filters) > 0
+  const cortexTree = useMemo(() => toTree("cortex", cortex.filter(kept), ["memories", "notes", "skills", "tools"]), [rev, filters]) // eslint-disable-line react-hooks/exhaustive-deps
+  const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p) && !marks.archived.has(p.id) && kept(p)), [rev, audience, filters]) // eslint-disable-line react-hooks/exhaustive-deps
+  const pinned = posts.concat(cortex).filter(d => marks.pinned.has(d.id) && (d.kind !== "post" || sees(audience, d)) && kept(d))
+  const archived = posts.filter(d => marks.archived.has(d.id) && kept(d))
   const [showArchived, setShowArchived] = useState(false)
   const [rows, setRows] = useState<HTMLDivElement | null>(null)
   const vaultTree = useMemo(() => toTree("vault", vaultDocs), [vaultDocs])
@@ -204,6 +209,9 @@ function RepoPanel() {
     }, 60)
     return () => clearTimeout(t)
   }, [reveal?.n, repoMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filtering opens every folder, so what matches is in view.
+  useEffect(() => { if (filtering) setExpanded(new Set(allFolders)) }, [filters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A renamed folder stays as open as it was, with its subfolders.
   useEffect(() => {
@@ -249,41 +257,39 @@ function RepoPanel() {
         </DropdownMenu>
       }
       actions={<>
-        <Button size="icon-sm" variant="ghost" className={toggle} aria-label="Show who each page is for" title="Visibility"
-          aria-pressed={showVisibility} onClick={() => setShowVisibility(!showVisibility)}>
-          <Icon icon={showVisibility ? EyeIcon : EyeOffIcon} size="sm" />
+        {/* The eye: click shows who each page is for; hover chooses who you are looking as. */}
+        <Popover>
+          <PopoverTrigger openOnHover delay={150} closeDelay={200} render={
+            <Button size="icon-sm" variant="ghost" className={cn(toggle, audience !== "personal" && "text-primary dark:text-(--ohm-green-light)")}
+              aria-label="Show who each page is for" aria-pressed={showVisibility} onClick={() => setShowVisibility(!showVisibility)} />
+          }>
+            <Icon icon={showVisibility ? EyeIcon : EyeOffIcon} size="sm" />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-52 gap-0 p-1">
+            <p className="px-2.5 pt-1.5 pb-1 text-small text-muted-foreground">View as</p>
+            <div role="radiogroup" aria-label="View as" className="flex flex-col">
+              {AUDIENCES.map(a => (
+                <button key={a.id} type="button" role="radio" aria-checked={audience === a.id} onClick={() => setAudience(a.id)} title={a.note}
+                  className="ux-menu-row flex w-full items-center gap-2 text-left">
+                  <Icon icon={a.icon} size="sm" className="text-muted-foreground" />
+                  <span className="flex-1">{a.label}</span>
+                  <Icon icon={CheckIcon} size="sm" className={cn(audience !== a.id && "invisible")} />
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <FilterMenu />
+        {/* One switch: it shows the view you would go to. */}
+        <Button size="icon-sm" variant="ghost" className="text-muted-foreground"
+          aria-label={repoMode === "tree" ? "Show as graph" : "Show as list"} title={repoMode === "tree" ? "Graph" : "List"}
+          onClick={() => setRepoMode(repoMode === "tree" ? "graph" : "tree")}>
+          <Icon icon={repoMode === "tree" ? NetworkIcon : ListTreeIcon} size="sm" />
         </Button>
-        <div role="group" aria-label="Show as" className="flex">
-          <Button size="icon-sm" variant="ghost" className={toggle} aria-label="Tree" aria-pressed={repoMode === "tree"} onClick={() => setRepoMode("tree")}>
-            <Icon icon={ListTreeIcon} size="sm" />
-          </Button>
-          <Button size="icon-sm" variant="ghost" className={toggle} aria-label="Graph" aria-pressed={repoMode === "graph"} onClick={() => setRepoMode("graph")}>
-            <Icon icon={NetworkIcon} size="sm" />
-          </Button>
-        </div>
-        {repoMode === "tree" && (
-          <Button size="icon-sm" variant="ghost" className="text-muted-foreground" aria-label={everything ? "Collapse all" : "Expand all"}
-            onClick={() => setExpanded(everything ? new Set() : new Set(allFolders))}>
-            <Icon icon={everything ? ChevronsDownUpIcon : ChevronsUpDownIcon} size="sm" />
-          </Button>
-        )}
       </>}
     >
       {repoMode === "tree" ? (
         <div ref={el => { treeRef.current = el; setRows(el) }} data-show-visibility={showVisibility || undefined} className="relative flex flex-col gap-0.5 [&_[data-drop]]:bg-primary/10 [&_[data-drop]]:ring-1 [&_[data-drop]]:ring-primary/40">
-          {showVisibility && (
-            /* Visibility, inside the repository: look as someone else, and see who each page is for. */
-            <div className="mb-2 flex flex-col gap-1.5 animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)">
-              <div role="radiogroup" aria-label="View as" className="grid grid-cols-3 gap-0.5 rounded-xl bg-muted p-0.5">
-                {AUDIENCES.map(a => (
-                  <button key={a.id} type="button" role="radio" aria-checked={audience === a.id} onClick={() => setAudience(a.id)} title={a.note}
-                    className="flex h-7 items-center justify-center gap-1.5 rounded-lg text-small text-muted-foreground transition-colors duration-(--ohm-duration-state) hover:text-foreground aria-checked:bg-card aria-checked:text-foreground aria-checked:shade-1">
-                    <Icon icon={a.icon} size="xs" />{a.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           {pinned.length > 0 && <>
             <p className="px-2 pt-1 pb-0.5 text-small text-muted-foreground">Pinned</p>
             {pinned.map(d => (
@@ -294,6 +300,12 @@ function RepoPanel() {
             ))}
             <div className="h-2" />
           </>}
+          {filtering && vaultDocs.length + cortexTree.length === 0 && (
+            <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-small text-muted-foreground">
+              Nothing matches the filter.
+              <Button size="xs" variant="ghost" onClick={() => setFilters(NO_FILTERS)}>Clear filter</Button>
+            </div>
+          )}
           {!showCortex && !showVault && (
             <p className="px-2 py-6 text-center text-small text-muted-foreground">Choose Cortex or Vault from the menu above.</p>
           )}

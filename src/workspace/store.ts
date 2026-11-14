@@ -4,6 +4,7 @@ import { all, byId, inbox, owner, posts, titleOf, type Audience, type Doc, type 
 import { buildGraph } from "@/graph/model"
 import type { AgentState } from "@/components/agent-status"
 import type { SettingsTab } from "./settings-tabs"
+import { NO_FILTERS, passes, type Filters } from "./filters"
 
 /** What the side panel shows. The rack chooses it. */
 export type Side = "repo" | "visibility" | "inbox" | "profile" | null
@@ -38,6 +39,8 @@ type State = {
   audience: Audience
   /** The repository shows who each page is for, with a pill to change it. */
   showVisibility: boolean
+  /** What the repository's tree and graph are narrowed to. */
+  filters: Filters
   graphCenter: string
   view: View
   searchOpen: boolean
@@ -63,7 +66,7 @@ const narrow = () => typeof window !== "undefined" && window.matchMedia("(max-wi
 const sideAfterOpen = (): Partial<State> => (narrow() ? { side: null } : {})
 
 let state: State = {
-  side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal", showVisibility: false,
+  side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal", showVisibility: false, filters: NO_FILTERS,
   graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0,
   appearance: "system", density: savedDensity(), agentsAllowed: true,
   history: [], at: -1, returnTo: null, reveal: null, lastSide: "repo",
@@ -130,6 +133,9 @@ export const setAgent = (agent: State["agent"]) => set({ agent })
 // Personal repo
 export const setRepoMode = (repoMode: State["repoMode"]) => set({ repoMode, side: "repo" })
 export const setScope = (scope: RepoScope) => set({ scope })
+export const setFilters = (filters: Filters) => set({ filters })
+/** Whether a page shows in the repository under the current filters. */
+export const kept = (d: Doc) => passes(state.filters, d, marks)
 export function setSideWidth(w: number) {
   const sideWidth = Math.round(Math.min(SIDE_WIDTH.max, Math.max(SIDE_WIDTH.min, w)))
   try { localStorage.setItem("ohm-ux:side-width", String(sideWidth)) } catch { /* a convenience only */ }
@@ -195,7 +201,7 @@ export function open(id: string, mode: "read" | "edit" = "read") {
 
 /** The graph lives in the side panel, in the personal repo. */
 export function showGraph(center?: string) {
-  const g = buildGraph({ center, audience: state.audience, ...scopeFolders(state.scope) })
+  const g = buildGraph({ center, audience: state.audience, ...scopeFolders(state.scope), keep: kept })
   set({ side: "repo", repoMode: "graph", graphCenter: g.center.handle, searchOpen: false })
   return { center: g.center.handle, nodes: g.nodes.length, edges: g.edges.length }
 }
