@@ -61,6 +61,8 @@ node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
 | `cortex token [dir] [--replace]` | The person | Makes the token HTTP clients sign in with, saves it in `agents/secrets/mcp-token`, and prints it once |
 | `cortex approve <skill> [dir]` | The person | Moves a skill an agent proposed into `skills/` |
 | `cortex event <text> [dir]` | A host | Records a change from outside, for the agent to settle |
+| `cortex hook <moment> [dir] --agent <name>` | Claude Code or Codex, as a hook | Answers `session-start`, `prompt`, `stop` or `session-end` from the folder: the playbook and working memory at the start, a request to distill when working memory changed and was not distilled, once for each change. Exits 0 and writes nothing on any error |
+| `cortex install-hooks claude-code\|codex` | The person | Prints the hooks to add to that client's settings. Writes nothing |
 
 ### Over HTTP
 

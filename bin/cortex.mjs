@@ -10,12 +10,16 @@
 // cortex confirm <field|id> [dir]   accept an identity fact an agent proposed
 // cortex reject <field|id> [dir]    turn one down; that value is not proposed again
 // cortex clear <field> [dir]        remove an identity field
+// cortex hook <moment> [dir] --agent <name>   answer a Claude Code or Codex hook: session-start, prompt, stop, session-end
+// cortex install-hooks claude-code|codex      print the hooks to add; writes nothing
 // The folder is the one named, or CORTEX_DIR, or ~/cortex.
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { Refused } from '../src/core.mjs';
+import { runHook, SNIPPETS } from '../src/adapter.mjs';
 import { agentName, initCortex, openCortex } from '../src/folder.mjs';
 import { createServer, serve } from '../src/protocol.mjs';
 import { cortexSessions, ENDPOINT, httpTransport, listen, makeToken, readToken } from '../src/http.mjs';
@@ -109,8 +113,18 @@ try {
     else for (const kind of [...new Set(items.map(item => item.kind))]) {
       for (const item of items.filter(item => item.kind === kind)) console.log(`${kind}: ${item.what} — ${item.clear}`);
     }
+  } else if (command === 'hook') {
+    // A hook never fails the session: whatever happens, it exits 0, and writes nothing on an error.
+    const at = rest.indexOf('--agent');
+    const agent = at >= 0 ? rest.splice(at, 2)[1] : undefined;
+    await runHook(rest[0], { dir: folder(rest[1]), agent, stdin: process.stdin, stdout: process.stdout });
+    process.exit(0);
+  } else if (command === 'install-hooks' && Object.hasOwn(SNIPPETS, rest[0])) {
+    const { file, where } = SNIPPETS[rest[0]];
+    console.error(`${where} The commands run \`cortex\` (npm link this folder) on the cortex in CORTEX_DIR, or ~/cortex. Set CORTEX_AGENT=${rest[0]} for the MCP server too, so its distill counts. Nothing was written.`);
+    process.stdout.write(readFileSync(fileURLToPath(new URL(`../hooks/${file}`, import.meta.url)), 'utf8'));
   } else {
-    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json]');
+    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex');
     process.exitCode = command ? 1 : 0;
   }
 } catch (problem) {

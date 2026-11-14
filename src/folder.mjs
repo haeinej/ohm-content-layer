@@ -277,6 +277,15 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const recorded = [];
       for (const item of seen) recorded.push(await cortex.addNote({ id: item.id, note: item.note, session, ...(item.project ? { project: item.project } : {}) }));
       const left = await putWorking(working, held?.version ?? null, { keepEarlier: true });
+      // The model does not know the client's session ID, so a distill is recorded by agent, time and
+      // the version of working memory it left. The stop hook asks whether the working memory it sees
+      // is one a distill left, since its session started.
+      // The notes and working memory are already saved, so a failed record never fails the distill.
+      const sessions = at('.cortex', 'sessions.jsonl');
+      try {
+        await mkdir(dirname(sessions), { recursive: true });
+        await appendFile(sessions, `${JSON.stringify({ agent: actor, distilled: now().toISOString(), version: left.version ?? null })}\n`);
+      } catch {}
       return { session, noted: recorded.map(item => item.id), working: left };
     },
 
