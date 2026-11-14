@@ -11,13 +11,16 @@ import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { byId, posts, titleOf } from "@/data/sample"
 import {
-  marks, moveDoc, open, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
+  createDraft, marks, moveDoc, open, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
 } from "./store"
-import { InlineRename, requestDelete } from "./PageActions"
+import { InlineRename, InlineRenameFolder, requestDelete } from "./PageActions"
 import { useLinkedHover } from "@/editor/LinkPreview"
 
 type Row = { id: string; top: number; height: number; textLeft: number }
 const isPage = (id?: string) => !!id && !id.includes(":") && !!byId(id)
+/** A vault folder row: `vault:label` or `vault:label/sublabel`. Cortex folders are fixed. */
+const folderPath = (id?: string) => (id?.startsWith("vault:") ? id.slice(6) : null)
+const isTarget = (id?: string) => isPage(id) || !!folderPath(id)
 
 export function RowMenu({ container }: { container: HTMLElement | null }) {
   const { rev } = useWorkspace()
@@ -43,13 +46,13 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
       if ((e.target as HTMLElement).closest("[data-row-menu]")) return
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
-      if (el && isPage(id)) { el.dataset.id = id; place(el) } else setRow(null)
+      if (el && isTarget(id)) { el.dataset.id = id; place(el) } else setRow(null)
     }
     const leave = () => { if (!menuOpen && !renaming) setRow(null) }
     const context = (e: MouseEvent) => {
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
-      if (!el || !isPage(id)) return
+      if (!el || !isTarget(id)) return
       e.preventDefault()
       el.dataset.id = id
       place(el)
@@ -60,7 +63,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
       if (e.metaKey || e.ctrlKey || e.altKey || menuOpen || renaming) return
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
-      if (!isPage(id)) return
+      if (!isTarget(id)) return
       if (run(e.key.toLowerCase(), id!)) { e.preventDefault(); place(el!) }
     }
     container.addEventListener("pointermove", move)
@@ -92,6 +95,19 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
 
   /** One letter, one action. Returns whether it did something. */
   function run(k: string, id: string): boolean {
+    const folder = folderPath(id)
+    if (folder) {
+      if (k === "r") { setRenaming(id); setMenuOpen(false); return true }
+      if (k === "n") {
+        const [label, sublabel] = folder.split("/")
+        const d = createDraft({ label })
+        const page = byId(d.id)
+        if (page) page.sublabel = sublabel
+        setMenuOpen(false)
+        return true
+      }
+      return false
+    }
     const doc = byId(id)
     if (!doc) return false
     const post = doc.kind === "post"
@@ -108,11 +124,29 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     return true
   }
 
-  const doc = row ? byId(row.id) : undefined
+  const folder = row ? folderPath(row.id) : null
+  const doc = row && !folder ? byId(row.id) : undefined
   const post = doc?.kind === "post"
   const here = doc ? (doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label) : ""
 
   return <>
+    {row && folder && !renaming && (
+      <div data-row-menu className="pointer-events-none absolute inset-x-0 z-10" style={{ top: row.top, height: row.height }}>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger render={
+            <button type="button" aria-label={`More for folder “${folder.split("/").at(-1)}”`}
+              className="pointer-events-auto absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-(--ohm-duration-press) animate-in fade-in-0 hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground" />
+          }>
+            <Icon icon={EllipsisIcon} size="sm" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-56"
+            onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase(), row.id)) e.preventDefault() }}>
+            <DropdownMenuItem onClick={() => run("n", row.id)}>New page here<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>
+            <DropdownMenuItem onClick={() => run("r", row.id)}>Rename<DropdownMenuShortcut>R</DropdownMenuShortcut></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )}
     {row && doc && !renaming && (
       <div data-row-menu className="pointer-events-none absolute inset-x-0 z-10" style={{ top: row.top, height: row.height }}>
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -161,8 +195,9 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     {/* Renaming in place: a field over the row's name, the text selected. */}
     {renaming && row && row.id === renaming && (
       <div className="absolute inset-x-0 z-20 flex items-center" style={{ top: row.top, height: row.height, paddingInlineStart: row.textLeft - 7 }}>
-        <InlineRename id={renaming} className="me-1 h-7 flex-1 text-body"
-          onDone={() => setRenaming(null)} />
+        {folderPath(renaming)
+          ? <InlineRenameFolder path={folderPath(renaming)!} className="me-1 h-7 flex-1 text-body" onDone={() => setRenaming(null)} />
+          : <InlineRename id={renaming} className="me-1 h-7 flex-1 text-body" onDone={() => setRenaming(null)} />}
       </div>
     )}
   </>

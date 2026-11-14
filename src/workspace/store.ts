@@ -239,3 +239,21 @@ export function deleteDoc(id: string) {
   for (const s of Object.values(marks)) s.delete(id)
   set({ ...bump(), view: state.view.kind === "doc" && state.view.id === id ? { kind: "empty" } : state.view })
 }
+
+/**
+ * Renames a vault folder (`label` or `label/sublabel`): every page in it is refiled under the new
+ * name. Folders are the owner's words; a published page's address follows on its next publish.
+ */
+export function renameFolder(path: string, name: string) {
+  const [label, sublabel] = path.split("/")
+  const next = name.trim().toLowerCase().replace(/\s+/g, "-")
+  let published = 0
+  for (const p of posts) {
+    if (p.label !== label || (sublabel !== undefined && p.sublabel !== sublabel)) continue
+    if (sublabel === undefined) p.label = next
+    else p.sublabel = next
+    if (p.visibility !== "private") published++
+  }
+  set(bump())
+  return { published }
+}

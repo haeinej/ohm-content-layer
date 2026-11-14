@@ -6,15 +6,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { notify } from "@/components/ui/notice"
 import { byId, titleOf } from "@/data/sample"
 import { cn } from "@/lib/cn"
-import { deleteDoc, renameDoc } from "./store"
+import { deleteDoc, renameDoc, renameFolder } from "./store"
 
 /**
  * A name edited in place: the text selected, a forest ring. Enter or leaving keeps it; Escape puts
- * it back. Nothing is saved when it is empty or unchanged.
+ * it back. Nothing is saved when it is empty or unchanged. Pages and folders both use it.
  */
-export function InlineRename({ id, className, onDone }: { id: string; className?: string; onDone: () => void }) {
-  const doc = byId(id)
-  const [value, setValue] = useState(doc?.title ?? "")
+export function InlineField({ initial, onCommit, onDone, className, label = "Name" }: {
+  initial: string; onCommit: (next: string) => void; onDone: () => void; className?: string; label?: string
+}) {
+  const [value, setValue] = useState(initial)
   const ref = useRef<HTMLInputElement>(null)
   const finished = useRef(false)
   useEffect(() => { ref.current?.focus(); ref.current?.select() }, [])
@@ -22,12 +23,11 @@ export function InlineRename({ id, className, onDone }: { id: string; className?
     if (finished.current) return
     finished.current = true
     const next = value.trim()
-    if (keep && doc && next && next !== doc.title) renameDoc(id, next)
+    if (keep && next && next !== initial) onCommit(next)
     onDone()
   }
-  if (!doc) return null
   return (
-    <input ref={ref} value={value} aria-label="Name" spellCheck={false}
+    <input ref={ref} value={value} aria-label={label} spellCheck={false}
       onChange={e => setValue(e.target.value)}
       onKeyDown={e => {
         e.stopPropagation()
@@ -43,6 +43,26 @@ export function InlineRename({ id, className, onDone }: { id: string; className?
         className,
       )} />
   )
+}
+
+/** A page's name, in place. */
+export function InlineRename({ id, className, onDone }: { id: string; className?: string; onDone: () => void }) {
+  const doc = byId(id)
+  if (!doc) return null
+  return <InlineField initial={doc.title} className={className} onDone={onDone} onCommit={next => renameDoc(id, next)} />
+}
+
+/** A vault folder's name, in place: `label` or `label/sublabel`. */
+export function InlineRenameFolder({ path, className, onDone }: { path: string; className?: string; onDone: () => void }) {
+  const name = path.split("/").at(-1)!
+  return <InlineField initial={name} label="Folder name" className={className} onDone={onDone} onCommit={next => {
+    const moved = renameFolder(path, next)
+    const to = [...path.split("/").slice(0, -1), next.trim().toLowerCase().replace(/\s+/g, "-")].join("/")
+    window.dispatchEvent(new CustomEvent("ohm:folder-renamed", { detail: { from: path, to } }))
+    notify({ message: moved.published
+      ? `Renamed to “${next}”. ${moved.published} published ${moved.published === 1 ? "page gets" : "pages get"} the new address when you publish.`
+      : `Renamed to “${next}”`, tone: "info" })
+  }} />
 }
 
 // ─── Delete, after asking ─────────────────────────────────────────────────────

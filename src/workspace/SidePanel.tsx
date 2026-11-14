@@ -147,6 +147,15 @@ function RepoPanel() {
     ...(showVault ? ["prime:vault", ...folderIds(vaultTree)] : []),
   ], [cortexTree, vaultTree, showCortex, showVault])
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["prime:cortex", "prime:vault", ...folderIds(vaultTree)]))
+  // A renamed folder stays as open as it was, with its subfolders.
+  useEffect(() => {
+    const moved = (e: Event) => {
+      const { from, to } = (e as CustomEvent<{ from: string; to: string }>).detail
+      setExpanded(s => new Set([...s].map(id => (id === `vault:${from}` || id.startsWith(`vault:${from}/`) ? `vault:${to}${id.slice(6 + from.length)}` : id))))
+    }
+    window.addEventListener("ohm:folder-renamed", moved)
+    return () => window.removeEventListener("ohm:folder-renamed", moved)
+  }, [])
   const everything = allFolders.length > 0 && allFolders.every(id => expanded.has(id))
   const flip = (id: string) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const selected = view.kind === "doc" ? view.id : null
