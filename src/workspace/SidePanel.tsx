@@ -119,7 +119,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
 function PrimeRow({ prime, open: isOpen, onOpen, locked }: { prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean }) {
   return (
     <button type="button" aria-expanded={isOpen} onClick={onOpen} disabled={locked}
-      className="flex min-h-9 w-full items-center gap-1.5 rounded-lg px-1.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-[color-mix(in_oklab,var(--ohm-ink)_5%,var(--ohm-card))] disabled:hover:bg-transparent">
+      className="ux-row flex w-full items-center gap-1.5 px-1.5 text-left">
       <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground", locked && "invisible")} />
       <PrimeIcon kind={prime} filled={isOpen} className="text-primary dark:text-foreground" />
       <span className="text-body font-bold text-primary dark:text-foreground">{prime}</span>

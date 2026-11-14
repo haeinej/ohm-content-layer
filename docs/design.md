@@ -36,9 +36,14 @@ Menus are tight, like a system menu:
 
 The rules are slot-level (`[data-slot=dropdown-menu-item]` and so on) and unlayered, in `src/theme.css`. They restyle ohm-ui's components without editing the installed copies (ohm-ui's "theme, don't fork").
 
-## Tree rows
+## Rows in the repository: one shade for all
 
-The tint on a hovered or selected tree row covers the whole row. It runs out to the same left edge as the cortex and vault rows (`--tree-inset` is how far the tree is indented under them), whatever the row's depth, so every tint has the same clean left edge. It is opaque, mixed from ink and the panel's own tone, so it covers the guide lines, and it sits under the chevron and the text. Its corners and tones are the cortex and vault rows'. Focus shows as a forest ring on the same shape.
+The cortex and vault rows and every tree row under them share one shade (`.ux-row` and the tree-row rules in `src/theme.css`):
+- **Edges:** the same left and right edges. Tree rows reach back over their indent (`--tree-inset`) to the cortex row's left edge, whatever their depth.
+- **Shape and tone:** the same 32 px height, the same row radius, rounded at both ends, and the same hover and selected tones.
+- **Layering:** the shade is opaque, ink mixed into the panel's tone, so it covers the guide lines and sits under the chevron and the text.
+
+**The bug this fixes.** ohm-ui's tree row carries its own `hover:` and `aria-selected:` background classes. They painted a second, square tint under the rounded one, which looked like a clipped right edge. Those are switched off for tree rows (`background-color: transparent !important`), so only the shared shade shows. When a vendored component brings its own background, turn it off at the slot rather than painting over it.
 
 ## Cortex and vault
 

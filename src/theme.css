@@ -99,22 +99,39 @@
 [data-slot=dropdown-menu-separator] { margin: 4px var(--ux-menu-row-x); }
 [data-slot=dropdown-menu-shortcut] { color: var(--ohm-muted); letter-spacing: .04em; }
 
-/* ─── Tree rows: one clean, full-width tint ─────────────────────────────────────
-   Every row's tint spans the whole row, out to the same left edge as the cortex and vault rows
-   (--tree-inset is how far the tree is indented under them), whatever its depth. It is opaque
-   (mixed from ink and the panel's own tone), so it covers the guide lines and sits under the
-   chevron and the text. Same radius and same tones as the cortex and vault rows. */
+/* ─── Rows in the repository: one shade for all ───────────────────────────────────
+   The cortex and vault rows and every tree row under them share one shade: same left and right
+   edges (the tree's rows reach back over its indent, --tree-inset), same height, same radius, same
+   tones. The shade is opaque (ink mixed into the panel's tone), so it covers the guide lines, and
+   it sits under the chevron and the text. */
+
+:root {
+  --ux-row-hover: color-mix(in oklab, var(--ohm-ink) 5%, var(--ohm-card));
+  --ux-row-selected: color-mix(in oklab, var(--ohm-ink) 9%, var(--ohm-card));
+  --ux-row-height: 32px;
+}
+
+.ux-row {
+  min-height: var(--ux-row-height);
+  border-radius: var(--ohm-radius-row);
+  background-color: transparent;
+  transition: background-color var(--ohm-duration-state) var(--ohm-ease-out);
+}
+.ux-row:hover:not(:disabled) { background-color: var(--ux-row-hover); }
+.ux-row[aria-selected=true], .ux-row[aria-current=true] { background-color: var(--ux-row-selected); }
 
 [data-slot=file-tree-item] {
   isolation: isolate;
-  background-color: transparent;
+  min-height: var(--ux-row-height);
   border-radius: 0;
+  /* The row's own hover and aria-selected utilities paint a second, square tint under ours: off. */
+  background-color: transparent !important;
 }
 [data-slot=file-tree-item] > span[aria-hidden=true].absolute { z-index: -2; }
 [data-slot=file-tree-item]::before {
   content: "";
   position: absolute;
-  inset-block: 1px;
+  inset-block: 0;
   inset-inline-end: 0;
   inset-inline-start: calc(-1 * var(--tree-inset, 0px));
   z-index: -1;
@@ -122,8 +139,8 @@
   background-color: transparent;
   transition: background-color var(--ohm-duration-state) var(--ohm-ease-out);
 }
-[data-slot=file-tree-item]:hover::before { background-color: color-mix(in oklab, var(--ohm-ink) 5%, var(--ohm-card)); }
-[data-slot=file-tree-item][aria-selected=true]::before { background-color: color-mix(in oklab, var(--ohm-ink) 9%, var(--ohm-card)); }
+[data-slot=file-tree-item]:hover::before { background-color: var(--ux-row-hover); }
+[data-slot=file-tree-item][aria-selected=true]::before { background-color: var(--ux-row-selected); }
 [data-slot=file-tree-item][data-drop]::before { background-color: color-mix(in oklab, var(--ohm-forest) 14%, var(--ohm-card)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ohm-forest) 40%, transparent); }
 [data-slot=file-tree-item]:focus-visible { box-shadow: none; }
 [data-slot=file-tree-item]:focus-visible::before { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ohm-forest) 45%, transparent); }
