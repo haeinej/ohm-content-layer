@@ -1,0 +1,16 @@
+# ohm-ux
+
+User flows for ohm, built so that a person and an agent can both complete them.
+
+A person moves through screens built from the [ohm design system](https://design.ohmmmm.com/overview). An agent in the browser calls the same steps as [WebMCP](https://webmachinelearning.github.io/webmcp/) tools that the page registers. Both use the same code, the same validation and the same end state, and anything lasting waits for the person's approval.
+
+## Why both
+
+An agent that clicks through pixels is slow and fragile. It can also do things the person never meant. WebMCP lets the page say exactly what can be done at each step and run it with its own code. Pairing each tool with a step that is on screen keeps the person able to see what's happening and in charge of what happens.
+
+## Where things are
+
+- [AGENTS.md](AGENTS.md): the rules every flow follows
+- [docs/webmcp.md](docs/webmcp.md): the WebMCP API as of the 13 November 2026 draft, and what changed from earlier guides
+- [flows/TEMPLATE.md](flows/TEMPLATE.md): start a new flow by copying this
+- [src/webmcp.ts](src/webmcp.ts): the one helper for registering tools
