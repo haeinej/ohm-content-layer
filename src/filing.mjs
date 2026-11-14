@@ -5,13 +5,15 @@
 // It reads and never writes: not the cortex, not the vault. Saving is the vault's job, done by
 // the agent through the vault's own tools once the person says yes.
 import { Refused } from './core.mjs';
-import { wordsOf } from './vault.mjs';
+import { matcherOf, wordsOf } from './vault.mjs';
 import { parseMap } from './vaultmap.mjs';
 
 const SECTIONS = 3;
 const RELATED = 5;
 // The words of the text that go to search, besides the title's: the ones it uses most.
 const TEXT_WORDS = 8;
+// The skill the template ships for any source. It is named only when no other approved skill fits.
+const GENERAL_SKILL = 'file-a-source';
 
 function checkSource({ kind, title, text } = {}) {
   if (typeof kind !== 'string' || !kind.trim() || kind.length > 200) throw new Refused('InvalidRequest', 'Say what the source is, in a few words, such as "meeting transcript" or "link"');
@@ -29,8 +31,8 @@ function mostUsed(text, count) {
 // A section scores for each of its words the source has: most for the kind, then the title, then
 // the text. A word in the section's name counts once more than one only in its meaning.
 function sectionsFor(source, shape, map) {
-  const weights = [[wordsOf(source.kind), 3], [wordsOf(source.title), 2], [wordsOf(source.text), 1]];
-  const weight = word => Math.max(0, ...weights.filter(([words]) => words.has(word)).map(([, value]) => value));
+  const weights = [[matcherOf(source.kind), 3], [matcherOf(source.title), 2], [matcherOf(source.text), 1]];
+  const weight = word => Math.max(0, ...weights.filter(([holds]) => holds(word)).map(([, value]) => value));
   const scored = [];
   for (const { section, posts } of shape.sections) {
     const words = map.get(section) ?? { meaning: '', conventions: '' };
@@ -51,19 +53,33 @@ function sectionsFor(source, shape, map) {
     scored.push({ score, item: { section, posts, ...(words.meaning ? { meaning: words.meaning } : {}), ...(words.conventions ? { conventions: words.conventions } : {}), why: `${why[0].toUpperCase()}${why.slice(1)}` } });
   }
   scored.sort((a, b) => b.score - a.score || a.item.section.localeCompare(b.item.section));
-  return scored.slice(0, SECTIONS).map(({ item }) => item);
+  // A section and its own subsection are not both offered: the subsection is the more exact place.
+  const chosen = [];
+  const within = (sub, parent) => sub.startsWith(`${parent}/`);
+  for (const { item } of scored) {
+    if (chosen.length === SECTIONS) break;
+    if (chosen.some(other => within(other.section, item.section))) continue;
+    const parent = chosen.findIndex(other => within(item.section, other.section));
+    if (parent >= 0) chosen[parent] = item;
+    else chosen.push(item);
+  }
+  return chosen;
 }
 
 // The approved skill whose name and description share the most words with the kind, if any does.
+// Between two that share as many, the one with fewer other words is the more exact. The general
+// filing skill fits most kinds, so it is named only when no other skill shares a word.
 function skillFor(kind, skills) {
-  const wanted = wordsOf(kind);
-  let best = null;
-  for (const skill of skills) {
-    const words = new Set([...wordsOf(skill.name.replace(/-/g, ' ')), ...wordsOf(skill.description)]);
-    const score = [...wanted].filter(word => words.has(word)).length;
-    if (score && (!best || score > best.score)) best = { score, skill: { name: skill.name, description: skill.description } };
-  }
-  return best?.skill ?? null;
+  const wanted = [...wordsOf(kind)];
+  const rank = skill => {
+    const text = `${skill.name.replace(/-/g, ' ')} ${skill.description}`;
+    const holds = matcherOf(text);
+    const score = wanted.filter(holds).length;
+    return { score, share: score / Math.max(1, wordsOf(text).size), skill: { name: skill.name, description: skill.description } };
+  };
+  const best = list => list.map(rank).filter(item => item.score)
+    .sort((a, b) => b.score - a.score || b.share - a.share || a.skill.name.localeCompare(b.skill.name))[0]?.skill ?? null;
+  return best(skills.filter(skill => skill.name !== GENERAL_SKILL)) ?? best(skills.filter(skill => skill.name === GENERAL_SKILL));
 }
 
 function askFor(sections, related, shape) {

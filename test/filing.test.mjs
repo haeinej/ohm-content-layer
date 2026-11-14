@@ -163,3 +163,68 @@ test('a new cortex ships the filing skill, and the rulebook says how to file', a
   assert.match(start.rules, /Never write a post or a fact of your own/);
   assert.equal(start.rules.match(/File only what/g).length, 1, 'the filing lines are moved, not repeated');
 });
+
+test('a specific approved skill is named before the general filing skill, and the more exact one wins a tie', async () => {
+  const { dir, agent, tools } = await setup();
+  const person = openCortex(dir, { actor: 'member' });
+  for (const [name, description] of [['save-a-link', 'Saving a link'], ['meeting-notes', 'Notes from a meeting transcript'], ['link-roundup', 'Gathering every link from a week of reading into one long post']]) {
+    await agent.proposeSkill({ text: `---\nname: ${name}\ndescription: ${description}\n---\n1. Do it.\n` });
+    await person.approveSkill(name);
+  }
+  const skillFor = async kind => (await tools.call('cortex_file_advice', { kind })).skill?.name;
+  assert.equal(await skillFor('link'), 'save-a-link', 'link-roundup shares as many words, but fewer of its own');
+  assert.equal(await skillFor('meeting transcript'), 'meeting-notes');
+  assert.equal(await skillFor('note'), 'meeting-notes');
+  // Only when nothing more specific fits is the general skill named.
+  assert.equal(await skillFor('upload'), undefined);
+  assert.equal(await skillFor('source'), 'file-a-source');
+});
+
+test('search and advice match Korean and Japanese, where words are not spaced', async () => {
+  const { dir, vault, agent, tools } = await setup();
+  await writePost(vault, 'meetings/harbour-ko.md', { id: 'k1', title: '항구 위원회 회의록', body: '방파제 수리를 논의했다.' });
+  await writePost(vault, 'notes/reading/book-ko.md', { id: 'k2', title: '읽은 것', body: '책 한 권을 다 읽었다.' });
+  await writePost(vault, 'meetings/harbour-ja.md', { id: 'j1', title: '港の会議', body: 'フェリーの時刻表について話した。' });
+  const folder = folderVault(vault);
+  const ids = async words => (await folder.search(words)).map(post => post.id);
+  assert.deepEqual(await ids('회의'), ['k1']);
+  assert.deepEqual(await ids('회의를'), ['k1'], 'a particle after the word still matches');
+  assert.deepEqual(await ids('책'), ['k2'], 'a one-character word is kept');
+  assert.deepEqual(await ids('会議'), ['j1']);
+  assert.deepEqual(await ids('フェリー'), ['j1']);
+  // English stop words and plurals still apply to English only.
+  assert.deepEqual(await ids('the'), []);
+  assert.ok((await ids('harbours')).includes('m1'), 'an English plural matches the singular');
+
+  await agent.start();
+  await openCortex(dir, { actor: 'member' }).syncVault();
+  const advice = await tools.call('cortex_file_advice', { kind: '회의록', title: '항구 위원회 회의', text: '방파제' });
+  assert.deepEqual(advice.related.map(post => post.id), ['k1']);
+});
+
+test('one piece of advice reads each post once, and search still sees a post that changed', async () => {
+  const { dir, vault } = await setup();
+  const read = [];
+  const counted = folderVault(vault, { readText: path => { read.push(path); return readFile(path, 'utf8'); } });
+  await adviseFiling(openCortex(dir, { vault: counted }), transcript);
+  assert.equal(read.length, 10, 'ten posts, each read once for shape and search together');
+  assert.equal(new Set(read).size, read.length);
+
+  read.length = 0;
+  await writePost(vault, 'essays/on-tides.md', { id: 'e1', title: 'On tides and lighthouses', body: 'A lighthouse at the end of the wall.' });
+  assert.deepEqual((await counted.search('lighthouse')).map(post => post.id), ['e1']);
+  assert.equal(read.length, 1, 'only the changed post is read again');
+});
+
+test('a section and its own subsection are not both offered', async () => {
+  const { vault, dir, agent, tools } = await setup();
+  await writePost(vault, 'notes/daily/monday.md', { id: 'd1', title: 'Monday', body: '' });
+  await openCortex(dir, { actor: 'member' }).syncVault();
+  await agent.describeSection({ section: 'notes', meaning: 'Short notes of every kind' });
+  await agent.describeSection({ section: 'notes/daily', meaning: 'A note for each day' });
+  const advice = await tools.call('cortex_file_advice', { kind: 'reading note' });
+  const sections = advice.sections.map(section => section.section);
+  assert.equal(sections[0], 'notes/reading');
+  assert.equal(sections.includes('notes'), false, sections.join(', '));
+  assert.ok(sections.includes('notes/daily'));
+});
