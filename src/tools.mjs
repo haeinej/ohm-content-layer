@@ -13,6 +13,13 @@ export const INSTRUCTIONS = [
   'The cortex is private to the person. Never put a password, key or token in it, and never send an email address, birthdate or city to another service.',
 ].join(' ');
 
+// What a client is told when it connects: how to start, then the cortex's own playbook, as the
+// person keeps it. A client that never opens the folder still follows its rules.
+export async function serverInstructions(cortex) {
+  const rules = (await cortex.rules()).trim();
+  return rules ? `${INSTRUCTIONS}\n\nThe playbook for this cortex, which the person keeps and you follow:\n\n${rules}` : INSTRUCTIONS;
+}
+
 const text = { type: 'string' };
 const name = { type: 'string', pattern: '^[a-z]+(?:-[a-z]+)*$', maxLength: 100 };
 const version = { type: 'string', minLength: 1, description: 'The version you read. A save is refused if the item has changed since.' };

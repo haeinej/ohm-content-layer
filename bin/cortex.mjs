@@ -14,7 +14,9 @@ import { fileURLToPath } from 'node:url';
 import { Refused } from '../src/core.mjs';
 import { agentName, initCortex, openCortex } from '../src/folder.mjs';
 import { createServer, serve } from '../src/protocol.mjs';
-import { createTools, INSTRUCTIONS, TOOLS } from '../src/tools.mjs';
+import { createTools, TOOLS } from '../src/tools.mjs';
+import { createResources } from '../src/resources.mjs';
+import { serverInstructions } from '../src/tools.mjs';
 
 const template = fileURLToPath(new URL('../template', import.meta.url));
 const [command, ...rest] = process.argv.slice(2);
@@ -33,7 +35,10 @@ try {
     // An agent is named by what connects, and can never take the person's or the account's name.
     let agent = agentName(process.env.CORTEX_AGENT);
     // Made at the first call, once the agent has said its name, and kept: a confirmation lives in it.
-    await serve(createServer({ tools: () => createTools(openCortex(dir, { actor: agent })), list: TOOLS, instructions: INSTRUCTIONS, onClient: name => { agent = agentName(process.env.CORTEX_AGENT ?? name); } }), process.stdin, process.stdout);
+    // Resources only read, so they are served the same to every agent.
+    const resources = createResources(openCortex(dir, { actor: agent }));
+    // The playbook is the server's instructions, read from the folder when a client connects.
+    await serve(createServer({ tools: () => createTools(openCortex(dir, { actor: agent })), list: TOOLS, resources, instructions: () => serverInstructions(openCortex(dir)), onClient: name => { agent = agentName(process.env.CORTEX_AGENT ?? name); } }), process.stdin, process.stdout);
   } else if (command === 'approve' && rest[0]) {
     const done = await openCortex(folder(rest[1])).approveSkill(rest[0]);
     console.log(`${done.name} is approved, and is now in skills/`);

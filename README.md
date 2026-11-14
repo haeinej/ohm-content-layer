@@ -39,7 +39,7 @@ A cortex also carries `.gitignore` and `.gitattributes`, so that one kept in git
 node bin/cortex.mjs init ~/cortex
 ```
 
-Then connect an agent to it over MCP, with this as the server's command:
+Then connect an agent to it over MCP, with this as the server's command. The agent is told the cortex's playbook when it connects, and can read the cortex's files as `cortex://` resources; secrets and birthdate are never served.
 
 ```bash
 node /path/to/cortex/bin/cortex.mjs mcp ~/cortex

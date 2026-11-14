@@ -53,13 +53,24 @@ export const IDENTITY = {
   city: { check: line(100), says: 'the city they are based in', sensitive: true },
   timezone: { check: timezone, says: 'a time zone such as Asia/Seoul' },
   languages: { check: list(language), says: 'a list of language tags, the preferred one first' },
-  birthdate: { check: birthdate, says: 'a date as YYYY-MM-DD, or --MM-DD with no year', sensitive: true },
+  // Hidden from agents altogether: they are told one is on file, and ask the person when a task needs it.
+  birthdate: { check: birthdate, says: 'a date as YYYY-MM-DD, or --MM-DD with no year', sensitive: true, hidden: true },
   occupation: { check: line(), says: 'what they do, on one line' },
   organization: { check: line(), says: 'where they do it, on one line' },
   position: { check: line(), says: 'their role there, on one line' },
 };
 export const FIELDS = Object.keys(IDENTITY);
 export const SENSITIVE = FIELDS.filter(field => IDENTITY[field].sensitive);
+export const HIDDEN = FIELDS.filter(field => IDENTITY[field].hidden);
+
+// What an agent is given of an identity: every confirmed field but the hidden ones, which are
+// only named, so it knows to ask.
+export function forAgent({ fields, own, about }) {
+  const shown = Object.fromEntries(Object.entries(fields).filter(([field]) => !HIDDEN.includes(field)));
+  const onFile = HIDDEN.filter(field => fields[field] !== undefined);
+  return { ...shown, ...(Object.keys(own).length ? { own } : {}), about, ...(onFile.length ? { hidden: onFile } : {}) };
+}
+export const shownValue = (field, value) => HIDDEN.includes(field) ? '(hidden)' : value;
 
 export function checkField(field, value) {
   if (!Object.hasOwn(IDENTITY, field)) throw new Refused('InvalidIdentity', `${field} is not an identity field. The fields are: ${FIELDS.join(', ')}`);
