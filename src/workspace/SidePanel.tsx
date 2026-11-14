@@ -253,10 +253,10 @@ function RepoPanel() {
           {showVisibility && (
             /* Visibility, inside the repository: look as someone else, and see who each page is for. */
             <div className="mb-2 flex flex-col gap-1.5 animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)">
-              <div role="radiogroup" aria-label="View as" className="grid grid-cols-3 gap-0.5 rounded-xl bg-muted p-0.5">
+              <div role="radiogroup" aria-label="View as" className="flex w-fit items-center gap-0.5 rounded-full bg-muted p-0.5">
                 {AUDIENCES.map(a => (
                   <button key={a.id} type="button" role="radio" aria-checked={audience === a.id} onClick={() => setAudience(a.id)}
-                    className="flex h-7 items-center justify-center gap-1.5 rounded-lg text-small text-muted-foreground transition-colors duration-(--ohm-duration-state) hover:text-foreground aria-checked:bg-card aria-checked:text-foreground aria-checked:shade-1">
+                    className="flex h-7 items-center gap-1 rounded-full px-2.5 text-small text-muted-foreground transition-colors duration-(--ohm-duration-state) hover:text-foreground aria-checked:bg-[color-mix(in_oklab,var(--ohm-green-light)_40%,var(--ohm-card))] aria-checked:font-medium aria-checked:text-primary dark:aria-checked:bg-(--ohm-green-light)/15 dark:aria-checked:text-(--ohm-green-light)">
                     <Icon icon={a.icon} size="xs" />{a.label}
                   </button>
                 ))}

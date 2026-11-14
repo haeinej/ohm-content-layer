@@ -162,5 +162,5 @@
 :root[data-theme="dark"] [data-slot=file-tree-item][data-linked]::before { background-color: color-mix(in oklab, var(--ohm-green-light) 16%, var(--ohm-card)); }
 
 /* With visibility shown, rows leave room at their end for the who-it-is-for pill. */
-[data-show-visibility] [data-slot=file-tree-item], [data-show-visibility] [data-row-id] { padding-inline-end: 7.25rem; }
-[data-show-visibility] [data-slot=file-tree-item][data-unread]::after { inset-inline-end: 7.5rem; }
+[data-show-visibility] [data-slot=file-tree-item], [data-show-visibility] [data-row-id] { padding-inline-end: 4.25rem; }
+[data-show-visibility] [data-slot=file-tree-item][data-unread]::after { inset-inline-end: 4.5rem; }

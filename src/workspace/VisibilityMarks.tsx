@@ -63,16 +63,17 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
       const post = doc.kind === "post"
       const v = post ? doc.visibility : "private"
       const pill = cn(
-        "pointer-events-auto absolute right-8 top-1/2 flex h-6 -translate-y-1/2 items-center gap-1 rounded-full px-2 text-small transition-colors duration-(--ohm-duration-press)",
-        v === "public" ? "bg-primary/10 text-primary dark:bg-(--ohm-green-light)/15 dark:text-(--ohm-green-light)"
+        // Icon only: the label is in the tooltip and for screen readers.
+        "pointer-events-auto absolute right-8 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full transition-colors duration-(--ohm-duration-press)",
+        v === "public" ? "bg-[color-mix(in_oklab,var(--ohm-green-light)_40%,transparent)] text-primary dark:bg-(--ohm-green-light)/15 dark:text-(--ohm-green-light)"
           : v === "friends" ? "bg-foreground/8 text-foreground" : "text-muted-foreground",
       )
       return (
         <div key={m.id} data-row-menu className="pointer-events-none absolute inset-x-0 z-[9]" style={{ top: m.top, height: m.height }}>
           {post ? (
             <DropdownMenu open={openId === m.id} onOpenChange={o => setOpenId(o ? m.id : null)}>
-              <DropdownMenuTrigger render={<button type="button" aria-label={`“${titleOf(doc)}” is for ${VISIBILITY[v].label}. Change`} className={cn(pill, "hover:bg-foreground/12")} />}>
-                <Icon icon={VISIBILITY[v].icon} size="xs" />{VISIBILITY[v].label}
+              <DropdownMenuTrigger render={<button type="button" title={VISIBILITY[v].label} aria-label={`“${titleOf(doc)}” is for ${VISIBILITY[v].label}. Change`} className={cn(pill, "hover:bg-foreground/12")} />}>
+                <Icon icon={VISIBILITY[v].icon} size="xs" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
                 {(["private", "friends", "public"] as Visibility[]).map(o => (
@@ -84,7 +85,7 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <span className={pill} title="Your cortex is yours alone"><Icon icon={LockIcon} size="xs" />Only you</span>
+            <span className={pill} title="Only you: your cortex is yours alone" aria-label="Only you"><Icon icon={LockIcon} size="xs" /></span>
           )}
         </div>
       )
