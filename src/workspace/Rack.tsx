@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react"
 import { EyeIcon, FolderGitIcon, InboxIcon } from "lucide-react"
 import { inbox } from "@/data/sample"
+import { NotificationCenter } from "./NotificationCenter"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Icon } from "@/components/ui/icon"
 import { icons } from "@/lib/icons"
@@ -54,6 +55,7 @@ export function Rack() {
         </span>
       </RackButton>
       <div className="flex-1" />
+      <NotificationCenter />
       <RackButton label="You" active={side === "profile"} onClick={() => (side === "profile" ? toggleSide("profile") : openSettings())}>
         <Avatar className="size-7"><AvatarFallback className="bg-primary text-small text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
       </RackButton>

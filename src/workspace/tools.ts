@@ -2,6 +2,7 @@
 import { useEffect } from "react"
 import { search, type SearchInput } from "@/data/search"
 import { registerStepTool } from "@/webmcp"
+import { record } from "./notifications"
 import { createDraft, open, setAgent, showGraph, useWorkspace, type ToolName } from "./store"
 
 /** Show the agent at work while a tool runs (AGENTS.md rule 13). UI calls never go through this. */
@@ -13,10 +14,12 @@ export function withAgent<I, O>(label: string, fn: (input: I, signal: AbortSigna
     try {
       const out = await fn(input, signal)
       setAgent({ state: "done", label })
+      record({ kind: "agent", title: label, detail: "Done, through WebMCP" })
       setTimeout(clear, 1500)
       return out
     } catch (e) {
       setAgent({ state: "failed", label })
+      record({ kind: "agent", title: label, detail: (e as Error)?.message ?? "Failed", tone: "error" })
       setTimeout(clear, 2500)
       throw e
     }

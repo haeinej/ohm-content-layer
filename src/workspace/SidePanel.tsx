@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { cortex, inbox, posts, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
+import { cortex, inbox, people, posts, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
@@ -300,16 +300,21 @@ function InboxPanel() {
 /** Who you are on top, then the settings, as agentic-twitter's account directory. */
 function ProfilePanel() {
   const { view } = useWorkspace()
+  // Friends: people you follow who follow you back. Synthetic: everyone else in the sample.
+  const friends = people.filter(p => p.did !== me.did).length
   const tab = view.kind === "settings" ? view.tab : undefined
   const row = "h-auto min-h-10 w-full justify-start gap-2.5 px-2.5 py-2 text-left font-normal whitespace-normal aria-[current=page]:bg-muted [&>svg]:text-muted-foreground aria-[current=page]:[&>svg]:text-foreground"
   return (
     <SidePanelFrame label="You"
       heading={
-        <div className="flex flex-col items-start gap-3 px-2.5 pt-4">
-          <Avatar className="size-11"><AvatarFallback className="bg-muted text-muted-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-h3">{me.name}</span>
-            <span className="text-body text-muted-foreground">@{me.handle}</span>
+        /* You: picture, then name, with handle and friends under it. */
+        <div className="flex min-w-0 items-center gap-3 px-1.5 pt-2">
+          <Avatar className="size-12 flex-none"><AvatarFallback className="bg-primary text-body text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-(length:--ohm-type-title-size) leading-(--ohm-type-title-leading) font-semibold">{me.name}</span>
+            <span className="truncate text-small text-muted-foreground">
+              @{me.handle} · <span className="font-medium text-foreground">{friends}</span> friends
+            </span>
           </div>
         </div>
       }>

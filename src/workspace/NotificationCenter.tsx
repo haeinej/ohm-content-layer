@@ -1,0 +1,101 @@
+// The bell above your picture in the rack, after agentic-twitter's notification center: what an agent
+// is doing now, then what agents did and the workspace's notices from the last week, in two tabs.
+import { useEffect, useState } from "react"
+import { BellIcon, BotIcon, InfoIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "lucide-react"
+import { AgentStatus } from "@/components/agent-status"
+import { Button } from "@/components/ui/button"
+import { Icon } from "@/components/ui/icon"
+import { onNotice } from "@/components/ui/notice"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/cn"
+import { ago, clearAll, markRead, record, remove, useNotifications, type NotificationKind } from "./notifications"
+import { open as openDoc, useWorkspace } from "./store"
+
+const TABS: { kind: NotificationKind; label: string }[] = [{ kind: "agent", label: "Agent" }, { kind: "system", label: "System" }]
+
+const rackButton = cn(
+  "relative inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none",
+  "hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40",
+  "aria-expanded:bg-muted aria-expanded:text-foreground",
+)
+
+export function NotificationCenter() {
+  const items = useNotifications()
+  const { agent } = useWorkspace()
+  const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState<NotificationKind>("agent")
+
+  // Everything the workspace raises as a notice is kept here too.
+  useEffect(() => onNotice(n => record({ kind: "system", title: typeof n.message === "string" ? n.message : "Notice", tone: n.tone === "error" ? "error" : "info" })), [])
+  // What you are looking at counts as read.
+  useEffect(() => { if (open) markRead(tab) }, [open, tab, items])
+
+  const unread = (k: NotificationKind) => items.filter(i => i.kind === k && !i.read).length
+  const total = unread("agent") + unread("system")
+  const status = [agent?.state === "working" && `Agent: ${agent.label}`, unread("agent") && `${unread("agent")} from agents`, unread("system") && `${unread("system")} system`]
+    .filter(Boolean).join(" · ") || "All caught up"
+  const shown = items.filter(i => i.kind === tab)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<button type="button" aria-label={`Notifications: ${status}`} title={status} className={rackButton} />}>
+        <Icon icon={BellIcon} />
+        {(total > 0 || agent?.state === "working") && (
+          <span aria-hidden className={cn("absolute top-2 right-2 size-2 rounded-full ring-2 ring-sidebar dark:ring-background",
+            agent?.state === "working" ? "animate-pulse bg-(--ohm-green-light)" : "bg-primary dark:bg-foreground")} />
+        )}
+      </PopoverTrigger>
+      <PopoverContent side="right" align="end" sideOffset={10} className="w-80 gap-0 p-0">
+        <header className="flex items-center justify-between gap-2 px-2 pt-2 pb-1">
+          <div role="tablist" aria-label="Notification kinds" className="flex gap-0.5">
+            {TABS.map(t => (
+              <Button key={t.kind} size="sm" variant="ghost" role="tab" aria-selected={tab === t.kind} onClick={() => setTab(t.kind)}
+                className="rounded-full text-muted-foreground aria-selected:bg-muted aria-selected:text-foreground">
+                {t.label}
+                {unread(t.kind) > 0 && <span className="ms-1 rounded-full bg-primary px-1.5 text-small text-primary-foreground tabular-nums dark:bg-foreground dark:text-background">{unread(t.kind)}</span>}
+              </Button>
+            ))}
+          </div>
+          <Button size="icon-sm" variant="ghost" aria-label="Clear all notifications" title="Clear all" disabled={!items.length} onClick={clearAll}
+            className="rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+            <Icon icon={Trash2Icon} size="sm" />
+          </Button>
+        </header>
+
+        {tab === "agent" && agent && (
+          <div role="status" className="mx-2 mb-1 flex items-center rounded-lg bg-muted px-2 py-2">
+            <AgentStatus state={agent.state} label={agent.label} />
+          </div>
+        )}
+
+        <ul role="tabpanel" className="flex max-h-96 flex-col gap-px overflow-y-auto px-1.5 pb-1.5">
+          {shown.map(i => (
+            <li key={i.id} className="group/item relative">
+              <button type="button" disabled={!i.ref} onClick={() => { if (i.ref) { openDoc(i.ref); setOpen(false) } }}
+                className="ux-row flex w-full items-start gap-2.5 px-2.5 py-2 pe-9 text-left disabled:cursor-default">
+                <span className={cn("mt-0.5 flex size-5 flex-none items-center justify-center rounded-full",
+                  i.tone === "error" ? "text-destructive" : i.kind === "agent" ? "text-primary dark:text-foreground" : "text-muted-foreground")}>
+                  <Icon icon={i.kind === "agent" ? BotIcon : i.tone === "error" ? TriangleAlertIcon : InfoIcon} size="sm" />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className={cn("text-body", !i.read && "font-semibold")}>{i.title}</span>
+                  {i.detail && <span className="truncate text-small text-muted-foreground">{i.detail}</span>}
+                </span>
+                <time dateTime={new Date(i.at).toISOString()} className="flex-none text-small text-muted-foreground tabular-nums">{ago(i.at)}</time>
+              </button>
+              <Button size="icon-xs" variant="ghost" aria-label={`Remove “${i.title}”`} onClick={() => remove(i.id)}
+                className="absolute top-2 right-2 rounded-full text-muted-foreground opacity-0 transition-opacity group-hover/item:opacity-100 focus-visible:opacity-100">
+                <Icon icon={XIcon} size="xs" />
+              </Button>
+            </li>
+          ))}
+          {!shown.length && (
+            <li className="px-2.5 py-6 text-center text-small text-muted-foreground">
+              {tab === "agent" ? "Nothing from agents this week." : "No notices this week."}
+            </li>
+          )}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  )
+}

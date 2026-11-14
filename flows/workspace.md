@@ -30,7 +30,8 @@ The rack sits on the page itself. The side panel and the main panel are separate
 | **Personal repository** | The repository, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders, **cortex** (a minimal brain) and **vault** (a minimal box), are bold forest rows that open in place. Their icons are outlines when closed and filled when open. A chevron-all button opens or closes everything, and a Tree/Graph switch shows the same scope as a graph inside the panel. Drag a page from the tree onto the main panel to open it, or onto a vault folder to file it there. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device |
 | **Visibility** | *View as* Only you, Friends or Public, with a check beside the current one. The repository, the graph and the page then show only what that audience can see, with a "Viewing as…" bar and Back to you |
 | **Inbox** | Replies, mentions, friend requests and cortex notes, newest first, with new ones marked. One about a post opens that post; the others open in the main panel |
-| You (avatar) | Your name and handle, then the settings sections: Your profile, Identity, Agents, Vault, Cortex, Appearance, and Sign out |
+| **Notifications** (bell) | Unchanged. A panel opens beside the rack, after agentic-twitter's notification center. **Agent** shows what an agent is doing now (its status), then what agents did through the page's WebMCP tools. **System** shows the workspace's notices. Each item shows how long ago it happened, can be removed on hover, and opens the page it is about. Clear all empties the list. A dot on the bell means something is unread; it pulses light green while an agent is working. Opening a tab marks it read |
+| You (avatar) | Your picture, then your name with your handle and how many friends you have under it. Below that, the settings sections: Your profile, Identity, Agents, Vault, Cortex, Appearance, and Sign out |
 
 ## The graph
 
@@ -160,7 +161,7 @@ Publishing is not part of this flow. It will be its own flow, with `consequentia
 | Part | File |
 | --- | --- |
 | State and the shared handlers | `src/workspace/store.ts` |
-| Rack | `src/workspace/Rack.tsx` |
+| Rack | `src/workspace/Rack.tsx`; the bell: `NotificationCenter.tsx`, `notifications.ts` |
 | Side panel: repo, visibility, inbox, you | `src/workspace/SidePanel.tsx`, `Surface.tsx` |
 | Main panel and settings | `src/workspace/MainPanel.tsx`, `Settings.tsx`, `settings-tabs.ts` |
 | The page editor | `src/editor/` |
