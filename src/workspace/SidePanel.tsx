@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
-  AtSignIcon, BrainIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
+  AtSignIcon, BrainIcon, EllipsisIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
@@ -18,7 +18,7 @@ import { RowMenu } from "./RowMenu"
 import { SETTINGS_TABS } from "./settings-tabs"
 import { panelTitle, SidePanelFrame } from "./Surface"
 import {
-  marks, me, moveDoc, open, openInbox, openSettings, setAudience, setRepoMode, setScope, useWorkspace,
+  createDraft, marks, me, moveDoc, open, openInbox, openSettings, setAudience, setRepoMode, setScope, useWorkspace,
 } from "./store"
 
 /** label › sublabel › item, as folders. Folder ids are prefixed so they never collide with docs. */
@@ -117,15 +117,45 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
  * One of the repo's two prime folders: its own icon (PrimeIcon) and its name, bold forest. The icon is an
  * outline when closed and filled when open, so open and closed read at a glance.
  */
-function PrimeRow({ prime, open: isOpen, onOpen, locked }: { prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean }) {
+function PrimeRow({ prime, open: isOpen, onOpen, locked, onExpandAll, allOpen, onOnly, onNew }: {
+  prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean
+  onExpandAll: () => void; allOpen: boolean; onOnly: () => void; onNew?: () => void
+}) {
+  const [menu, setMenu] = useState(false)
+  const run = (k: string) => {
+    if (k === "e") onExpandAll()
+    else if (k === "o") onOnly()
+    else if (k === "n" && onNew) onNew()
+    else return false
+    setMenu(false)
+    return true
+  }
   return (
-    <button type="button" aria-expanded={isOpen} onClick={onOpen} disabled={locked}
-      className="ux-row flex w-full items-center gap-1.5 px-1.5 text-left">
-      <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground", locked && "invisible")} />
-      <PrimeIcon kind={prime} filled={isOpen} className="text-primary dark:text-foreground" />
-      <span className="text-body font-bold text-primary dark:text-foreground">{prime}</span>
-      {locked && <Icon icon={LockIcon} size="xs" className="ms-auto text-muted-foreground" aria-label="Only you see your cortex" />}
-    </button>
+    <div className="group/prime relative" onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && run(e.key.toLowerCase())) e.preventDefault() }}>
+      <button type="button" aria-expanded={isOpen} onClick={onOpen} disabled={locked}
+        className="ux-row flex w-full items-center gap-1.5 px-1.5 pe-8 text-left">
+        <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground", locked && "invisible")} />
+        <PrimeIcon kind={prime} filled={isOpen} className="text-primary dark:text-foreground" />
+        <span className="text-body font-bold text-primary dark:text-foreground">{prime}</span>
+        {locked && <Icon icon={LockIcon} size="xs" className="ms-auto text-muted-foreground" aria-label="Only you see your cortex" />}
+      </button>
+      {!locked && (
+        <DropdownMenu open={menu} onOpenChange={setMenu}>
+          <DropdownMenuTrigger render={
+            <button type="button" aria-label={`More for ${prime}`}
+              className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color] duration-(--ohm-duration-press) group-hover/prime:opacity-100 hover:bg-foreground/10 hover:text-foreground focus-visible:opacity-100 aria-expanded:bg-foreground/10 aria-expanded:opacity-100" />
+          }>
+            <Icon icon={EllipsisIcon} size="sm" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-56"
+            onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase())) e.preventDefault() }}>
+            {onNew && <DropdownMenuItem onClick={() => run("n")}>New page<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>}
+            <DropdownMenuItem onClick={() => run("e")}>{allOpen ? "Collapse all" : "Expand all"}<DropdownMenuShortcut>E</DropdownMenuShortcut></DropdownMenuItem>
+            <DropdownMenuItem onClick={() => run("o")}>Show only {prime}<DropdownMenuShortcut>O</DropdownMenuShortcut></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   )
 }
 
@@ -157,6 +187,13 @@ function RepoPanel() {
     return () => window.removeEventListener("ohm:folder-renamed", moved)
   }, [])
   const everything = allFolders.length > 0 && allFolders.every(id => expanded.has(id))
+  // One prime folder's own expand-all, from its ⋯.
+  const primeFolders = (p: "cortex" | "vault") => [`prime:${p}`, ...folderIds(p === "cortex" ? cortexTree : vaultTree)]
+  const primeAllOpen = (p: "cortex" | "vault") => primeFolders(p).every(id => expanded.has(id))
+  const expandPrime = (p: "cortex" | "vault") => {
+    const ids = primeFolders(p), open = !primeAllOpen(p)
+    setExpanded(s => { const n = new Set(s); for (const id of ids) open ? n.add(id) : n.delete(id); return n })
+  }
   const flip = (id: string) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const selected = view.kind === "doc" ? view.id : null
 
@@ -216,14 +253,17 @@ function RepoPanel() {
             <p className="px-2 py-6 text-center text-small text-muted-foreground">Choose Cortex or Vault from the menu above.</p>
           )}
           {showCortex && <>
-            <PrimeRow prime="cortex" locked={cortexLocked} open={!cortexLocked && expanded.has("prime:cortex")} onOpen={() => flip("prime:cortex")} />
+            <PrimeRow prime="cortex" locked={cortexLocked} open={!cortexLocked && expanded.has("prime:cortex")} onOpen={() => flip("prime:cortex")}
+              allOpen={primeAllOpen("cortex")} onExpandAll={() => expandPrime("cortex")} onOnly={() => setScope({ cortex: true, vault: false })} />
             {!cortexLocked && expanded.has("prime:cortex") && (
               <FileTree aria-label="cortex" className="ms-4 [--tree-inset:1rem] animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={cortexTree}
                 expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(id)} />
             )}
           </>}
           {showVault && <>
-            <PrimeRow prime="vault" open={expanded.has("prime:vault")} onOpen={() => flip("prime:vault")} />
+            <PrimeRow prime="vault" open={expanded.has("prime:vault")} onOpen={() => flip("prime:vault")}
+              allOpen={primeAllOpen("vault")} onExpandAll={() => expandPrime("vault")} onOnly={() => setScope({ cortex: false, vault: true })}
+              onNew={() => createDraft()} />
             {expanded.has("prime:vault") && (
               <FileTree aria-label="vault" className="ms-4 [--tree-inset:1rem] animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={vaultTree}
                 expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(id)} />
@@ -337,21 +377,17 @@ function InboxPanel() {
 /** Who you are on top, then the settings, as agentic-twitter's account directory. */
 function ProfilePanel() {
   const { view } = useWorkspace()
-  // Friends: people you follow who follow you back. Synthetic: everyone else in the sample.
-  const friends = people.filter(p => p.did !== me.did).length
   const tab = view.kind === "settings" ? view.tab : undefined
   const row = "h-auto min-h-10 w-full justify-start gap-2.5 px-2.5 py-2 text-left font-normal whitespace-normal aria-[current=page]:bg-muted [&>svg]:text-muted-foreground aria-[current=page]:[&>svg]:text-foreground"
   return (
     <SidePanelFrame label="You"
       heading={
-        /* You: picture, then name, with handle and friends under it. */
+        /* You: picture, then name with handle under it. */
         <div className="flex min-w-0 items-center gap-3 px-1.5 pt-2">
           <Avatar className="size-12 flex-none"><AvatarFallback className="bg-primary text-body text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-(length:--ohm-type-title-size) leading-(--ohm-type-title-leading) font-semibold">{me.name}</span>
-            <span className="truncate text-small text-muted-foreground">
-              @{me.handle} · <span className="font-medium text-foreground">{friends}</span> friends
-            </span>
+            <span className="truncate text-small text-muted-foreground">@{me.handle}</span>
           </div>
         </div>
       }>

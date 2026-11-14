@@ -299,18 +299,18 @@ export function GraphView() {
           <PopoverTrigger render={<Button size="icon-sm" variant="ghost" aria-label="Graph settings" className={cn(floating, "pointer-events-auto")} />}>
             <Icon icon={SlidersHorizontalIcon} size="sm" />
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-64">
-            <p className="text-small text-muted-foreground">Show</p>
+          <PopoverContent align="end" className="w-60 gap-0 p-2">
+            <p className="px-1.5 pb-1 text-small text-muted-foreground">Show</p>
             {([
               ["links", "Links between posts"],
               ["people", "People mentioned"],
             ] as const).map(([key, label]) => (
-              <label key={key} className="flex min-h-9 items-center justify-between gap-3 text-body">
+              <label key={key} className="flex min-h-8 items-center justify-between gap-3 rounded-lg px-1.5 text-body hover:bg-muted">
                 {label}
                 <Switch checked={filters[key]} onCheckedChange={v => setFilters(f => ({ ...f, [key]: v }))} />
               </label>
             ))}
-            <Button size="sm" variant="secondary" className="mt-1 w-full"
+            <Button size="sm" variant="secondary" className="mt-1.5 h-8 w-full"
               onClick={() => { last.clear(); userMoved.current = false; setFilters(f => ({ ...f })) }}>
               Lay out again
             </Button>
