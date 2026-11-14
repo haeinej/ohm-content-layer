@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -108,4 +108,42 @@ test('the person can read or clear any working memory, and a client can read the
   assert.equal(answers[3].error.code, -32002);
   await rm(join(dir, '.cortex', 'working', 'codex.md'));
   assert.deepEqual((await openCortex(dir, { actor: 'claude-code' }).start()).working.others, []);
+});
+
+test('a refused distill writes nothing', async () => {
+  const dir = await fresh();
+  const codex = openCortex(dir, { actor: 'codex' });
+  await codex.addNote({ id: 'taken', note: 'Already here', session: 's0' });
+  const { version } = await codex.writeWorking('today');
+  for (const notes of [
+    [{ id: 'a', note: 'one' }, { id: 'b', note: 'two' }, { id: 'c', note: 'three\nlines' }],
+    [{ id: 'a', note: 'one' }, { id: 'a', note: 'one again' }],
+    [{ id: 'a', note: 'one' }, { id: 'taken', note: 'Something else' }],
+  ]) await assert.rejects(codex.distill({ session: 's1', version, working: 'next', notes }), problem => ['InvalidRequest', 'Changed'].includes(problem.code));
+  assert.deepEqual((await codex.listNotes()).notes.map(note => note.id), ['taken']);
+  assert.equal((await codex.working()).mine.text, 'today');
+});
+
+test('other agents\' working memory says when it was written, newest first', async () => {
+  const dir = await fresh();
+  await openCortex(dir, { actor: 'codex' }).writeWorking('Open: the atlas essay.');
+  await openCortex(dir, { actor: 'cursor' }).writeWorking('Open: tidying links.');
+  const weeksAgo = new Date(Date.now() - 21 * 24 * 3600 * 1000);
+  await utimes(join(dir, '.cortex', 'working', 'codex.md'), weeksAgo, weeksAgo);
+  const { others } = (await openCortex(dir, { actor: 'claude-code' }).start()).working;
+  assert.deepEqual(others.map(item => item.agent), ['cursor', 'codex']);
+  assert.equal(others[1].updated, weeksAgo.toISOString());
+});
+
+test('clearing working memory removes it, and keeps what it said', async () => {
+  const dir = await fresh();
+  const codex = openCortex(dir, { actor: 'codex' });
+  const first = await codex.writeWorking('Open: renaming the reading section.');
+  assert.equal((await codex.distill({ session: 's1', version: first.version, working: '' })).working.cleared, true);
+  assert.deepEqual((await openCortex(dir, { actor: 'claude-code' }).start()).working.others, []);
+  assert.deepEqual(await readdir(join(dir, '.cortex', 'working')), []);
+  assert.equal((await readdir(join(dir, '.cortex', 'history', 'working', 'codex'))).length, 1);
+  const again = await codex.writeWorking('Open: one more thing.');
+  assert.equal((await codex.writeWorking('  ', { replaces: again.version })).cleared, true);
+  assert.equal((await readdir(join(dir, '.cortex', 'history', 'working', 'codex'))).length, 2);
 });

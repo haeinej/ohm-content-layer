@@ -281,7 +281,7 @@ A post saved in a known section needs nothing and is not noted. With a vault con
 
 ## What exists now, and what changes
 
-Built in the `ohm-cortex` repository and tested (46 tests). Steps 1 and 2 are built:
+Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are built:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
@@ -290,7 +290,7 @@ Built in the `ohm-cortex` repository and tested (46 tests). Steps 1 and 2 are bu
 | Strict identity (`src/identity.mjs`): fixed typed fields, proposals with evidence in `.cortex/identity.jsonl`, `cortex confirm`, `reject`, `clear` and `identity`, `init --account` | History of changes | Done (step 1). With a vault connected, vault evidence is checked against the post |
 | Memory kinds `person`, `preference`, `project`, `reference` | Rules for names, descriptions, versions | Drop `project` |
 | Ten MCP tools, with `cortex_propose_identity` in place of `cortex_identity`; short instructions that send an agent to `cortex_start`, which returns the playbook; a `start` prompt; the files as `cortex://` resources; birthdate hidden from agents | All | Add working memory and filing advice; serve over HTTP |
-| Working memory: one file per agent in `.cortex/working/`, `cortex_working` to rewrite your own, `cortex_distill` to record what was seen again and leave what is open, given in `cortex_start` and as `cortex://working/<agent>` resources; when something becomes a memory is in the playbook | All | Done (step 3). The working memory a distill replaces is kept; rewrites during a session are not |
+| Working memory: one file per agent in `.cortex/working/`, `cortex_working` to rewrite your own, `cortex_distill` to record what was seen again and leave what is open, given in `cortex_start` and as `cortex://working/<agent>` resources; when something becomes a memory is in the playbook | All | Done (step 3). The working memory a distill replaces, or a clear removes, is kept; rewrites during a session are not |
 | Commands `init`, `mcp`, `identity`, `confirm`, `reject`, `clear`, `approve`, `event` | All | `event` takes structured vault events; add `status` |
 | The rulebook in `agents/AGENTS.md`, with the identity policy | Secrets, git and identity sections | Rewrite around filing and working memory |
 | Git policy files, with `.cortex/identity.jsonl` as append-only | Both | |
