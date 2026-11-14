@@ -91,9 +91,12 @@ test('birthdate is hidden from agents: they are told one is on file, and nothing
   assert.equal(start.identity.birthdate, undefined);
   assert.deepEqual(start.identity.hidden, ['birthdate']);
 
-  const later = await agent.proposeIdentity({ field: 'birthdate', value: '1991-07-15', source: { kind: 'person', quote: 'actually the 15th' } });
+  const later = await agent.proposeIdentity({ field: 'birthdate', value: '1991-07-15', source: { kind: 'person', quote: 'I was born on 15 July 1991, not the 14th' } });
   assert.equal(later.current, '(hidden)');
-  assert.equal((await agent.start()).waiting.identity[0].value, '(hidden)');
+  const waiting = (await agent.start()).waiting.identity[0];
+  assert.deepEqual(waiting.source, { kind: 'person', hidden: true }, 'the quote states the date, so it is hidden too');
+  assert.equal(waiting.value, '(hidden)');
+  assert.doesNotMatch(JSON.stringify(await agent.start()), /15 July 1991|1991-07-15/);
 
   const answers = session(dir, [
     { method: 'tools/call', params: { name: 'cortex_start', arguments: {} } },

@@ -5,7 +5,7 @@
 //   .cortex/                                             what is waiting, and what was replaced
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
-import { checkField, checkSource, FIELDS, forAgent, IDENTITY, readIdentity, shownValue, statesValue, writeIdentity } from './identity.mjs';
+import { checkField, checkSource, FIELDS, forAgent, IDENTITY, proposalForAgent, readIdentity, shownValue, statesValue, writeIdentity } from './identity.mjs';
 import { sectionOf, vaultFrom } from './vault.mjs';
 import { checkWords, gone, parseMap, writeMap } from './vaultmap.mjs';
 import { createHash } from 'node:crypto';
@@ -300,7 +300,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         notes: pending,
         working: await cortex.working(),
         waiting: {
-          identity: (await cortex.identityProposals()).map(({ id, field, value, source }) => ({ id, field, value: shownValue(field, value), source })),
+          identity: (await cortex.identityProposals()).map(proposalForAgent),
           skills: (await skillsIn(at('.cortex', 'proposed', 'skills'))).map(skill => skill.name),
           tools: (await toolsIn(at('.cortex', 'proposed', 'tools'))).map(tool => tool.name),
         },
