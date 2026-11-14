@@ -33,6 +33,15 @@ test('a proposal without evidence is refused', async () => {
   await assert.rejects(agent.proposeIdentity({ field: 'account', value: 'did:plc:abc', source: said('my DID is did:plc:abc') }), refused('InvalidIdentity'));
 });
 
+test('the evidence must say the value itself', async () => {
+  const { agent } = await fresh();
+  await assert.rejects(agent.proposeIdentity({ field: 'city', value: 'Porto', source: said('I moved to Lisbon') }), refused('NoEvidence'));
+  await assert.rejects(agent.proposeIdentity({ field: 'emails', value: ['sam@example.com'], source: said('write to me any time') }), refused('NoEvidence'));
+  assert.equal((await agent.proposeIdentity({ field: 'websites', value: ['https://www.example.com/'], source: said('my site is example.com') })).waiting, true);
+  assert.equal((await agent.proposeIdentity({ field: 'occupation', value: 'Cartographer', source: said('I work as a cartographer') })).waiting, true);
+  assert.equal((await agent.proposeIdentity({ field: 'timezone', value: 'Europe/Lisbon', source: said('I am on Lisbon time') })).waiting, true, 'a field that cannot be read off word for word rests on the person');
+});
+
 test('pronouns come only from the person, never from the vault', async () => {
   const { agent } = await fresh();
   await assert.rejects(agent.proposeIdentity({ field: 'pronouns', value: 'she/her', source: post('p1', 'Sam Rivera wrote this') }), refused('NoEvidence'));
@@ -54,7 +63,7 @@ test('a value that is not of its type is refused', async () => {
     ['name', 'Two\nlines'],
   ]) await assert.rejects(agent.proposeIdentity({ field, value, source }), refused('InvalidIdentity'), `${field}: ${JSON.stringify(value)}`);
   for (const [field, value] of [['timezone', 'Europe/Lisbon'], ['birthdate', '--04-12'], ['birthdate', '1990-02-28'], ['languages', ['pt-PT', 'en']], ['emails', [{ label: 'work', address: 'Sam@Example.com' }]]]) {
-    assert.equal((await agent.proposeIdentity({ field, value, source })).waiting, true, field);
+    assert.equal((await agent.proposeIdentity({ field, value, source: said(`it is ${JSON.stringify(value)}`) })).waiting, true, field);
   }
   assert.deepEqual((await agent.identityProposals()).find(item => item.field === 'emails').value, [{ label: 'work', address: 'sam@example.com' }]);
 });
@@ -86,7 +95,7 @@ test('a confirmed field is not overwritten by a later proposal', async () => {
   assert.equal((await agent.proposeIdentity({ field: 'occupation', value: 'Illustrator', source: said('still an illustrator') })).confirmed, true);
 
   // With two waiting for one field, the person names which one.
-  await agent.proposeIdentity({ field: 'occupation', value: 'Designer', source: said('I design') });
+  await agent.proposeIdentity({ field: 'occupation', value: 'Designer', source: said('I am a designer') });
   await assert.rejects(person.confirmIdentity('occupation'), refused('Ambiguous'));
   await person.confirmIdentity(later.id);
   assert.equal((await readIdentity(await file(dir))).fields.occupation, 'Art director');
@@ -107,13 +116,13 @@ test('a rejected fact is not proposed again, whatever the evidence', async () =>
 
 test('clearing removes a field and keeps the earlier file', async () => {
   const { dir, agent, person } = await fresh();
-  await agent.proposeIdentity({ field: 'position', value: 'Founder', source: said('I founded it') });
+  await agent.proposeIdentity({ field: 'position', value: 'Founder', source: said('I am the founder') });
   await person.confirmIdentity('position');
   await person.clearIdentity('position');
   assert.equal((await readIdentity(await file(dir))).fields.position, undefined);
   assert.equal((await readdir(join(dir, '.cortex', 'history', 'identity', 'identity'))).length, 2);
   // Cleared, the same fact can be proposed and confirmed again.
-  await agent.proposeIdentity({ field: 'position', value: 'Founder', source: said('I founded it') });
+  await agent.proposeIdentity({ field: 'position', value: 'Founder', source: said('I am the founder') });
   await person.confirmIdentity('position');
   assert.equal((await readIdentity(await file(dir))).fields.position, 'Founder');
 });

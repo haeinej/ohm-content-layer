@@ -10,6 +10,7 @@ Cortex is separate software. It does not need ohm, a vault, or any one coding ag
 cortex/
 ├── agents/         AGENTS.md, the rulebook for keeping this cortex, and secrets/
 ├── identity.md     who this cortex belongs to, read in full every session
+├── vault.md        how to read the vault: each section, what it means, how posts there are filed
 ├── memory/         one thing learned per file, plus a generated MEMORY.md index
 ├── skills/         <name>/SKILL.md, in the form coding agents already read
 └── tools/          the list of what the agent can do, each on or off
@@ -48,6 +49,8 @@ node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
 | Command | Who runs it | What it does |
 | --- | --- | --- |
 | `cortex init [dir] [--account <did>]` | The person | Starts a cortex in an empty folder, optionally with the signed-in account |
+| `cortex vault connect <folder> [dir]` | The person | Connects the vault kept in that folder, and writes `vault.md` |
+| `cortex vault [sync] [dir]` | The person or a host | Brings the cortex in step with the vault: counts, what moved or left, memories pointing at posts no longer there |
 | `cortex identity [dir]` | The person | Shows the confirmed identity and the facts an agent proposed |
 | `cortex confirm <field or id> [dir]` | The person | Accepts a proposed identity fact |
 | `cortex reject <field or id> [dir]` | The person | Turns one down; that value is not proposed again |
@@ -69,6 +72,6 @@ test/       run with npm test
 
 ## Status
 
-Built: the folder store, strict identity, the ten tools and the commands above, tested against temporary folders. No real agent has been connected yet. See [docs/plan.md](docs/plan.md) for what comes next.
+Built: the folder store, strict identity, the vault contract with a folder vault and `vault.md`, the eleven tools and the commands above, tested against temporary folders. No real agent has been connected yet. See [docs/plan.md](docs/plan.md) for what comes next.
 
 Not built: the hooks adapter for Claude Code and Codex, turns, syncing a cortex to a host, and switching tools on from anywhere but the file itself.

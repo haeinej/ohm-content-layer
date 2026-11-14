@@ -154,7 +154,7 @@ test('an agent keeps a cortex through the tools alone', async () => {
   const hello = await handle({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'claude-code' } } });
   assert.match(hello.result.instructions, /cortex_start before anything else/);
   assert.equal(seen, 'claude-code');
-  assert.equal((await handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).result.tools.length, 10);
+  assert.equal((await handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).result.tools.length, 11);
 
   assert.match((await ask('cortex_start')).value.rules, /What you may not do/);
   const saved = (await ask('cortex_remember', { memory: likes })).value;
