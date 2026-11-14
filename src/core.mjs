@@ -1,6 +1,6 @@
 export const KINDS = ['person', 'preference', 'project', 'reference'];
 export const NAME = /^[a-z]+(?:-[a-z]+)*$/;
-const FIELDS = ['name', 'description', 'kind', 'always', 'stated', 'from', 'project', 'body', 'notes', 'writtenBy', 'seen'];
+const FIELDS = ['name', 'description', 'kind', 'always', 'stated', 'from', 'project', 'posts', 'body', 'notes', 'writtenBy', 'seen'];
 const bytes = text => new TextEncoder().encode(text).length;
 
 export class InvalidMemory extends Error {}
@@ -18,6 +18,7 @@ export function memoryProblems(memory) {
     if (memory[field] !== undefined && (typeof memory[field] !== 'string' || memory[field].length > 2000 || /[\r\n\u0000]/u.test(memory[field]))) problems.push(`${field} is text, at most 2,000 characters`);
   }
   if (memory.notes !== undefined && (!Array.isArray(memory.notes) || memory.notes.length > 100 || new Set(memory.notes).size !== memory.notes.length || memory.notes.some(id => typeof id !== 'string' || !id || id.length > 200))) problems.push('notes is up to 100 distinct note IDs');
+  if (memory.posts !== undefined && (!Array.isArray(memory.posts) || !memory.posts.length || memory.posts.length > 20 || new Set(memory.posts).size !== memory.posts.length || memory.posts.some(id => typeof id !== 'string' || !id.trim() || id.length > 200))) problems.push('posts is up to 20 distinct vault post IDs');
   if (memory.writtenBy !== undefined && (typeof memory.writtenBy !== 'string' || !memory.writtenBy)) problems.push('writtenBy is text');
   if (memory.seen !== undefined) {
     const seen = memory.seen;

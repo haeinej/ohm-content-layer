@@ -3,6 +3,8 @@
 // cortex mcp [dir]             serve the cortex's tools to an agent, over standard input and output
 // cortex approve <skill> [dir] approve a skill an agent proposed
 // cortex event <text> [dir]    report a change from outside, for the agent to settle
+// cortex vault connect <folder> [dir]   read the vault kept in that folder
+// cortex vault [sync] [dir]         bring the cortex in step with the vault, and show how it reads it
 // cortex confirm <field|id> [dir]   accept an identity fact an agent proposed
 // cortex reject <field|id> [dir]    turn one down; that value is not proposed again
 // cortex clear <field> [dir]        remove an identity field
@@ -49,6 +51,16 @@ try {
   } else if (command === 'clear' && rest[0]) {
     await openCortex(folder(rest[1]), { actor: 'member' }).clearIdentity(rest[0]);
     console.log(`${rest[0]} is cleared`);
+  } else if (command === 'vault') {
+    if (rest[0] === 'connect' && rest[1]) {
+      const done = await openCortex(folder(rest[2]), { actor: 'member' }).connectVault({ kind: 'folder', path: resolve(rest[1]) });
+      console.log(`Connected the vault in ${resolve(rest[1])}: ${done.sections.length} sections`);
+    } else {
+      const dir = folder(rest[0] === 'sync' ? rest[1] : rest[0]);
+      const done = await openCortex(dir, { actor: 'member' }).syncVault();
+      console.log(JSON.stringify(done, null, 2));
+      if (!done.connected) process.exitCode = 1;
+    }
   } else if (command === 'identity') {
     const cortex = openCortex(folder(rest[0]));
     const { fields, problems } = await cortex.identity();
@@ -57,7 +69,7 @@ try {
     const { id } = await openCortex(folder(rest[1]), { actor: process.env.CORTEX_SOURCE ?? 'host' }).addNote({ id: randomUUID(), note: rest[0], session: 'event' });
     console.log(`Recorded ${id}`);
   } else {
-    console.log('cortex init [dir] [--account <did>] | mcp [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir]');
+    console.log('cortex init [dir] [--account <did>] | mcp [dir] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir]');
     process.exitCode = command ? 1 : 0;
   }
 } catch (problem) {
