@@ -53,6 +53,17 @@ ohm-ux is where ohm's **user flows** are designed and built. Every flow has two 
 
 20. **ohm-ui only, tokens only.** Install components with `npx shadcn add @ohm/<name>`. Choose variants and don't restyle. App CSS is for layout only. Follow ohm-ui's rules: theme, don't fork; no edges; one primary per view; Coconat only for `h1` and `h2`.
 
+## Running it
+
+```sh
+npm install
+npm run dev        # http://localhost:5190
+npm run typecheck
+```
+
+- The app is Vite + React 19 + Tailwind 4. ohm-ui's foundations are in `src/ohm/`, copied with `npm run foundations -- ../ohm-ux` from an ohm-ui checkout; never edit them here. Components come from `npx shadcn add @ohm/<name>` into `src/components/`.
+- In development, `src/webmcp-shim.ts` stands in for `document.modelContext` when the browser has none, so the tool path can be walked from the console: `await document.modelContext.getTools()`, then `executeTool(tool, input)`. It is never in a production build.
+
 ## Each flow
 
 A flow is a file `flows/<flow>.md` (from the template) plus its code. The file is the specification: steps, the screen for each step and its ohm-ui components, the tool for each step with its schema and annotations, where approval happens, and the end states. Write the file first, then build to it.
