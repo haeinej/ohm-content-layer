@@ -37,7 +37,7 @@ cortex/
 ├── skills/               how they like a kind of source filed or a task done. <name>/SKILL.md
 ├── tools/                what the agent may use. One file per tool, on or off
 ├── .cortex/              machinery the person does not need to look at
-│   ├── working.md        working memory: this session, and what was left open last time
+│   ├── working/          working memory, one file per agent: this session, and what was left open
 │   ├── notes.jsonl       observations waiting to be settled, and vault events
 │   ├── proposed/         identity facts, skills and tools waiting for the person
 │   └── history/          every earlier version of every file
@@ -54,9 +54,9 @@ For someone non-technical it is: who I am, how my vault is laid out, what my age
 | `agents/AGENTS.md` | Nothing | Add their own rules at the end | Every session |
 | `agents/secrets/` | Nothing, and never read a value into anything | Put a secret there | When a tool needs it, by file name |
 | `identity.md` | Propose a field, with evidence | Confirm, correct or clear a field | Every session, in full |
-| `vault.md` | Keep the structure, counts and pointers in step with the vault; draft a section's meaning | Confirm a section's meaning, in their words | Every session |
+| `vault.md` | Keep the structure, counts and pointers in step with the vault; write and rewrite a section's meaning | Edit anything in it; what they write outranks the agent's | Every session |
 | `memory/` | Write, rewrite and remove freely | Edit or remove anything | Index every session; a memory when it fits |
-| `.cortex/working.md` | Write freely | Edit or clear it | Every session |
+| `.cortex/working/<agent>.md` | Write its own freely; read the others' | Edit or clear any of them | Every session |
 | `skills/` | Propose | Approve | Descriptions every session; a skill when it fits |
 | `tools/` | Ask for one to be built | Add one, switch one on or off | The list every session |
 | `.gitignore`, `.gitattributes` | Nothing | Change the policy | Never by the agent |
@@ -112,7 +112,7 @@ Behind each value, `.cortex/identity.jsonl` records where it came from: the pers
 3. **Never guess.** Pronouns are never inferred from a name. Kind is never inferred from writing style. A field with no evidence stays empty, and empty is a valid answer.
 4. **Values are checked.** Emails must be addresses, timezones real zones, dates real dates. A value that fails is refused.
 5. **A confirmed field is not overwritten by a proposal.** If the vault later says something different, the new value is proposed beside the old one, and the confirmed one stands until the person chooses.
-6. **Sensitive fields stay in.** Email addresses, birthdate and city are never sent to another service, put in a URL, or included in anything published. They are shown to the agent so it can help, not so it can share.
+6. **Sensitive fields stay in.** Email addresses, birthdate and city are never sent to another service, put in a URL, or included in anything published. **Birthdate is hidden from agents altogether:** no tool or resource returns it, and an agent is told only that one is on file. A task that needs it asks the person. The rest are shown to the agent so it can help, not so it can share.
 7. **Every change is kept.** An earlier value can be read back and restored.
 8. **Proposals do not nag.** A value the person turned down is not proposed again for that field, whatever the evidence. The person can still set it themselves. Two proposals of the same value are one.
 9. **An agent never writes as the person.** The names `member` and `account` are reserved; an agent that connects under one is recorded as `agent:<name>`.
@@ -122,7 +122,7 @@ Behind each value, `.cortex/identity.jsonl` records where it came from: the pers
 `vault.md` is the agent's index of the vault, so a new session knows where things are without reading everything.
 
 - **Structure and counts** come from the vault: each section and subsection, how many posts, what is recent. Cortex keeps these in step with vault events, without asking, because they are derived, not content.
-- **Meanings** are the person's words: what each section is for and what goes in it. The agent may draft one; it stands once the person confirms or edits it.
+- **Meanings** say what each section is for and what goes in it. The agent writes and rewrites them without asking, from what it sees in the vault and what the person says. The person can edit any of it, and what they write outranks what the agent wrote.
 - **Filing conventions** per section: how titles are written, what properties a post there carries, what it usually links to.
 
 Pointers to specific posts live in `reference` memories, by post ID.
@@ -148,24 +148,24 @@ Rules carried over from the current implementation:
 - `always` puts a memory in full into every session.
 - `seen` counts how often a memory was confirmed.
 
-### Working memory: `.cortex/working.md`
+### Working memory: `.cortex/working/`
 
-What the agent is noticing in this session, and what was left open last time.
+What an agent is noticing in this session, and what was left open last time. Each agent keeps its own file, named for it (`claude-code.md`, `codex.md`), so two agents working at once never write over each other.
 
 | | Long-term memory | Working memory |
 | --- | --- | --- |
 | Holds | How they work, across sessions | How they are working today, and open threads |
 | Example | Wants a short first draft first | Answering in Korean today, one-line replies. Filing three meeting notes, two done |
-| Written | When stated, or seen in more than one session | Freely, all session |
+| Written | When stated, or seen in more than one session | Freely, all session, by the agent it belongs to |
 | Life | Until corrected | Refreshed every session |
 
 The cycle:
 
-1. **Session start: before, then refresh.** The agent reads last session's working memory beside long-term memory and the vault index, then rewrites it for today. It keeps open threads and drops what was only about that day. Anything that looks like a habit becomes a note.
-2. **During the session.** The agent updates working memory as it works. A correction goes there at once. Anything the person states outright also goes straight to long-term memory.
-3. **Session end: distill.** What has now been seen in more than one session becomes a note, and a memory at the next settle. What is left stays as "last time" for the next refresh.
+1. **Session start: before, then refresh.** The agent reads its own working memory and every other agent's beside long-term memory and the vault index, then rewrites its own for today. It keeps open threads, takes up any another agent left, and drops what was only about that day.
+2. **During the session.** The agent updates its own working memory as it works. A correction goes there at once. Anything the person states outright also goes straight to long-term memory.
+3. **Session end: distill and merge.** The agent reads every agent's working memory together. What more than one of them saw, or one saw across sessions, becomes a note, and a memory at the next settle. What is left stays in its own file as "last time".
 
-Style is learned in three steps: noticed today, seen again, remembered.
+When something has been seen enough to become a memory is judgement, written in the playbook, not a count kept in code. Style is learned in three steps: noticed today, seen again, remembered.
 
 ## Filing into the vault
 
@@ -231,6 +231,15 @@ What each part can do, in plain words. Tool names are given where they exist.
 **To the vault**
 - **Nothing directly.** Filing goes through the vault's API on the person's say-so.
 
+## How an agent reaches cortex
+
+Cortex does not run an agent. It is read by one: ChatGPT, Claude, a coding agent, or anything else that speaks MCP. Those clients do not open the folder, so everything an agent must know is served to it over MCP.
+
+- **The playbook is the server's instructions.** When a client connects, the server answers with the cortex's own `agents/AGENTS.md`, the person's added rules included. Every client reads it before it calls a tool, so the rules reach an agent that never sees the file.
+- **The files are resources.** The playbook, identity, `vault.md`, the memory index and each memory, approved skills, and the tool list can be read as `cortex://` resources. Secrets, birthdate, proposals and history are never served.
+- **The tools change things.** Everything that writes goes through a tool, so the limits are enforced in code.
+- **Two ways to connect.** Over standard input and output, for agents on the person's machine (`cortex mcp`). Over HTTP, for clients that connect to a remote server, such as ChatGPT and Claude in the browser. The HTTP transport is not built yet, and needs a way to sign in.
+
 ## What cortex needs from a vault
 
 A small contract, so any vault can sit beside a cortex: ohm's service, an Obsidian folder, or another host.
@@ -260,14 +269,14 @@ Cortex reads through this contract and never writes. Saving goes through the vau
 
 ## What exists now, and what changes
 
-Built in the `ohm-cortex` repository and tested (24 tests). Step 1, strict identity, is on the `identity` branch:
+Built in the `ohm-cortex` repository and tested (27 tests). Step 1, strict identity, is on the `identity` branch:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
 | The folder store (`src/folder.mjs`) | Memories, history, notes, skill proposals, tool proposals | Add `vault.md`, working memory, identity fields and proposals |
 | Strict identity (`src/identity.mjs`): fixed typed fields, proposals with evidence in `.cortex/identity.jsonl`, `cortex confirm`, `reject`, `clear` and `identity`, `init --account` | History of changes | Done (step 1). Vault evidence is checked for shape only until the vault contract exists |
 | Memory kinds `person`, `preference`, `project`, `reference` | Rules for names, descriptions, versions | Drop `project` |
-| Ten MCP tools, with `cortex_propose_identity` in place of `cortex_identity` | All | Add working memory and filing advice |
+| Ten MCP tools, with `cortex_propose_identity` in place of `cortex_identity`; the playbook as the server's instructions; the files as `cortex://` resources; birthdate hidden from agents | All | Add working memory and filing advice; serve over HTTP |
 | Commands `init`, `mcp`, `identity`, `confirm`, `reject`, `clear`, `approve`, `event` | All | `event` takes structured vault events; add `status` |
 | The rulebook in `agents/AGENTS.md`, with the identity policy | Secrets, git and identity sections | Rewrite around filing and working memory |
 | Git policy files, with `.cortex/identity.jsonl` as append-only | Both | |
@@ -276,13 +285,16 @@ Built in the `ohm-cortex` repository and tested (24 tests). Step 1, strict ident
 
 1. **Identity.** *Done.* Fixed fields, validation, `.cortex/identity.jsonl`, proposals with evidence, `cortex confirm`. Done when a proposal without a post and passage is refused, a confirmed field is not overwritten by a proposal, and pronouns cannot be proposed from anything but the person's own words.
 2. **Vault contract and `vault.md`.** The contract as an interface, a folder vault that implements it for tests, structured events, and `vault.md` kept in step. Done when removing a post in the test vault flags the memory that pointed at it.
-3. **Working memory.** The file, a tool to update it, refresh at start and distill at end, callable without hooks. Done when something noticed in two sessions becomes a memory in the third, with nobody asked.
+3. **Working memory.** One file per agent, a tool to update its own, refresh at start and distill and merge at end, with the rules for when something becomes a memory in the playbook. Callable without hooks. Done when something noticed in two sessions becomes a memory in the third, with nobody asked.
 4. **Filing rules and advice.** The rulebook rewritten, a filing skill template, and a "how should I file this" answer built from `vault.md` and skills. Done when the answer for a source names a section, its conventions and related posts, and nothing is written to the vault.
 5. **`cortex status`.** Everything waiting or broken, in one answer. Done when every item it lists has a way to clear it.
-6. **The hooks adapter.** `cortex hook <moment>` for Claude Code, then Codex, answering from the folder with no network wait. Done when, with neither model calling a tool, a session starts with working memory refreshed and ends with it distilled.
-7. **Sync with a host.** The folder kept in step with ohm's service, folder first. Done when a cortex removed from the host is restored from the folder unchanged, and the other way round.
+6. **Remote MCP over HTTP,** with sign-in, so ChatGPT and browser clients can reach a cortex. Done when a client connected over HTTP reads the playbook as its instructions and calls `cortex_start`.
+7. **The hooks adapter.** `cortex hook <moment>` for Claude Code, then Codex, answering from the folder with no network wait. Done when, with neither model calling a tool, a session starts with working memory refreshed and ends with it distilled.
+8. **Sync with a host.** The folder kept in step with ohm's service, folder first. Done when a cortex removed from the host is restored from the folder unchanged, and the other way round.
 
-Steps 1 to 5 need only the cortex folder and a test vault. Step 6 needs Claude Code and Codex signed in to verify. Step 7 needs ohm.
+Steps 1 to 5 need only the cortex folder and a test vault. Step 6 needs a place to host the server and a sign-in. Step 7 needs Claude Code and Codex signed in to verify. Step 8 needs ohm.
+
+Already done outside this order: the playbook is served as the MCP server's instructions, and the cortex's files as resources, over standard input and output.
 
 ## Outside cortex
 
@@ -291,10 +303,17 @@ Steps 1 to 5 need only the cortex folder and a test vault. Step 6 needs Claude C
 - **The person's confirmation surface:** a command today, the ohm editor later, for identity proposals, skills and tools.
 - **Removing the old cortex code** from ohm-content-layer once ohm syncs with this one.
 
+## Decided
+
+On 14 November 2026:
+
+- **Working memory is one file per agent,** merged when it is distilled.
+- **The agent writes `vault.md` meanings without the person.** The person can edit them, and their words outrank the agent's.
+- **Birthdate is hidden from agents.** An agent knows one is on file, and asks the person when a task needs it.
+- **When something becomes a memory is in the playbook,** as judgement, not a session count in code.
+- **The playbook reaches agents over MCP,** as the server's instructions, because cortex does not run the agent and clients do not read its files.
+
 ## Open decisions
 
-- **Where working memory lives** if two agents run at once: one shared file, or one per agent merged at distill.
-- **Whether the agent may draft `vault.md` meanings** without the person, marked as drafts, or only ask.
-- **Which identity fields are sensitive enough to hide from the agent's prompt** unless a task needs them. Birthdate is the obvious one.
-- **How many sessions are enough** to turn an observation into a memory. Two is a guess.
 - **Whether a cortex can serve more than one identity,** such as a person and their company. The plan assumes one cortex per identity.
+- **How a remote client signs in** to a cortex served over HTTP.

@@ -8,12 +8,13 @@ Cortex is how an agent reads and edits a person's vault for them: who they are, 
 
 ## The rules
 
-1. **Folder first.** The files are the cortex. Do not add a database, a hidden second copy, or anything a person could not read by opening the folder.
-2. **Cortex never writes to a vault.** It reads through the vault contract in the plan. Saving content is the vault's job.
-3. **Standalone.** Do not import from ohm-content-layer or any host. No runtime dependencies without a reason written in the commit message; today there are none.
-4. **The agent's limits are enforced in code, not only in the rulebook.** No tool writes to `agents/`, `agents/secrets/` or the git policy files. No tool approves a skill, adds or enables a tool, or confirms an identity field.
-5. **Nothing is lost.** Every replaced or removed file goes to `.cortex/history/`.
-6. **Private and synthetic.** Tests and examples use invented people. Never put a real person's details in this repository.
+1. **Cortex does not run an agent; agents read it over MCP.** ChatGPT, Claude and coding agents never open the folder, so anything an agent must know is served: the playbook as the server's instructions, the files as resources.
+2. **Folder first.** The files are the cortex. Do not add a database, a hidden second copy, or anything a person could not read by opening the folder.
+3. **Cortex never writes to a vault.** It reads through the vault contract in the plan. Saving content is the vault's job.
+4. **Standalone.** Do not import from ohm-content-layer or any host. No runtime dependencies without a reason written in the commit message; today there are none.
+5. **The agent's limits are enforced in code, not only in the rulebook.** No tool writes to `agents/`, `agents/secrets/` or the git policy files. No tool approves a skill, adds or enables a tool, or confirms an identity field.
+6. **Nothing is lost.** Every replaced or removed file goes to `.cortex/history/`.
+7. **Private and synthetic.** Tests and examples use invented people. Never put a real person's details in this repository.
 
 ## Layout
 
@@ -21,7 +22,8 @@ Cortex is how an agent reads and edits a person's vault for them: who they are, 
 src/core.mjs       memory rules, versions, the Markdown property format, the Refused error
 src/identity.mjs   identity fields, their types, and what counts as evidence
 src/folder.mjs     the folder store: every operation on a cortex
-src/tools.mjs      the MCP tools an agent is given, built only from folder operations
+src/tools.mjs      the MCP tools an agent is given, built only from folder operations, and the server's instructions
+src/resources.mjs  what a client may read without a tool: the playbook, identity, vault.md, memories, skills, tools
 src/protocol.mjs   MCP over standard input and output
 bin/cortex.mjs     the command line: init, mcp, identity, confirm, reject, clear, approve, event
 template/          what a new cortex starts as

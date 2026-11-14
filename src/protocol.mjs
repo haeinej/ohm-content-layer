@@ -5,7 +5,9 @@ const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 // `tools` is ready-made, or a function that makes them the first time a tool is used, so that
 // starting up and listing the tools never depends on the person's configuration being in place.
 // `onClient` is told the connecting agent's name, so a save can say which agent made it.
-export function createServer({ tools, list, name = 'cortex', version = '0.0.0', instructions, onClient }) {
+// `instructions` may be a function, read when a client connects, so the playbook served is the one on disk.
+// `resources`, when given, lists and reads what a client may read without calling a tool.
+export function createServer({ tools, list, name = 'cortex', version = '0.0.0', instructions, resources, onClient }) {
   let ready;
   const made = () => (ready ??= Promise.resolve(typeof tools === 'function' ? tools() : tools).catch(problem => { ready = undefined; throw problem; }));
   const answer = (id, result) => ({ jsonrpc: '2.0', id, result });
@@ -23,13 +25,23 @@ export function createServer({ tools, list, name = 'cortex', version = '0.0.0', 
       if (typeof params.clientInfo?.name === 'string' && params.clientInfo.name) onClient?.(params.clientInfo.name.slice(0, 100));
       return answer(id, {
         protocolVersion: VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : VERSIONS[0],
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, ...(resources ? { resources: {} } : {}) },
         serverInfo: { name, version },
-        instructions,
+        instructions: typeof instructions === 'function' ? await instructions() : instructions,
       });
     }
     if (method === 'ping') return answer(id, {});
     if (method === 'tools/list') return answer(id, { tools: list });
+    if (resources && method === 'resources/list') return answer(id, { resources: await resources.list() });
+    if (resources && method === 'resources/templates/list') return answer(id, { resourceTemplates: [] });
+    if (resources && method === 'resources/read') {
+      if (typeof params.uri !== 'string') return failure(id, -32602, 'Give the uri of a resource');
+      try {
+        return answer(id, { contents: [await resources.read(params.uri)] });
+      } catch (problem) {
+        return failure(id, -32002, problem.message);
+      }
+    }
     if (method === 'tools/call') {
       if (typeof params.name !== 'string' || (params.arguments !== undefined && (!params.arguments || typeof params.arguments !== 'object' || Array.isArray(params.arguments)))) return failure(id, -32602, 'A tool call needs a name and an arguments object');
       // A tool that cannot do what was asked says why in its result, so the agent can read it.

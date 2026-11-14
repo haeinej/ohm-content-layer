@@ -5,7 +5,7 @@
 //   .cortex/                                             what is waiting, and what was replaced
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
-import { checkField, checkSource, FIELDS, IDENTITY, readIdentity, writeIdentity } from './identity.mjs';
+import { checkField, checkSource, FIELDS, forAgent, IDENTITY, readIdentity, shownValue, writeIdentity } from './identity.mjs';
 import { cleanMemory, cortexVersion, InvalidMemory, KINDS, memoryFile, memoryVersion, NAME, readMemoryFile, Refused, splitFront, writeFront } from './core.mjs';
 
 const bytes = text => new TextEncoder().encode(text).length;
@@ -179,12 +179,12 @@ export function openCortex(dir, { actor = 'member', now = () => new Date() } = {
     async start() {
       await reindex();
       const { memories, problems } = await all();
-      const { fields, own, about, problems: identityProblems } = await cortex.identity();
+      const identity = await cortex.identity();
       const pending = [...(await notes()).values()].filter(note => !note.settledAt);
-      const found = [...identityProblems, ...problems];
+      const found = [...identity.problems, ...problems];
       return {
-        rules: await text(at('agents', 'AGENTS.md')) ?? '',
-        identity: { ...fields, ...(Object.keys(own).length ? { own } : {}), about },
+        rules: await cortex.rules(),
+        identity: forAgent(identity),
         always: memories.filter(({ memory }) => memory.always),
         memories: memories.filter(({ memory }) => !memory.always).map(({ memory: { name, description, kind } }) => ({ name, description, kind })),
         // Only what the person has approved or switched on is handed over as usable.
@@ -192,7 +192,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date() } = {
         tools: (await toolsIn(at('tools'))).filter(tool => tool.on).map(({ name, description }) => ({ name, description })),
         notes: pending,
         waiting: {
-          identity: (await cortex.identityProposals()).map(({ id, field, value, source }) => ({ id, field, value, source })),
+          identity: (await cortex.identityProposals()).map(({ id, field, value, source }) => ({ id, field, value: shownValue(field, value), source })),
           skills: (await skillsIn(at('.cortex', 'proposed', 'skills'))).map(skill => skill.name),
           tools: (await toolsIn(at('.cortex', 'proposed', 'tools'))).map(tool => tool.name),
         },
@@ -201,6 +201,10 @@ export function openCortex(dir, { actor = 'member', now = () => new Date() } = {
     },
 
     identity: async () => readIdentity(await text(at('identity.md'))),
+
+    // The playbook, as the person keeps it, their own rules included.
+    rules: async () => (await text(at('agents', 'AGENTS.md'))) ?? '',
+    vaultMap: () => text(at('vault.md')),
 
     // Every proposal, confirmation, rejection and clearing, in the order it happened.
     async identityLog() {
@@ -237,7 +241,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date() } = {
       const same = (await cortex.identityProposals()).find(proposal => factKey(proposal.field, proposal.value) === key);
       if (same) return { id: same.id, field, waiting: true, unchanged: true };
       await recordIdentity({ type: 'proposed', id, field, value: checked, source: evidence });
-      return { id, field, waiting: true, ...(fields[field] !== undefined ? { current: fields[field] } : {}) };
+      return { id, field, waiting: true, ...(fields[field] !== undefined ? { current: shownValue(field, fields[field]) } : {}) };
     },
 
     // The person's answer to a proposal, by its ID, or by the field when only one is waiting for it.
