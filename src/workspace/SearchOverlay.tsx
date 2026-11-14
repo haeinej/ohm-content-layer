@@ -85,7 +85,7 @@ export function SearchOverlay() {
         "backdrop:bg-(--ohm-overlay) max-sm:p-2.5",
       )}
     >
-      <div className="mx-auto flex max-h-full min-h-0 w-[min(640px,100%)] flex-col rounded-lg bg-popover p-2.5 shade-5 frost-thick"
+      <div className="mx-auto flex max-h-full min-h-0 w-[min(640px,100%)] flex-col rounded-lg bg-popover p-2.5 shade-5 backdrop-blur-xl"
         onClick={e => e.stopPropagation()}>
         <div role="group" aria-label="Search categories" className="flex flex-none gap-1 overflow-x-auto px-1 pt-0.5 pb-2.5">
           <Button size="sm" variant="ghost" className={filter} aria-pressed={scope === "all"} onClick={() => filterBy("all")}>All</Button>

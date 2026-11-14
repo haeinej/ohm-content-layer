@@ -13,14 +13,21 @@ export type View =
   | { kind: "inbox"; id: string }
   | { kind: "settings"; tab: SettingsTab }
 export type Appearance = "system" | "light" | "dark"
+export type RepoScope = "all" | "cortex" | "vault"
+export const SIDE_WIDTH = { min: 220, max: 640, initial: 300 }
+const savedWidth = () => {
+  try { const w = Number(localStorage.getItem("ohm-ux:side-width")); return w >= SIDE_WIDTH.min && w <= SIDE_WIDTH.max ? w : SIDE_WIDTH.initial } catch { return SIDE_WIDTH.initial }
+}
 export type ToolName = "workspace.search" | "workspace.open" | "workspace.graph" | "workspace.create" | "workspace.save-draft"
 
 type State = {
   side: Side
   /** The personal repo: as a tree, or as the graph. */
   repoMode: "tree" | "graph"
-  /** The repo's two prime folders, checked in or out of the side panel and the graph. */
-  include: { cortex: boolean; vault: boolean }
+  /** Which of the repo's two prime folders the side panel and the graph show. */
+  scope: RepoScope
+  /** The side panel's width, set with its handle. */
+  sideWidth: number
   /** Who you are looking as: yourself, a friend, or anyone. */
   audience: Audience
   graphCenter: string
@@ -38,7 +45,7 @@ const narrow = () => typeof window !== "undefined" && window.matchMedia("(max-wi
 const sideAfterOpen = (): Partial<State> => (narrow() ? { side: null } : {})
 
 let state: State = {
-  side: narrow() ? null : "repo", repoMode: "tree", include: { cortex: true, vault: true }, audience: "personal",
+  side: narrow() ? null : "repo", repoMode: "tree", scope: "all", sideWidth: savedWidth(), audience: "personal",
   graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0,
   appearance: "system", agentsAllowed: true,
   offered: { "workspace.search": true, "workspace.open": true, "workspace.graph": true, "workspace.create": true, "workspace.save-draft": true },
@@ -60,7 +67,14 @@ export const setAgent = (agent: State["agent"]) => set({ agent })
 
 // Personal repo
 export const setRepoMode = (repoMode: State["repoMode"]) => set({ repoMode, side: "repo" })
-export const setInclude = (folder: keyof State["include"], on: boolean) => set({ include: { ...state.include, [folder]: on } })
+export const setScope = (scope: RepoScope) => set({ scope })
+export function setSideWidth(w: number) {
+  const sideWidth = Math.round(Math.min(SIDE_WIDTH.max, Math.max(SIDE_WIDTH.min, w)))
+  try { localStorage.setItem("ohm-ux:side-width", String(sideWidth)) } catch { /* a convenience only */ }
+  set({ sideWidth })
+}
+/** The graph filters a scope stands for. */
+export const scopeFolders = (scope: RepoScope) => ({ cortex: scope !== "vault", vault: scope !== "cortex" })
 
 // Visibility
 export const setAudience = (audience: Audience) => set({ audience })
@@ -102,7 +116,7 @@ export function open(id: string, mode: "read" | "edit" = "read") {
 
 /** The graph lives in the side panel, in the personal repo. */
 export function showGraph(center?: string) {
-  const g = buildGraph({ center, audience: state.audience, ...state.include })
+  const g = buildGraph({ center, audience: state.audience, ...scopeFolders(state.scope) })
   set({ side: "repo", repoMode: "graph", graphCenter: g.center.handle, searchOpen: false })
   return { center: g.center.handle, nodes: g.nodes.length, edges: g.edges.length }
 }
@@ -112,7 +126,7 @@ export function createDraft(input: { label?: string; title?: string } = {}) {
   draftCount += 1
   const slug = `untitled-${Date.now().toString(36)}`
   const doc: Doc = {
-    id: `draft-${draftCount}`, kind: "post", slug, title: input.title?.trim() || "Untitled",
+    id: `draft-${draftCount}`, kind: "post", slug, title: input.title?.trim() ?? "",
     label: input.label?.trim() || "other", visibility: "private",
     updated: new Date().toISOString().slice(0, 10), body: "",
   }
@@ -130,13 +144,32 @@ export function saveDraft(input: { title?: string; body?: string }) {
   if (!doc || doc.kind !== "post") throw new DOMException("Only posts are edited here", "DataError")
   // Changing a post other people can see needs the person's approval (AGENTS.md rule 11): its own flow.
   if (doc.visibility !== "private") throw new DOMException("This post is not private; changing it needs approval", "NotAllowedError")
-  if (input.title !== undefined) doc.title = input.title.trim() || "Untitled"
+  if (input.title !== undefined) doc.title = input.title.trim()
   if (input.body !== undefined) doc.body = input.body
   if (doc.id.startsWith("draft-")) doc.slug = slugify(doc.title) || doc.slug
+  // The editor keeps the post open; saving changes nothing about what is on screen.
   doc.updated = new Date().toISOString().slice(0, 10)
-  set({ view: { kind: "doc", id: doc.id, mode: "read" }, ...bump() })
+  set(bump())
   return { id: doc.id, slug: doc.slug, visibility: doc.visibility }
 }
 
 export const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60)
 export const me = owner
+
+/** A page's icon: an emoji shown above its title. */
+export function setIcon(id: string, icon: string | undefined) {
+  const doc = byId(id)
+  if (!doc) return
+  doc.icon = icon
+  set(bump())
+}
+/** Saves as you type, for private posts only. */
+export function autosave(id: string, patch: { title?: string; body?: string }) {
+  const doc = byId(id)
+  if (!doc || doc.kind !== "post" || doc.visibility !== "private") return
+  if (patch.title !== undefined) doc.title = patch.title
+  if (patch.body !== undefined) doc.body = patch.body
+  if (doc.id.startsWith("draft-") && patch.title) doc.slug = slugify(patch.title) || doc.slug
+  doc.updated = new Date().toISOString().slice(0, 10)
+  set(bump())
+}

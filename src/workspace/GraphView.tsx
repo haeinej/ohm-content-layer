@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Switch } from "@/components/ui/switch"
 import { buildGraph, DEFAULT_FILTERS, type EdgeKind, type GraphNode, type NodeType } from "@/graph/model"
 import { cn } from "@/lib/cn"
-import { me, open, showGraph, useWorkspace } from "./store"
+import { me, open, scopeFolders, showGraph, useWorkspace } from "./store"
 
 type SimNode = GraphNode & SimulationNodeDatum
 type SimLink = SimulationLinkDatum<SimNode> & { kind: EdgeKind }
@@ -50,9 +50,10 @@ const structural = (n: GraphNode) => n.layer === 0 || n.type === "label" || n.ty
 /** A floating control over the graph: the popover surface, solid in dark. */
 const floating = "rounded-md bg-popover text-popover-foreground shade-3"
 
-/** Lives in the side panel, in the personal repo. What it draws follows the repo's checked folders and who you are looking as. */
+/** Lives in the side panel, in the personal repository. What it draws follows the repository's scope (all, cortex, vault) and who you are looking as. */
 export function GraphView() {
-  const { rev, include, audience, graphCenter: center } = useWorkspace()
+  const { rev, scope, audience, graphCenter: center } = useWorkspace()
+  const include = useMemo(() => scopeFolders(scope), [scope])
   const [filters, setFilters] = useState({ people: DEFAULT_FILTERS.people, links: DEFAULT_FILTERS.links })
   const graph = useMemo(() => buildGraph({ center, ...include, audience, ...filters }), [center, include, audience, filters, rev]) // eslint-disable-line react-hooks/exhaustive-deps
   const hasCortex = graph.nodes.some(n => n.type === "memory")

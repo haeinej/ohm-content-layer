@@ -27,8 +27,8 @@ The rack sits on the page itself. The side panel and the main panel are separate
 | ohm dot | Nothing. The brand mark, at icon size |
 | Search (⌘K) | Unchanged. Search opens over everything |
 | New post (⌘N) | Unchanged. A private draft opens in the editor |
-| **Personal repo** | The repository, read-only. Its two top-level folders, **cortex** and **vault**, each have a check (include it or leave it out) and a chevron (open it). A chevron-all button opens or closes everything. A Tree/Graph switch shows the same repository as a graph, inside the side panel, which widens to fit |
-| **Visibility** | *View as* Only you, Friends or Public. The repo, the graph and the main panel then show only what that audience can see, with a "Viewing as…" bar and Back to you. Below that, every post grouped by who it is for, with a select to change it. Making a post visible to more people asks first, in a dialog. Marking is not publishing |
+| **Personal repository** | The repository, read-only. Its title is a dropdown, **All / Cortex / Vault**, with a check beside the one shown. The two top-level folders, **cortex** and **vault**, are bold forest folders that open in place. A chevron-all button opens or closes everything, and a Tree/Graph switch shows the same scope as a graph inside the panel. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device |
+| **Visibility** | *View as* Only you, Friends or Public, with a check beside the current one. The repository, the graph and the page then show only what that audience can see, with a "Viewing as…" bar and Back to you |
 | **Inbox** | Replies, mentions, friend requests and cortex notes, newest first, with new ones marked. One about a post opens that post; the others open in the main panel |
 | You (avatar) | Your name and handle, then the settings sections: Your profile, Identity, Agents, Vault, Cortex, Appearance, and Sign out |
 
@@ -61,8 +61,23 @@ How it behaves, as Obsidian's graph view does (from the screen recording):
 - **Fit:** the graph stays fitted to the panel as the panel widens and the layout settles, until you pan or zoom yourself.
 - **Popover:** turns links between posts and people mentioned on or off, and lays the graph out again.
 - **Clicking:** a post or memory opens it in the main panel. Clicking a person re-centres on them, showing the posts that mention them; "Back to me" returns.
-- **What it draws:** the repo's cortex and vault checks, and the audience. The cortex is only ever yours.
+- **What it draws:** the repository's scope (all, cortex or vault) and the audience. The cortex is only ever yours.
 - **Code:** built in `src/graph/model.ts` (nodes, layers and edges) and `src/workspace/GraphView.tsx` (forces, interaction, drawing).
+
+## The page editor
+
+Every page opens in the main panel in one block editor, built after the reference recording (Tiptap underneath, so the page is Markdown).
+
+- **Toolbar.** On the left, the page's icon (opens the icon picker) and a pill of inserts: Text, Image, Table, and + for everything. On the right, History, Comments (with a dot when there are some), you, and **Share**, which opens Visibility. Toolbar inserts go after the block the caret is in, never inside a table or list.
+- **Icon and title.** An emoji above the title, picked from a searchable, grouped set (with Clear); hover the title to add one. The title reads "Untitled page" until it has one; Enter moves into the page.
+- **Templates.** While a page is empty, chips under the title (To-do list, Project tracker, Weekly update, Feedback tracker) fill it, and ⋯ opens a gallery with previews of all seven. A template also sets the title and icon if they are empty.
+- **Writing.** The empty line says "Type / for commands or @ for mentions". `/` opens the insert menu at the caret, grouped (Generate, Create, Media, Basic) and filtered as you type, with arrows and Enter to choose. Each block has a drag handle on hover.
+- **Selected text** brings up a floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), Bold, Italic, Underline, Strikethrough, Code, a **Text ▾** menu to turn the block into a heading, list, checklist, quote or code (with a check on the current one), and **Comment**, which opens an inline field with dictation and send, then highlights the text and adds the comment to the toolbar's list.
+- **Blocks:** paragraphs, three headings, bulleted, numbered and check lists, quotes, code, dividers, tables with a toned header row, and images. An image starts as a placeholder with **Generate** and **Attach** (Upload image, or Choose from vault).
+- **Links.** `[[slug]]` and `@handle` read as links. Click to follow them on a read-only page, or ⌘-click while editing. They stay plain text in the Markdown, so search and the graph still find them.
+- **Saving.** A private page saves as you type, and it stays private. A page other people can see opens read-only, with "changing it asks first". The `workspace.save-draft` tool takes Markdown and writes into the open page.
+- **Motion.** Menus and the floating bar fade and scale in on ohm's open duration and easing, and presses settle. Reduced motion turns this off.
+- **Code:** in `src/editor/`. `PageEditor.tsx` is the page; `SelectionToolbar.tsx`, `InsertMenu.tsx` (the + and / menus), `IconPicker.tsx`, `TemplateGallery.tsx` and `ImagePlaceholder.tsx` are its parts; `commands.ts` lists what can be inserted and turned into; `extensions.ts` holds the slash command, image placeholder and links; and `editor.css` styles the text with ohm tokens.
 
 ## Steps and tools
 
@@ -125,9 +140,10 @@ Publishing is not part of this flow. It will be its own flow, with `consequentia
 | State and the shared handlers | `src/workspace/store.ts` |
 | Rack | `src/workspace/Rack.tsx` |
 | Side panel: repo, visibility, inbox, you | `src/workspace/SidePanel.tsx`, `Surface.tsx` |
-| Main panel, post view, editor, settings | `src/workspace/MainPanel.tsx`, `DocView.tsx`, `Editor.tsx`, `Settings.tsx`, `settings-tabs.ts` |
+| Main panel and settings | `src/workspace/MainPanel.tsx`, `Settings.tsx`, `settings-tabs.ts` |
+| The page editor | `src/editor/` |
 | Search sheet and the one search path (vault, cortex, people, settings) | `src/workspace/SearchOverlay.tsx`, `src/data/search.ts` (`setSearchProvider`) |
-| Tools | `src/workspace/tools.ts`; `workspace.save-draft` in `Editor.tsx` |
+| Tools | `src/workspace/tools.ts`; `workspace.save-draft` in `src/editor/PageEditor.tsx` |
 | Synthetic data | `src/data/sample.ts` |
 
 On a phone the side panel lies over the main panel. It starts closed, and closes when something opens.
@@ -140,4 +156,4 @@ On a phone the side panel lies over the main panel. It starts closed, and closes
 
 ## Not yet tools
 
-Changing who a post is for, and acting on inbox items, are only in the UI so far. When they become tools, making a post less private is `consequentialHint` and goes through the same dialog (AGENTS.md rule 11). Settings › Agents already turns each tool on or off.
+Acting on inbox items, and Ask for change in the editor, are only in the UI so far. When they become tools, anything that changes what other people see is `consequentialHint` and asks first (AGENTS.md rule 11). Settings › Agents already turns each tool on or off.

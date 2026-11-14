@@ -14,6 +14,8 @@ export type Doc = {
   visibility: Visibility
   body: string
   updated: string
+  /** An emoji shown above the title. */
+  icon?: string
   /** Cortex only: the parts of the vault this is about, as `label`, `label/sublabel` or a post's slug. */
   about?: string[]
 }
@@ -106,6 +108,7 @@ export const all: Doc[] = [...posts, ...cortex]
 
 export const bySlug = (slug: string) => all.find(d => d.slug === slug)
 export const byId = (id: string) => all.find(d => d.id === id)
+export const titleOf = (d: Doc) => d.title || "Untitled page"
 export const personByHandle = (h: string) => people.find(p => p.handle === h || p.did === h)
 
 /** `@handle` mentions in a body. */

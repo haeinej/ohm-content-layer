@@ -12,9 +12,9 @@ An agent that clicks through pixels is slow and fragile. It can also do things t
 
 A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/workspace.md)):
 
-- A **rack** on the page: search, new post, **personal repo**, **visibility**, **inbox**, and you.
+- A **rack** on the page: search, new post, **personal repository** (All / Cortex / Vault), **visibility**, **inbox**, and you.
 - A **side panel** card that becomes what the rack chose. The personal repo has cortex and vault as checkable top-level folders, and a **graph** inside it. The graph is centred on you, with the cortex as the closest layer, then labels, sublabels and posts intertwining. It behaves like Obsidian's: springy, with hover highlighting and drag.
-- A **main panel** card for a post, the editor, an inbox item, or settings.
+- A **main panel** card where every page opens in a block editor. It has a toolbar of inserts, an emoji icon, template chips, a `/` menu, a floating selection toolbar (ask for change, formatting, turn into, comment), drag handles, tables and images. Inbox items and settings open here too.
 - **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, so a real service can be connected behind it with `setSearchProvider`.
 
 All data is synthetic and nothing is saved.

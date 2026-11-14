@@ -1,24 +1,22 @@
 import { useMemo, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
-  AtSignIcon, BrainIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon,
-  LibraryIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
+  AtSignIcon, BrainIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, FolderIcon,
+  FolderOpenIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { notify } from "@/components/ui/notice"
-import { cortex, inbox, posts, sees, type Audience, type Doc, type InboxItem, type Visibility } from "@/data/sample"
+import { cortex, inbox, posts, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { GraphView } from "./GraphView"
 import { SETTINGS_TABS } from "./settings-tabs"
 import { panelTitle, SidePanelFrame } from "./Surface"
 import {
-  me, open, openInbox, openSettings, setAudience, setInclude, setRepoMode, setVisibility, useWorkspace,
+  me, open, openInbox, openSettings, setAudience, setRepoMode, setScope, useWorkspace, type RepoScope,
 } from "./store"
 
 /** label › sublabel › item, as folders. Folder ids are prefixed so they never collide with docs. */
@@ -37,7 +35,7 @@ function toTree(prime: string, docs: Doc[], order?: string[]): FileTreeNode[] {
   })
   return names.map(label => {
     const subs = labels.get(label)!
-    const leaf = (d: Doc) => ({ id: d.id, name: d.title })
+    const leaf = (d: Doc) => ({ id: d.id, name: `${d.icon ? `${d.icon} ` : ""}${titleOf(d)}` })
     return {
       id: `${prime}:${label}`, name: label,
       children: [
@@ -50,76 +48,65 @@ function toTree(prime: string, docs: Doc[], order?: string[]): FileTreeNode[] {
 const folderIds = (nodes: FileTreeNode[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id, ...folderIds(n.children)] : []))
 
-const mobile = "max-md:absolute max-md:inset-y-3 max-md:left-[68px] max-md:z-20 max-md:w-[calc(100%-80px)]"
 const toggle = "text-muted-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
 
-// ─── Personal repo ────────────────────────────────────────────────────────────
+// ─── Personal repository ──────────────────────────────────────────────────────
 
-type Prime = "cortex" | "vault"
-const PRIME: Record<Prime, { icon: LucideIcon; note: string }> = {
-  cortex: { icon: BrainIcon, note: "What your agents know" },
-  vault: { icon: LibraryIcon, note: "Everything you write" },
-}
+const SCOPES: { id: RepoScope; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "cortex", label: "Cortex" },
+  { id: "vault", label: "Vault" },
+]
 
-/** One of the repo's two prime folders: a check to include it, a chevron to open it. */
-function PrimeRow({ prime, count, checked, open: isOpen, onOpen, disabled, note }: {
-  prime: Prime; count: number; checked: boolean; open: boolean; onOpen: () => void; disabled?: boolean; note?: string
-}) {
+/** One of the repo's two prime folders: a forest folder, bold, that opens in place. */
+function PrimeRow({ prime, open: isOpen, onOpen, locked }: { prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean }) {
   return (
-    <div className={cn("flex min-h-10 items-center gap-1.5 rounded-md pe-2 hover:bg-muted", !checked && "text-muted-foreground")}>
-      <button type="button" aria-expanded={isOpen} aria-label={`${isOpen ? "Close" : "Open"} ${prime}`} onClick={onOpen}
-        disabled={!checked} className="flex size-8 items-center justify-center rounded-md text-muted-foreground disabled:opacity-40">
-        <Icon icon={isOpen && checked ? ChevronDownIcon : ChevronRightIcon} size="sm" />
-      </button>
-      <Checkbox aria-label={`Include ${prime}`} checked={checked} disabled={disabled} onCheckedChange={v => setInclude(prime, v === true)} />
-      <Icon icon={PRIME[prime].icon} size="sm" className="ms-1 text-muted-foreground" />
-      <button type="button" onClick={onOpen} disabled={!checked} className="flex min-w-0 flex-1 flex-col items-start text-left">
-        <span className="text-body font-medium">{prime}</span>
-        <span className="truncate text-small text-muted-foreground">{note ?? PRIME[prime].note}</span>
-      </button>
-      <span className="text-small text-muted-foreground tabular-nums">{count}</span>
-    </div>
+    <button type="button" aria-expanded={isOpen} onClick={onOpen} disabled={locked}
+      className="flex min-h-9 w-full items-center gap-1.5 rounded-md px-1.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted disabled:hover:bg-transparent">
+      <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground transition-transform", locked && "invisible")} />
+      <Icon icon={isOpen ? FolderOpenIcon : FolderIcon} size="sm" strokeWidth={2.5} className="text-primary dark:text-foreground" />
+      <span className="text-body font-bold text-primary dark:text-foreground">{prime}</span>
+      {locked && <Icon icon={LockIcon} size="xs" className="ms-auto text-muted-foreground" aria-label="Only you see your cortex" />}
+    </button>
   )
 }
 
 function RepoPanel() {
-  const { view, rev, repoMode, include, audience } = useWorkspace()
+  const { view, rev, repoMode, scope, audience } = useWorkspace()
   const cortexTree = useMemo(() => toTree("cortex", cortex, ["memories", "notes", "skills", "tools"]), [rev])
   const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p)), [rev, audience]) // eslint-disable-line react-hooks/exhaustive-deps
   const vaultTree = useMemo(() => toTree("vault", vaultDocs), [vaultDocs])
-  const allFolders = useMemo(() => ["prime:cortex", "prime:vault", ...folderIds(cortexTree), ...folderIds(vaultTree)], [cortexTree, vaultTree])
+  const showCortex = scope !== "vault", showVault = scope !== "cortex"
+  const cortexLocked = audience !== "personal"
+  const allFolders = useMemo(() => [
+    ...(showCortex ? ["prime:cortex", ...folderIds(cortexTree)] : []),
+    ...(showVault ? ["prime:vault", ...folderIds(vaultTree)] : []),
+  ], [cortexTree, vaultTree, showCortex, showVault])
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["prime:cortex", "prime:vault", ...folderIds(vaultTree)]))
-  const everything = allFolders.every(id => expanded.has(id))
+  const everything = allFolders.length > 0 && allFolders.every(id => expanded.has(id))
   const flip = (id: string) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const cortexOnlyYou = audience !== "personal"
-
-  const primes = (
-    <div className="flex flex-col gap-0.5">
-      <PrimeRow prime="cortex" count={cortex.length} checked={include.cortex && !cortexOnlyYou} disabled={cortexOnlyYou}
-        note={cortexOnlyYou ? "Only you see your cortex" : undefined}
-        open={repoMode === "tree" && expanded.has("prime:cortex")} onOpen={() => (repoMode === "tree" ? flip("prime:cortex") : setRepoMode("tree"))} />
-      {repoMode === "tree" && include.cortex && !cortexOnlyYou && expanded.has("prime:cortex") && (
-        <FileTree aria-label="cortex" className="ms-4" nodes={cortexTree} expanded={expanded} onExpandedChange={setExpanded}
-          selected={view.kind === "doc" ? view.id : null} onSelect={id => open(id)} />
-      )}
-      <PrimeRow prime="vault" count={vaultDocs.length} checked={include.vault}
-        open={repoMode === "tree" && expanded.has("prime:vault")} onOpen={() => (repoMode === "tree" ? flip("prime:vault") : setRepoMode("tree"))} />
-      {repoMode === "tree" && include.vault && expanded.has("prime:vault") && (
-        <FileTree aria-label="vault" className="ms-4" nodes={vaultTree} expanded={expanded} onExpandedChange={setExpanded}
-          selected={view.kind === "doc" ? view.id : null} onSelect={id => open(id)} />
-      )}
-    </div>
-  )
+  const selected = view.kind === "doc" ? view.id : null
 
   return (
     <SidePanelFrame
-      label="Personal repo"
-      className={cn("shrink-0 transition-[width] duration-(--ohm-duration-open) ease-(--ohm-ease-out)", repoMode === "graph" ? "w-[min(560px,45vw)]" : "w-[344px]", mobile)}
+      label="Personal repository"
       scroll={repoMode === "tree"}
-      heading={<>
-        <h1 className={panelTitle}>Personal repo</h1>
-        <p className="truncate text-small text-muted-foreground">@{me.handle} · read-only{audience !== "personal" && ` · as ${audience === "friends" ? "a friend" : "anyone"}`}</p>
-      </>}
+      heading={
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<button type="button" className="-ms-1 flex max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted" />}>
+            <span className={cn(panelTitle, "truncate")}>Personal repository</span>
+            <Icon icon={ChevronDownIcon} size="sm" className="flex-none text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-48">
+            {SCOPES.map(s => (
+              <DropdownMenuItem key={s.id} onClick={() => setScope(s.id)} className="flex items-center gap-2">
+                <span className="flex-1">{s.label}</span>
+                <Icon icon={CheckIcon} size="sm" className={cn(scope !== s.id && "invisible")} />
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
       actions={<>
         <div role="group" aria-label="Show as" className="flex">
           <Button size="icon-sm" variant="ghost" className={toggle} aria-label="Tree" aria-pressed={repoMode === "tree"} onClick={() => setRepoMode("tree")}>
@@ -137,21 +124,26 @@ function RepoPanel() {
         )}
       </>}
     >
-      {repoMode === "tree" ? primes : (
-        <div className="flex min-h-0 flex-1 flex-col gap-2">
-          {/* The same checks, compact, above the graph they control. */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 px-1">
-            {(["cortex", "vault"] as Prime[]).map(p => (
-              <label key={p} className={cn("flex min-h-8 items-center gap-2 text-body", p === "cortex" && cortexOnlyYou && "text-muted-foreground")}>
-                <Checkbox checked={include[p] && !(p === "cortex" && cortexOnlyYou)} disabled={p === "cortex" && cortexOnlyYou}
-                  onCheckedChange={v => setInclude(p, v === true)} />
-                {p}
-              </label>
-            ))}
-          </div>
-          <div className="-mx-2 flex min-h-0 flex-1 overflow-hidden rounded-md bg-background">
-            <GraphView />
-          </div>
+      {repoMode === "tree" ? (
+        <div className="flex flex-col gap-0.5">
+          {showCortex && <>
+            <PrimeRow prime="cortex" locked={cortexLocked} open={!cortexLocked && expanded.has("prime:cortex")} onOpen={() => flip("prime:cortex")} />
+            {!cortexLocked && expanded.has("prime:cortex") && (
+              <FileTree aria-label="cortex" className="ms-4 animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={cortexTree}
+                expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(id)} />
+            )}
+          </>}
+          {showVault && <>
+            <PrimeRow prime="vault" open={expanded.has("prime:vault")} onOpen={() => flip("prime:vault")} />
+            {expanded.has("prime:vault") && (
+              <FileTree aria-label="vault" className="ms-4 animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={vaultTree}
+                expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(id)} />
+            )}
+          </>}
+        </div>
+      ) : (
+        <div className="-mx-1 flex min-h-0 flex-1 overflow-hidden rounded-md bg-background">
+          <GraphView />
         </div>
       )}
     </SidePanelFrame>
@@ -165,81 +157,26 @@ const AUDIENCES: { id: Audience; label: string; note: string; icon: LucideIcon }
   { id: "friends", label: "Friends", note: "Posts for friends, and for everyone", icon: UsersIcon },
   { id: "public", label: "Public", note: "Posts for everyone", icon: GlobeIcon },
 ]
-const FOR: Record<Visibility, string> = { private: "Only you", friends: "Friends", public: "Everyone" }
-const openness: Record<Visibility, number> = { private: 0, friends: 1, public: 2 }
 
 function VisibilityPanel() {
-  const { audience, rev } = useWorkspace()
-  const [asking, setAsking] = useState<{ doc: Doc; to: Visibility } | null>(null)
-  const count = (a: Audience) => posts.filter(p => sees(a, p)).length + (a === "personal" ? cortex.length : 0)
-  void rev
-  const change = (doc: Doc, to: Visibility) => {
-    if (openness[to] > openness[doc.visibility]) return setAsking({ doc, to })
-    setVisibility(doc.id, to)
-    notify({ message: `“${doc.title}” is now for ${FOR[to].toLowerCase()}`, tone: "info" })
-  }
+  const { audience } = useWorkspace()
   return (
-    <SidePanelFrame label="Visibility" className={cn("w-[344px] shrink-0", mobile)}
-      heading={<>
-        <h1 className={panelTitle}>Visibility</h1>
-        <p className="text-small text-muted-foreground">See yourself as others do</p>
-      </>}>
+    <SidePanelFrame label="Visibility"
+      heading={<h1 className={panelTitle}>Visibility</h1>}>
       <p className="mx-2.5 mb-2 text-small text-muted-foreground">View as</p>
       <div role="radiogroup" aria-label="View as" className="flex flex-col gap-0.5">
         {AUDIENCES.map(a => (
           <button key={a.id} type="button" role="radio" aria-checked={audience === a.id} onClick={() => setAudience(a.id)}
-            className="flex min-h-12 items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-muted aria-checked:bg-muted">
+            className="flex min-h-12 items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted aria-checked:bg-muted">
             <Icon icon={a.icon} size="sm" className="text-muted-foreground" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-body font-medium">{a.label}</span>
               <span className="text-small text-muted-foreground">{a.note}</span>
             </span>
-            <span className="text-small text-muted-foreground tabular-nums">{count(a.id)}</span>
+            <Icon icon={CheckIcon} size="sm" className={cn(audience !== a.id && "invisible")} />
           </button>
         ))}
       </div>
-
-      <p className="mx-2.5 mt-6 mb-1 text-small text-muted-foreground">Who each post is for</p>
-      {(["public", "friends", "private"] as Visibility[]).map(v => {
-        const list = posts.filter(p => p.visibility === v)
-        return list.length > 0 && (
-          <section key={v} className="mb-2">
-            <h2 className="px-2.5 pt-2 pb-1 text-h3">{FOR[v]}</h2>
-            <ul>
-              {list.map(d => (
-                <li key={d.id} className="flex min-h-10 items-center gap-2 rounded-md ps-2.5 pe-1 hover:bg-muted">
-                  <button type="button" className="min-w-0 flex-1 truncate py-2 text-left text-body" onClick={() => open(d.id)}>{d.title}</button>
-                  <NativeSelect size="sm" aria-label={`Who “${d.title}” is for`} value={d.visibility}
-                    onChange={e => change(d, e.target.value as Visibility)} className="w-28">
-                    {(["private", "friends", "public"] as Visibility[]).map(o => <NativeSelectOption key={o} value={o}>{FOR[o]}</NativeSelectOption>)}
-                  </NativeSelect>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )
-      })}
-
-      {/* Showing a post to more people asks first. Marking is not publishing. */}
-      <Dialog open={Boolean(asking)} onOpenChange={o => !o && setAsking(null)}>
-        <DialogContent className="rounded-lg">
-          <DialogHeader>
-            <DialogTitle>Show “{asking?.doc.title}” to {asking && FOR[asking.to].toLowerCase()}?</DialogTitle>
-            <DialogDescription>
-              It is marked in your vault as for {asking && FOR[asking.to].toLowerCase()}. It reaches your site and other applications only when you publish.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setAsking(null)}>Cancel</Button>
-            <Button onClick={() => {
-              if (!asking) return
-              setVisibility(asking.doc.id, asking.to)
-              notify({ message: `“${asking.doc.title}” is marked for ${FOR[asking.to].toLowerCase()}. Not published yet.`, tone: "info" })
-              setAsking(null)
-            }}>Mark for {asking && FOR[asking.to].toLowerCase()}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </SidePanelFrame>
   )
 }
@@ -258,7 +195,7 @@ function InboxPanel() {
   void rev
   const unread = inbox.filter(i => i.unread).length
   return (
-    <SidePanelFrame label="Inbox" className={cn("w-[344px] shrink-0", mobile)}
+    <SidePanelFrame label="Inbox"
       heading={<>
         <h1 className={panelTitle}>Inbox</h1>
         <p className="text-small text-muted-foreground">{unread ? `${unread} new` : "All read"}</p>
@@ -269,7 +206,7 @@ function InboxPanel() {
           return (
             <li key={i.id}>
               <button type="button" onClick={() => openInbox(i.id)} aria-current={current || undefined}
-                className="flex w-full items-start gap-3 rounded-md px-2.5 py-2.5 text-left hover:bg-muted aria-[current=true]:bg-muted">
+                className="flex w-full items-start gap-3 rounded-md px-2.5 py-2.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted aria-[current=true]:bg-muted">
                 <Avatar className="mt-0.5 size-8"><AvatarFallback className="bg-muted text-small text-muted-foreground">
                   {i.from === "cortex" ? <Icon icon={BrainIcon} size="sm" /> : i.from.slice(0, 1).toUpperCase()}
                 </AvatarFallback></Avatar>
@@ -301,7 +238,7 @@ function ProfilePanel() {
   const tab = view.kind === "settings" ? view.tab : undefined
   const row = "h-auto min-h-10 w-full justify-start gap-2.5 px-2.5 py-2 text-left font-normal whitespace-normal aria-[current=page]:bg-muted [&>svg]:text-muted-foreground aria-[current=page]:[&>svg]:text-foreground"
   return (
-    <SidePanelFrame label="You" className={cn("w-[344px] shrink-0", mobile)}
+    <SidePanelFrame label="You"
       heading={
         <div className="flex flex-col items-start gap-3 px-2.5 pt-4">
           <Avatar className="size-11"><AvatarFallback className="bg-muted text-muted-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>

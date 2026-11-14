@@ -1,23 +1,15 @@
-import { NetworkIcon } from "lucide-react"
-import { inbox } from "@/data/sample"
 import { AgentStatus } from "@/components/agent-status"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
-import { Icon } from "@/components/ui/icon"
-import { byId } from "@/data/sample"
 import { notify } from "@/components/ui/notice"
-import { icons } from "@/lib/icons"
+import { byId, inbox } from "@/data/sample"
+import { PageEditor } from "@/editor/PageEditor"
 import { cn } from "@/lib/cn"
-import { DocView } from "./DocView"
-import { Editor } from "./Editor"
 import { SettingsView } from "./Settings"
 import { surface } from "./Surface"
-import { closeSettings, createDraft, open, setAudience, setSearchOpen, showGraph, useWorkspace } from "./store"
+import { closeSettings, createDraft, setAudience, setSearchOpen, showGraph, useWorkspace } from "./store"
 
-const VISIBILITY = { public: "Everyone", friends: "Friends", private: "Private" } as const
-
-/** Where things open: a post, the editor, an inbox item, or settings. A card of its own, apart from the rack. */
+/** Where things open: a page in the editor, an inbox item, or settings. A card of its own, apart from the rack. */
 export function MainPanel() {
   const { view, agent, audience } = useWorkspace()
   const doc = view.kind === "doc" ? byId(view.id) : undefined
@@ -30,44 +22,28 @@ export function MainPanel() {
           <Button size="xs" variant="ghost" onClick={() => setAudience("personal")}>Back to you</Button>
         </div>
       )}
-      <header className="flex h-14 shrink-0 items-center gap-2 px-5">
-          <div className="flex min-w-0 flex-1 items-center gap-2 text-small text-muted-foreground">
-            {doc && <>
-              <span className="truncate">{[doc.kind === "post" ? "vault" : "cortex", doc.label, doc.sublabel].filter(Boolean).join(" › ")}</span>
-              <Badge variant={doc.visibility === "private" ? "outline" : "secondary"}>
-                <Icon icon={doc.visibility === "private" ? icons.locked : icons.visible} size="xs" />
-                {VISIBILITY[doc.visibility]}
-              </Badge>
-            </>}
-          </div>
-          {agent && <AgentStatus state={agent.state} label={agent.label} />}
-          {doc && view.kind === "doc" && (
-            <div className="flex items-center gap-1">
-              {view.mode === "read" && doc.kind === "post" && (
-                <Button size="sm" variant="ghost" onClick={() => open(doc.id, "edit")}><Icon icon={icons.edit} size="sm" /> Edit</Button>
-              )}
-              <Button size="sm" variant="ghost" onClick={() => showGraph()}><Icon icon={NetworkIcon} size="sm" /> Graph</Button>
-            </div>
-          )}
-          {view.kind === "settings" && <Button size="sm" variant="ghost" onClick={closeSettings}>Done</Button>}
-        </header>
-      {view.kind === "settings" ? (
-        <SettingsView tab={view.tab} />
+      {agent && <AgentStatus state={agent.state} label={agent.label} className="absolute top-16 right-4 z-10 animate-in fade-in-0 slide-in-from-top-1" />}
+
+      {doc ? (
+        <PageEditor key={doc.id} doc={doc} />
+      ) : view.kind === "settings" ? (
+        <>
+          <header className="flex h-14 shrink-0 items-center justify-end px-5">
+            <Button size="sm" variant="ghost" onClick={closeSettings}>Done</Button>
+          </header>
+          <SettingsView tab={view.tab} />
+        </>
       ) : view.kind === "inbox" ? (
         <InboxItemView id={view.id} />
-      ) : doc && view.kind === "doc" ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {view.mode === "edit" ? <Editor key={doc.id} doc={doc} /> : <DocView doc={doc} />}
-        </div>
       ) : (
         <Empty className="flex-1">
           <EmptyHeader>
             <EmptyTitle>Nothing open</EmptyTitle>
-            <EmptyDescription>Open a post from the vault, search, or start one.</EmptyDescription>
+            <EmptyDescription>Open a page from your repo, search, or start one.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent className="flex-row justify-center">
             <Button variant="ghost" onClick={() => setSearchOpen(true)}>Search</Button>
-            <Button onClick={() => createDraft()}>New post</Button>
+            <Button onClick={() => createDraft()}>New page</Button>
           </EmptyContent>
         </Empty>
       )}
