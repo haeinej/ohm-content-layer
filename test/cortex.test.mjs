@@ -154,7 +154,9 @@ test('an agent keeps a cortex through the tools alone', async () => {
   const hello = await handle({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'claude-code' } } });
   assert.match(hello.result.instructions, /cortex_start before anything else/);
   assert.equal(seen, 'claude-code');
-  assert.equal((await handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).result.tools.length, 13);
+  // Other tools are added over time; these are the ones this test relies on.
+  const offered = (await handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).result.tools.map(tool => tool.name);
+  for (const name of ['cortex_start', 'cortex_remember', 'cortex_recall', 'cortex_note', 'cortex_settle', 'cortex_forget']) assert.ok(offered.includes(name), name);
 
   assert.match((await ask('cortex_start')).value.rules, /What you may not do/);
   const saved = (await ask('cortex_remember', { memory: likes })).value;

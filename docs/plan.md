@@ -306,6 +306,8 @@ Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are bu
 7. **The hooks adapter.** `cortex hook <moment>` for Claude Code, then Codex, answering from the folder with no network wait. Done when, with neither model calling a tool, a session starts with working memory refreshed and ends with it distilled.
 8. **Sync with a host.** The folder kept in step with ohm's service, folder first. Done when a cortex removed from the host is restored from the folder unchanged, and the other way round.
 
+Steps 4 to 7 are split into briefs for parallel agents in [handoff/](handoff/README.md).
+
 Steps 1 to 5 need only the cortex folder and a test vault. Step 6 needs a place to host the server and a sign-in. Step 7 needs Claude Code and Codex signed in to verify. Step 8 needs ohm.
 
 Already done outside this order: short MCP instructions that send an agent to `cortex_start`, the playbook returned from it, a `start` prompt, and the cortex's files as resources, over standard input and output.

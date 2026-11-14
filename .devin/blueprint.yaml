@@ -8,3 +8,5 @@ knowledge:
     contents: Node.js 20 or newer is required. There are no dependencies and no install step.
   - name: specification
     contents: docs/plan.md is the specification. Its build order says what to build next; AGENTS.md says the rules.
+  - name: handoff
+    contents: docs/handoff/README.md splits the remaining build steps into briefs that run in parallel, each with its own branch, files and done-when. Work only on your brief, open a pull request against main, and do not merge it yourself.
