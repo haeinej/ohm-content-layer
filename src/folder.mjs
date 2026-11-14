@@ -5,7 +5,7 @@
 //   .cortex/                                             what is waiting, and what was replaced
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
-import { checkField, checkSource, FIELDS, forAgent, IDENTITY, readIdentity, shownValue, statesValue, writeIdentity } from './identity.mjs';
+import { checkField, checkSource, FIELDS, forAgent, IDENTITY, proposalForAgent, readIdentity, shownValue, statesValue, writeIdentity } from './identity.mjs';
 import { sectionOf, vaultFrom } from './vault.mjs';
 import { checkWords, gone, parseMap, writeMap } from './vaultmap.mjs';
 import { createHash } from 'node:crypto';
@@ -91,6 +91,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         const { memory, version } = await held(known(entry.name.slice(0, -3)));
         memories.push({ memory, version });
       } catch (problem) {
+        // A file that cannot be opened is reported, not thrown, so a session or status still answers.
+        if (!(problem instanceof Refused) && problem?.code) { problems.push(`memory/${entry.name} cannot be read: ${problem.code}`); continue; }
         if (!(problem instanceof Refused)) throw problem;
         problems.push(`memory/${entry.name}: ${problem.message}`);
       }
@@ -284,6 +286,29 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         return { connected: true, reachable: false, problem: problem.message };
       });
       await reindex();
+      return cortex.inspect(vault);
+    },
+
+    // A read-only view for the person. Unlike starting an agent session, inspecting must not
+    // sync the vault, regenerate the index, or record observations just by looking at them.
+    async inspect(synced) {
+      let vault = synced;
+      if (!vault) {
+        try {
+          const connected = await theVault();
+          vault = { connected: Boolean(connected) };
+          if (connected) {
+            const shape = await connected.shape();
+            const map = parseMap(await text(at('vault.md')), new Set(shape.sections.map(item => item.section)));
+            const { memories } = await all();
+            const pointed = memories.flatMap(({ memory }) => memory.posts ?? []);
+            const where = pointed.length ? await connected.exists(pointed) : {};
+            vault = { connected: true, sections: shape.sections.map(item => ({ ...item, meaning: map.get(item.section)?.meaning, conventions: map.get(item.section)?.conventions })), gone: gone(shape, map), broken: memories.flatMap(({ memory }) => (memory.posts ?? []).filter(id => !where[id]?.exists).map(post => ({ memory: memory.name, post }))), problems: shape.problems };
+          }
+        } catch (problem) {
+          vault = { connected: true, reachable: false, problem: problem.message };
+        }
+      }
       const { memories, problems } = await all();
       const identity = await cortex.identity();
       const pending = [...(await notes()).values()].filter(note => !note.settledAt);
@@ -291,7 +316,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return {
         rules: await cortex.rules(),
         identity: forAgent(identity),
-        vault: vault.connected && vault.reachable !== false ? { connected: true, sections: vault.sections, ...(vault.broken.length ? { broken: vault.broken } : {}) } : { connected: vault.connected, ...(vault.reachable === false ? { reachable: false } : {}) },
+        vault: vault.connected && vault.reachable !== false ? { connected: true, sections: vault.sections, ...(vault.broken.length ? { broken: vault.broken } : {}), ...(vault.gone?.length ? { gone: vault.gone } : {}) } : { connected: vault.connected, ...(vault.reachable === false ? { reachable: false } : {}) },
         always: memories.filter(({ memory }) => memory.always),
         memories: memories.filter(({ memory }) => !memory.always).map(({ memory: { name, description, kind } }) => ({ name, description, kind })),
         // Only what the person has approved or switched on is handed over as usable.
@@ -300,7 +325,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         notes: pending,
         working: await cortex.working(),
         waiting: {
-          identity: (await cortex.identityProposals()).map(({ id, field, value, source }) => ({ id, field, value: shownValue(field, value), source })),
+          identity: (await cortex.identityProposals()).map(proposalForAgent),
           skills: (await skillsIn(at('.cortex', 'proposed', 'skills'))).map(skill => skill.name),
           tools: (await toolsIn(at('.cortex', 'proposed', 'tools'))).map(tool => tool.name),
         },
@@ -308,7 +333,15 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       };
     },
 
-    identity: async () => readIdentity(await text(at('identity.md'))),
+    async identity() {
+      let content;
+      try { content = await text(at('identity.md')); } catch (problem) {
+        if (!problem?.code) throw problem;
+        const empty = await readIdentity(null);
+        return { ...empty, problems: [`identity.md cannot be read: ${problem.code}`] };
+      }
+      return readIdentity(content);
+    },
 
     // The person names the vault this cortex reads. It is opened and read once to check it answers.
     async connectVault(config) {
@@ -362,7 +395,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return {
         connected: true,
         sections: shape.sections.map(({ section, posts }) => ({ section, posts, ...(map.get(section)?.meaning ? { meaning: map.get(section).meaning } : {}), ...(map.get(section)?.conventions ? { conventions: map.get(section).conventions } : {}) })),
-        changes: changes.length, noted, broken, ...(shape.problems?.length ? { problems: shape.problems } : {}),
+        changes: changes.length, noted, broken, gone: gone(shape, map), ...(shape.problems?.length ? { problems: shape.problems } : {}),
       };
     },
 
