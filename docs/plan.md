@@ -281,7 +281,7 @@ A post saved in a known section needs nothing and is not noted. With a vault con
 
 ## What exists now, and what changes
 
-Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are built:
+Built in the `ohm-cortex` repository and tested (97 tests, run by CI on Node 20 and 22). Steps 1 to 7 are built; step 8 is not planned:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
@@ -308,20 +308,25 @@ Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are bu
 5. **`cortex status`.** *Done.* Everything waiting or broken, in one answer. Every item it lists has a way to clear it.
 6. **Remote MCP over HTTP,** *Done, with a bearer token; OAuth waits for a decision.* With sign-in, so ChatGPT and browser clients can reach a cortex. Done when a client connected over HTTP reads the playbook as its instructions and calls `cortex_start`.
 7. **The hooks adapter.** *Built; the run in a real client is still to do.* `cortex hook <moment>` for Claude Code, then Codex, answering from the folder with no network wait. Done when, with neither model calling a tool, a session starts with working memory refreshed and ends with it distilled.
-8. **Sync with a host.** The folder kept in step with ohm's service, folder first. Done when a cortex removed from the host is restored from the folder unchanged, and the other way round.
+8. **Sync with a host.** *Not planned.* On 14 November 2026 the person decided to keep the cortex a folder of its own, not connected to ohm. The design looked at was an exact copy of the cortex files kept on ohm and synced both ways. It is kept here in case that changes.
 
-Steps 4 to 7 are split into briefs for parallel agents in [handoff/](handoff/README.md).
+Steps 4 to 7 were built in parallel from the briefs in [handoff/](handoff/README.md).
 
-Steps 1 to 5 need only the cortex folder and a test vault. Step 6 needs a place to host the server and a sign-in. Step 7 needs Claude Code and Codex signed in to verify. Step 8 needs ohm.
+What is left to verify: step 7 in a real Claude Code or Codex session, and step 6 from a client on another machine. OAuth for step 6 needs a public address and a sign-in, and waits for a decision.
 
 Already done outside this order: short MCP instructions that send an agent to `cortex_start`, the playbook returned from it, a `start` prompt, and the cortex's files as resources, over standard input and output.
 
 ## Outside cortex
 
-- **In ohm:** implement the vault contract over the vault service. Send vault events to a member's cortex. Hold a synced copy and show it in the editor.
-- **An agent's own key,** issued by the host and limited to reading the vault and keeping the cortex, so no PDS password sits in a hook's settings.
-- **The person's confirmation surface:** a command today, the ohm editor later, for identity proposals, skills and tools.
-- **Removing the old cortex code** from ohm-content-layer once ohm syncs with this one.
+Nothing outside cortex is needed for what is built. The hooks read the folder directly, so they need no key, and the person confirms identity, skills and tools with commands.
+
+Not planned, since cortex is not connected to ohm:
+- implementing the vault contract over ohm's vault service;
+- an ohm-issued agent key;
+- showing this cortex in ohm's editor;
+- removing the older cortex code from ohm-content-layer.
+
+A vault kept as a folder of Markdown works today through the folder vault.
 
 ## Decided
 
@@ -332,6 +337,7 @@ On 14 November 2026:
 - **Birthdate is hidden from agents.** An agent knows one is on file, and asks the person when a task needs it.
 - **When something becomes a memory is in the playbook,** as judgement, not a session count in code.
 - **The playbook reaches agents over MCP,** because cortex does not run the agent and clients do not read its files: short instructions send the agent to `cortex_start`, which returns it. Hooks make it certain where a client has them.
+- **Cortex is not synced with ohm.** It stays a folder of its own, and the older cortex in ohm-content-layer stays separate.
 
 ## Open decisions
 

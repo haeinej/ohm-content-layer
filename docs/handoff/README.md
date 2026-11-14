@@ -44,8 +44,8 @@ Merge in this order, rebasing each on `main` after the one before it lands. It g
 
 ## After the first wave
 
-These wait until the first wave is merged:
+The first wave is merged: status (#7), filing (#9), HTTP (#8) and hooks (#10). What is left:
 
-- **Step 8, sync with ohm.** Mostly work in the `ohm-content-layer` repository: implement the vault contract over ohm's vault service, and keep a cortex folder in step with ohm's store, folder first. It needs ohm's agent key decided.
-- **Drop the `project` memory kind.** The plan says project facts are vault content. Touches `src/core.mjs` and the memory schema in `src/tools.mjs`, so it waits for the wave to land.
+- **Step 8, sync with ohm, is not planned.** The person decided to keep the cortex a folder of its own.
+- **Drop the `project` memory kind.** The plan says project facts are vault content. Touches `src/core.mjs` and the memory schema in `src/tools.mjs`.
 - **`profile()` for a folder vault.** The contract has it; a folder answers nothing yet. Decide where a folder vault keeps profile facts first.
