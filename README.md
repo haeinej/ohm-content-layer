@@ -50,7 +50,7 @@ node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
 | `cortex init [dir] [--account <did>]` | The person | Starts a cortex in an empty folder, optionally with the signed-in account |
 | `cortex identity [dir]` | The person | Shows the confirmed identity and the facts an agent proposed |
 | `cortex confirm <field or id> [dir]` | The person | Accepts a proposed identity fact |
-| `cortex reject <field or id> [dir]` | The person | Turns one down; it is not proposed again from the same evidence |
+| `cortex reject <field or id> [dir]` | The person | Turns one down; that value is not proposed again |
 | `cortex clear <field> [dir]` | The person | Removes an identity field |
 | `cortex mcp [dir]` | An agent | Serves the ten `cortex_*` tools over standard input and output |
 | `cortex approve <skill> [dir]` | The person | Moves a skill an agent proposed into `skills/` |

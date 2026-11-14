@@ -114,7 +114,8 @@ Behind each value, `.cortex/identity.jsonl` records where it came from: the pers
 5. **A confirmed field is not overwritten by a proposal.** If the vault later says something different, the new value is proposed beside the old one, and the confirmed one stands until the person chooses.
 6. **Sensitive fields stay in.** Email addresses, birthdate and city are never sent to another service, put in a URL, or included in anything published. They are shown to the agent so it can help, not so it can share.
 7. **Every change is kept.** An earlier value can be read back and restored.
-8. **Proposals do not nag.** A rejected proposal is not made again from the same evidence.
+8. **Proposals do not nag.** A value the person turned down is not proposed again for that field, whatever the evidence. The person can still set it themselves. Two proposals of the same value are one.
+9. **An agent never writes as the person.** The names `member` and `account` are reserved; an agent that connects under one is recorded as `agent:<name>`.
 
 ## How the vault is read: `vault.md`
 
@@ -259,7 +260,7 @@ Cortex reads through this contract and never writes. Saving goes through the vau
 
 ## What exists now, and what changes
 
-Built in the `ohm-cortex` repository and tested (21 tests). Step 1, strict identity, is on the `identity` branch:
+Built in the `ohm-cortex` repository and tested (24 tests). Step 1, strict identity, is on the `identity` branch:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |

@@ -4,7 +4,7 @@
 // cortex approve <skill> [dir] approve a skill an agent proposed
 // cortex event <text> [dir]    report a change from outside, for the agent to settle
 // cortex confirm <field|id> [dir]   accept an identity fact an agent proposed
-// cortex reject <field|id> [dir]    turn one down; it is not proposed again from the same evidence
+// cortex reject <field|id> [dir]    turn one down; that value is not proposed again
 // cortex clear <field> [dir]        remove an identity field
 // The folder is the one named, or CORTEX_DIR, or ~/cortex.
 import { randomUUID } from 'node:crypto';
@@ -12,7 +12,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Refused } from '../src/core.mjs';
-import { initCortex, openCortex } from '../src/folder.mjs';
+import { agentName, initCortex, openCortex } from '../src/folder.mjs';
 import { createServer, serve } from '../src/protocol.mjs';
 import { createTools, INSTRUCTIONS, TOOLS } from '../src/tools.mjs';
 
@@ -30,9 +30,10 @@ try {
   } else if (command === 'mcp') {
     const dir = folder(rest[0]);
     // The agent is named by what connects, so each save says which agent made it.
-    let agent = process.env.CORTEX_AGENT ?? 'agent';
+    // An agent is named by what connects, and can never take the person's or the account's name.
+    let agent = agentName(process.env.CORTEX_AGENT);
     // Made at the first call, once the agent has said its name, and kept: a confirmation lives in it.
-    await serve(createServer({ tools: () => createTools(openCortex(dir, { actor: agent })), list: TOOLS, instructions: INSTRUCTIONS, onClient: name => { agent = process.env.CORTEX_AGENT ?? name; } }), process.stdin, process.stdout);
+    await serve(createServer({ tools: () => createTools(openCortex(dir, { actor: agent })), list: TOOLS, instructions: INSTRUCTIONS, onClient: name => { agent = agentName(process.env.CORTEX_AGENT ?? name); } }), process.stdin, process.stdout);
   } else if (command === 'approve' && rest[0]) {
     const done = await openCortex(folder(rest[1])).approveSkill(rest[0]);
     console.log(`${done.name} is approved, and is now in skills/`);

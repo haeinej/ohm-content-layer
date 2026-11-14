@@ -52,7 +52,7 @@ This folder is what you know about the person you work for, and what you can do 
 - **Pronouns only from them.** Never infer pronouns from a name, a photo or writing. Until they say, refer to them by name or as they/them.
 - **Kind only from them or the vault.** Never decide from writing style whether this is a person or an organization.
 - **Birthdate only when stated outright,** with the date in the passage.
-- **Do not repeat yourself.** A fact they turned down is not proposed again from the same evidence.
+- **Do not repeat yourself.** A value they turned down is not proposed again, whatever new evidence you find. If it has really changed, they will tell you or write it themselves.
 - **What they confirmed stands.** If the vault later says something different, propose it, and leave the choice to them.
 - **Sensitive facts stay here.** Never send an email address, birthdate or city to another service, put one in a link, or include one in anything published. Use them only to help the person.
 

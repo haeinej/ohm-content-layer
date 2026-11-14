@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { initCortex, openCortex } from '../src/folder.mjs';
+import { agentName, initCortex, openCortex } from '../src/folder.mjs';
 import { readIdentity } from '../src/identity.mjs';
 import { createServer } from '../src/protocol.mjs';
 import { createTools, INSTRUCTIONS, TOOLS } from '../src/tools.mjs';
@@ -92,7 +92,7 @@ test('a confirmed field is not overwritten by a later proposal', async () => {
   assert.equal((await readIdentity(await file(dir))).fields.occupation, 'Art director');
 });
 
-test('a rejected proposal is not made again from the same evidence', async () => {
+test('a rejected fact is not proposed again, whatever the evidence', async () => {
   const { agent, person } = await fresh();
   const proposal = { field: 'city', value: 'Porto', source: post('p2', 'A weekend in Porto.') };
   await agent.proposeIdentity(proposal);
@@ -100,7 +100,9 @@ test('a rejected proposal is not made again from the same evidence', async () =>
   assert.equal((await agent.identityProposals()).length, 1);
   await person.rejectIdentity('city');
   await assert.rejects(agent.proposeIdentity(proposal), refused('AlreadyRejected'));
-  assert.equal((await agent.proposeIdentity({ ...proposal, source: said('I live in Porto') })).waiting, true, 'new evidence may be proposed');
+  await assert.rejects(agent.proposeIdentity({ ...proposal, source: said('Porto.') }), refused('AlreadyRejected'), 'rewording the quote does not bring it back');
+  await assert.rejects(agent.proposeIdentity({ ...proposal, source: post('p3', 'Back in Porto again.') }), refused('AlreadyRejected'));
+  assert.equal((await agent.proposeIdentity({ field: 'city', value: 'Braga', source: said('I moved to Braga') })).waiting, true, 'another value may be proposed');
 });
 
 test('clearing removes a field and keeps the earlier file', async () => {
@@ -158,4 +160,42 @@ test('the person confirms from the command line', async () => {
   assert.equal((await agent.start()).identity.timezone, 'Europe/Lisbon');
   assert.equal(JSON.parse(execFileSync('node', [cli, 'identity', dir], { encoding: 'utf8' })).fields.timezone, 'Europe/Lisbon');
   assert.throws(() => execFileSync('node', [cli, 'confirm', 'city', dir], { stdio: 'pipe' }));
+});
+
+test('a bad account refuses before anything is copied, so init can be run again', async () => {
+  const dir = join(await mkdtemp(join(tmpdir(), 'cortex-')), 'cortex');
+  await assert.rejects(initCortex(dir, template, { account: 'not a did' }), refused('InvalidIdentity'));
+  assert.deepEqual(await readdir(dir).catch(() => []), []);
+  await initCortex(dir, template, { account: 'did:plc:example123' });
+  assert.equal((await openCortex(dir).start()).identity.account, 'did:plc:example123');
+});
+
+test('an agent cannot write under the person\'s or the account\'s name', async () => {
+  assert.deepEqual(['member', 'Account', ' member ', 'claude-code', undefined, ''].map(agentName), ['agent:member', 'agent:Account', 'agent:member', 'claude-code', 'agent', 'agent']);
+  const { dir } = await fresh();
+  const lines = [
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'member' } } },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'cortex_propose_identity', arguments: { field: 'name', value: 'Sam Rivera', source: { kind: 'person', quote: 'I am Sam Rivera' } } } },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'cortex_remember', arguments: { memory: { name: 'likes-maps', description: 'Draws maps for fun', kind: 'person', stated: true, body: 'Maps.' } } } },
+  ].map(line => JSON.stringify(line)).join('\n');
+  execFileSync('node', [cli, 'mcp', dir], { input: `${lines}\n`, encoding: 'utf8' });
+  const cortex = openCortex(dir);
+  assert.equal((await cortex.identityLog()).at(-1).by, 'agent:member');
+  assert.equal((await cortex.read('likes-maps')).memory.writtenBy, 'agent:member');
+});
+
+test('a proposal stops waiting once the field holds its value, and the same fact waits once', async () => {
+  const { dir, agent, person } = await fresh();
+  const first = await agent.proposeIdentity({ field: 'city', value: 'Lisbon', source: said('Lisbon') });
+  const again = await agent.proposeIdentity({ field: 'city', value: 'Lisbon', source: said('I live in Lisbon') });
+  assert.deepEqual([again.id, again.unchanged], [first.id, true]);
+  assert.equal((await agent.start()).waiting.identity.length, 1);
+  await person.confirmIdentity('city');
+  assert.deepEqual((await agent.start()).waiting.identity, []);
+
+  // Written by hand, the value a proposal waited for is no longer waiting.
+  await agent.proposeIdentity({ field: 'timezone', value: 'Europe/Lisbon', source: said('Lisbon time') });
+  await writeFile(join(dir, 'identity.md'), (await file(dir)).replace(/^---\n/, '---\ntimezone: Europe/Lisbon\n'));
+  assert.equal((await readIdentity(await file(dir))).fields.timezone, 'Europe/Lisbon');
+  assert.deepEqual((await agent.start()).waiting.identity, []);
 });
