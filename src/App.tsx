@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { Notices } from "@/components/ui/notice"
+import { DeleteDialog } from "@/workspace/PageActions"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { MainPanel } from "@/workspace/MainPanel"
 import { Rack } from "@/workspace/Rack"
@@ -32,6 +33,7 @@ export function App() {
         <MainPanel />
       </div>
       <SearchOverlay />
+      <DeleteDialog />
       <Notices />
     </TooltipProvider>
   )

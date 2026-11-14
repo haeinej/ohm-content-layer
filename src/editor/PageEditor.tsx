@@ -21,18 +21,19 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
-  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub,
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub,
   DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { bySlug, posts, titleOf, type Doc } from "@/data/sample"
+import { byId, bySlug, posts, titleOf, type Doc } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
-import { autosave, me, moveDoc, open, openFile, saveDraft, setIcon, showGraph, useWorkspace } from "@/workspace/store"
+import { autosave, marks, me, moveDoc, open, openFile, saveDraft, setIcon, showGraph, toggleArchive, useWorkspace } from "@/workspace/store"
+import { InlineRename, requestDelete } from "@/workspace/PageActions"
 import { withAgent } from "@/workspace/tools"
 import { insertImage, insertImageFiles, insertTable, insertText } from "./commands"
 import { ActiveCell, References, SlashCommand } from "./extensions"
@@ -40,6 +41,7 @@ import { IconPicker } from "./IconPicker"
 import { PlusMenu, SlashMenu } from "./InsertMenu"
 import { SelectionToolbar } from "./SelectionToolbar"
 import { LastEdited, TableControls } from "./TableControls"
+import { LinkPreview } from "./LinkPreview"
 import "./editor.css"
 
 /** Bodies written before the editor start with "# Title"; the title has its own field now. */
@@ -77,54 +79,95 @@ function useAutoHeight(ref: React.RefObject<HTMLTextAreaElement | null>, value: 
 const pathOf = (d: Doc) => [d.kind === "post" ? "vault" : "cortex", d.label, d.sublabel, titleOf(d)].filter(Boolean) as string[]
 
 /**
- * The page's path, in a pill. Drag it out to save the page as a .md file, or onto a vault folder in
- * the side panel to file it there. Its menu opens a file, saves, and moves.
+ * The page's path, in a pill. Click the page's name to rename it in place. Drag the pill out to save
+ * the page as a .md file, or onto a vault folder in the side panel to file it there. The ⌄ beside it
+ * opens the page's menu, as a session list has it: Open in, Rename, the file, Move, Archive, Delete.
  */
-function PathPill({ doc, markdown, editable, onPickFile }: { doc: Doc; markdown: () => string; editable: boolean; onPickFile: () => void }) {
+function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown: () => string; onPickFile: () => void; onRenamed: (title: string) => void }) {
   const path = pathOf(doc)
+  const post = doc.kind === "post"
+  const [renaming, setRenaming] = useState(false)
+  const [menu, setMenu] = useState(false)
   const folders = useMemo(() => {
     const set = new Set<string>()
     for (const p of posts) { set.add(p.label); if (p.sublabel) set.add(`${p.label}/${p.sublabel}`) }
     return [...set].sort()
   }, [doc.updated, doc.label, doc.sublabel]) // eslint-disable-line react-hooks/exhaustive-deps
   const here = doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label
+  const md = () => `# ${titleOf(doc)}\n\n${markdown()}`
+  const rename = () => { if (post) { setMenu(false); setRenaming(true) } }
+  const key = (e: React.KeyboardEvent) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return
+    const k = e.key.toLowerCase()
+    if (k === "r" && post) { e.preventDefault(); rename() }
+    if (k === "a" && post) { e.preventDefault(); setMenu(false); toggleArchive(doc.id); notify({ message: marks.archived.has(doc.id) ? `Archived “${titleOf(doc)}”` : `Restored “${titleOf(doc)}”`, tone: "info" }) }
+    if (k === "d" && post) { e.preventDefault(); setMenu(false); requestDelete(doc.id) }
+  }
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={
-        <button type="button" draggable aria-label={`${path.join(" / ")}. Drag out to save as Markdown`}
-          onDragStart={e => dragOutAsMarkdown(e.dataTransfer, doc.id, doc.title, `# ${titleOf(doc)}\n\n${markdown()}`)}
-          className={cn(pill, "h-9 min-w-0 max-w-[min(440px,55vw)] cursor-grab gap-1.5 ps-3 pe-2 text-small text-muted-foreground transition-colors duration-(--ohm-duration-state) hover:text-foreground active:cursor-grabbing aria-expanded:text-foreground")} />
-      }>
-        <Icon icon={FileTextIcon} size="sm" className="flex-none" />
-        <span className="flex min-w-0 items-center gap-1">
-          {path.map((seg, i) => (
-            <span key={i} className={cn("flex min-w-0 items-center gap-1", i < path.length - 1 ? "flex-shrink" : "flex-shrink-0")}>
-              <span className={cn("truncate", i === path.length - 1 && "max-w-48 font-medium text-foreground")}>{seg}</span>
-              {i < path.length - 1 && <span aria-hidden className="text-muted-foreground/60">/</span>}
-            </span>
-          ))}
-        </span>
-        <Icon icon={ChevronDownIcon} size="xs" className="flex-none" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-60">
-        <DropdownMenuItem className="flex items-center gap-2" onClick={onPickFile}><Icon icon={FolderOpenIcon} size="sm" />Open file…</DropdownMenuItem>
-        <DropdownMenuItem className="flex items-center gap-2" onClick={() => saveAsMarkdown(doc.title, `# ${titleOf(doc)}\n\n${markdown()}`)}><Icon icon={DownloadIcon} size="sm" />Save as Markdown</DropdownMenuItem>
-        {doc.kind === "post" && editable && (
+    <div draggable={!renaming} aria-label={`${path.join(" / ")}. Drag out to save as Markdown`}
+      onDragStart={e => dragOutAsMarkdown(e.dataTransfer, doc.id, doc.title, md())}
+      className={cn(pill, "h-9 min-w-0 max-w-[min(480px,58vw)] cursor-grab gap-1.5 ps-3 pe-0.5 text-small text-muted-foreground active:cursor-grabbing")}>
+      <Icon icon={FileTextIcon} size="sm" className="flex-none" />
+      <span className="flex min-w-0 items-center gap-1">
+        {path.slice(0, -1).map((seg, i) => (
+          <span key={i} className="flex min-w-0 flex-shrink items-center gap-1">
+            <span className="truncate">{seg}</span>
+            <span aria-hidden className="text-muted-foreground/60">/</span>
+          </span>
+        ))}
+        {renaming ? (
+          <InlineRename id={doc.id} className="h-7 w-48 text-small font-medium"
+            onDone={() => { setRenaming(false); onRenamed(byId(doc.id)?.title ?? doc.title) }} />
+        ) : (
+          <button type="button" disabled={!post} onClick={rename} title={post ? "Rename" : undefined}
+            className="max-w-48 flex-shrink-0 cursor-text truncate rounded-md px-1 py-0.5 font-medium text-foreground transition-colors hover:bg-background disabled:cursor-default disabled:hover:bg-transparent">
+            {path.at(-1)}
+          </button>
+        )}
+      </span>
+      <DropdownMenu open={menu} onOpenChange={setMenu}>
+        <DropdownMenuTrigger render={
+          <button type="button" aria-label="Page menu"
+            className="flex size-8 flex-none items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground aria-expanded:bg-background aria-expanded:text-foreground" />
+        }>
+          <Icon icon={ChevronDownIcon} size="sm" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-60" onKeyDown={key}>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="flex items-center gap-2"><Icon icon={FolderInputIcon} size="sm" />Move to</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="max-h-72 w-52 overflow-y-auto">
-              {folders.map(f => (
-                <DropdownMenuCheckboxItem key={f} checked={f === here} onCheckedChange={() => {
-                  const [label, sublabel] = f.split("/")
-                  moveDoc(doc.id, label, sublabel)
-                  notify({ message: `Filed under ${f.replace("/", " › ")}`, tone: "info" })
-                }}>{f.replace("/", " › ")}</DropdownMenuCheckboxItem>
-              ))}
+            <DropdownMenuSubTrigger>Open in</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-48">
+              <DropdownMenuItem onClick={() => window.open(`${location.pathname}?open=${encodeURIComponent(doc.id)}`, "_blank", "noopener")}>New tab</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => showGraph()}>Graph</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={!post} onClick={rename}>Rename<DropdownMenuShortcut>R</DropdownMenuShortcut></DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onPickFile}>Open file…</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => saveAsMarkdown(doc.title, md())}>Save as Markdown</DropdownMenuItem>
+          {post && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>Move to section</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="max-h-72 w-52 overflow-y-auto">
+                {folders.map(f => (
+                  <DropdownMenuCheckboxItem key={f} checked={f === here} onCheckedChange={() => {
+                    const [label, sublabel] = f.split("/")
+                    moveDoc(doc.id, label, sublabel)
+                    notify({ message: `Moved to ${f.replace("/", " › ")}`, tone: "info" })
+                    setMenu(false)
+                  }}>{f.replace("/", " › ")}</DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={!post} onClick={() => { toggleArchive(doc.id); notify({ message: marks.archived.has(doc.id) ? `Archived “${titleOf(doc)}”` : `Restored “${titleOf(doc)}”`, tone: "info" }) }}>
+            {marks.archived.has(doc.id) ? "Restore" : "Archive"}<DropdownMenuShortcut>A</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={!post} variant="destructive" onClick={() => requestDelete(doc.id)}>Delete<DropdownMenuShortcut>D</DropdownMenuShortcut></DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }
 
@@ -291,7 +334,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
       {/* Toolbar: the page's path, then inserts; history, comments, you and sharing on the right. */}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
         <div className="flex min-w-0 items-center gap-1.5">
-          <PathPill doc={doc} editable={editable} markdown={() => toMarkdown(editor)} onPickFile={() => fileInput.current?.click()} />
+          <PathPill doc={doc} markdown={() => toMarkdown(editor)} onPickFile={() => fileInput.current?.click()} onRenamed={setTitle} />
           {editable && (
             <div className={pill}>
               <ToolButton label="Text" icon={TypeIcon} onClick={() => insertText(editor)} />
@@ -376,6 +419,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
             )}
             <EditorContent editor={editor} />
             {editable && <TableControls editor={editor} container={canvas} updated={updated} />}
+            <LinkPreview container={canvas} />
           </div>
         </div>
       </div>

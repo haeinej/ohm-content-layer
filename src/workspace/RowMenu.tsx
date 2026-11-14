@@ -1,37 +1,37 @@
 // The ⋯ on a page in the repository, as a session list has it: it shows on hover (and right-click opens
 // the same menu), and its single-key shortcuts work while the menu is open or the row has focus.
-// Open in ›, Pin, Mark as unread, Rename, Fork, Move to section ›, Archive, Delete.
+// Open in ›, Pin, Mark as unread, Rename (in place), Move to section ›, Archive, Delete.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EllipsisIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut,
   DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
-import { Input } from "@/components/ui/input"
 import { notify } from "@/components/ui/notice"
 import { byId, posts, titleOf } from "@/data/sample"
 import {
-  deleteDoc, forkDoc, marks, moveDoc, open, renameDoc, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
+  marks, moveDoc, open, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
 } from "./store"
+import { InlineRename, requestDelete } from "./PageActions"
+import { useLinkedHover } from "@/editor/LinkPreview"
 
-type Row = { id: string; top: number; height: number }
+type Row = { id: string; top: number; height: number; textLeft: number }
 const isPage = (id?: string) => !!id && !id.includes(":") && !!byId(id)
 
 export function RowMenu({ container }: { container: HTMLElement | null }) {
   const { rev } = useWorkspace()
+  const linked = useLinkedHover()
   const [row, setRow] = useState<Row | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<string | null>(null)
-  const draft = useRef("")
 
   const place = useCallback((el: HTMLElement) => {
     if (!container) return
     const base = container.getBoundingClientRect(), r = el.getBoundingClientRect()
-    setRow({ id: el.dataset.id!, top: r.top - base.top + container.scrollTop, height: r.height })
+    // Where the row's name starts, so renaming in place lines up with it.
+    const label = el.querySelector<HTMLElement>("span.truncate") ?? el
+    setRow({ id: el.dataset.id!, top: r.top - base.top + container.scrollTop, height: r.height, textLeft: label.getBoundingClientRect().left - base.left })
   }, [container])
 
   // Follow the pointer over page rows; hold still while the menu is open.
@@ -39,13 +39,13 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     if (!container) return
     const rowOf = (t: EventTarget | null) => (t as HTMLElement | null)?.closest<HTMLElement>("[data-row-id], [data-slot=file-tree-item]")
     const move = (e: PointerEvent) => {
-      if (menuOpen) return
+      if (menuOpen || renaming) return
       if ((e.target as HTMLElement).closest("[data-row-menu]")) return
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
       if (el && isPage(id)) { el.dataset.id = id; place(el) } else setRow(null)
     }
-    const leave = () => { if (!menuOpen) setRow(null) }
+    const leave = () => { if (!menuOpen && !renaming) setRow(null) }
     const context = (e: MouseEvent) => {
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
@@ -57,11 +57,11 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     }
     // Shortcuts on a focused row, without opening the menu.
     const key = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || menuOpen) return
+      if (e.metaKey || e.ctrlKey || e.altKey || menuOpen || renaming) return
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
       if (!isPage(id)) return
-      if (run(e.key.toLowerCase(), id!)) e.preventDefault()
+      if (run(e.key.toLowerCase(), id!)) { e.preventDefault(); place(el!) }
     }
     container.addEventListener("pointermove", move)
     container.addEventListener("pointerleave", leave)
@@ -79,6 +79,8 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
   useEffect(() => {
     container?.querySelectorAll<HTMLElement>("[data-slot=file-tree-item]").forEach(el => {
       el.toggleAttribute("data-unread", marks.unread.has(el.dataset.id ?? ""))
+      // The page a hovered [[link]] points to, shaded green.
+      el.toggleAttribute("data-linked", !!linked && el.dataset.id === linked)
     })
   })
 
@@ -97,10 +99,9 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     switch (k) {
       case "p": togglePin(id); done(marks.pinned.has(id) ? `Pinned “${titleOf(doc)}”` : `Unpinned “${titleOf(doc)}”`); break
       case "u": toggleUnread(id); break
-      case "r": if (!post) return false; draft.current = doc.title; setRenaming(id); break
-      case "f": if (!post) return false; forkDoc(id); done(`Forked “${titleOf(doc)}” as a private page`); break
+      case "r": if (!post) return false; setRenaming(id); break
       case "a": if (!post) return false; toggleArchive(id); done(marks.archived.has(id) ? `Archived “${titleOf(doc)}”` : `Restored “${titleOf(doc)}”`); break
-      case "d": if (!post) return false; setDeleting(id); break
+      case "d": if (!post) return false; requestDelete(id); break
       default: return false
     }
     setMenuOpen(false)
@@ -110,11 +111,9 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
   const doc = row ? byId(row.id) : undefined
   const post = doc?.kind === "post"
   const here = doc ? (doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label) : ""
-  const renameTarget = renaming ? byId(renaming) : undefined
-  const deleteTarget = deleting ? byId(deleting) : undefined
 
   return <>
-    {row && doc && (
+    {row && doc && !renaming && (
       <div data-row-menu className="pointer-events-none absolute inset-x-0 z-10" style={{ top: row.top, height: row.height }}>
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger render={
@@ -137,7 +136,6 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
             <DropdownMenuItem onClick={() => run("p", doc.id)}>{marks.pinned.has(doc.id) ? "Unpin" : "Pin"}<DropdownMenuShortcut>P</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuItem onClick={() => run("u", doc.id)}>{marks.unread.has(doc.id) ? "Mark as read" : "Mark as unread"}<DropdownMenuShortcut>U</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuItem disabled={!post} onClick={() => run("r", doc.id)}>Rename<DropdownMenuShortcut>R</DropdownMenuShortcut></DropdownMenuItem>
-            <DropdownMenuItem disabled={!post} onClick={() => run("f", doc.id)}>Fork<DropdownMenuShortcut>F</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger disabled={!post}>Move to section</DropdownMenuSubTrigger>
@@ -160,38 +158,12 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
       </div>
     )}
 
-    <Dialog open={!!renaming} onOpenChange={o => !o && setRenaming(null)}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Rename</DialogTitle>
-          <DialogDescription>{renameTarget?.visibility === "private" ? "Only you see this page." : "The title changes in your vault; your site shows it after you publish."}</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={e => { e.preventDefault(); if (renaming) { renameDoc(renaming, draft.current); setRenaming(null) } }}>
-          <Input autoFocus defaultValue={renameTarget?.title} aria-label="Title" onChange={e => { draft.current = e.target.value }}
-            onFocus={e => e.currentTarget.select()} />
-          <DialogFooter className="mt-4">
-            <Button type="button" variant="ghost" onClick={() => setRenaming(null)}>Cancel</Button>
-            <Button type="submit">Rename</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-
-    <Dialog open={!!deleting} onOpenChange={o => !o && setDeleting(null)}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Delete “{deleteTarget && titleOf(deleteTarget)}”?</DialogTitle>
-          <DialogDescription>
-            {deleteTarget?.visibility === "private"
-              ? "It is removed from your vault. This cannot be undone."
-              : "It is removed from your vault. If it is published, taking it down from your repository is its own step, and copies others made stay where they are."}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setDeleting(null)}>Cancel</Button>
-          <Button variant="destructive" onClick={() => { if (deleting) { const t = deleteTarget && titleOf(deleteTarget); deleteDoc(deleting); notify({ message: `Deleted “${t}”`, tone: "info" }); setDeleting(null); setRow(null) } }}>Delete</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    {/* Renaming in place: a field over the row's name, the text selected. */}
+    {renaming && row && row.id === renaming && (
+      <div className="absolute inset-x-0 z-20 flex items-center" style={{ top: row.top, height: row.height, paddingInlineStart: row.textLeft - 7 }}>
+        <InlineRename id={renaming} className="me-1 h-7 flex-1 text-body"
+          onDone={() => setRenaming(null)} />
+      </div>
+    )}
   </>
 }

@@ -56,7 +56,26 @@
 .ohm-prose ::selection { background: color-mix(in oklab, var(--ohm-forest) 22%, transparent); }
 :root[data-theme="dark"] .ohm-prose ::selection { background: color-mix(in oklab, var(--ohm-green-light) 28%, transparent); }
 
-/* [[links]] and @mentions read as links; ⌘-click follows them while editing. */
+/* [[links]]: a chunk of green text, the linked page's title; the raw [[slug]] is hidden until the
+   caret is in it. Hover shows the page (LinkPreview) and shades it green in the tree. */
+.ohm-prose .ohm-link {
+  color: var(--ohm-forest);
+  background: color-mix(in oklab, var(--ohm-green-light) 22%, transparent);
+  border-radius: var(--ohm-radius-chip);
+  padding: .05em .3em;
+  margin: 0 .05em;
+  cursor: pointer;
+  transition: background-color var(--ohm-duration-state) var(--ohm-ease-out);
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.ohm-prose .ohm-link:hover, .ohm-prose .ohm-link.is-hovered { background: color-mix(in oklab, var(--ohm-green-light) 40%, transparent); }
+.ohm-prose .ohm-link.is-raw { cursor: text; font-family: var(--ohm-font-mono, ui-monospace, monospace); font-size: .92em; }
+.ohm-prose .ohm-link.is-missing { color: var(--ohm-muted); background: var(--ohm-wash); text-decoration: line-through dotted; }
+.ohm-prose .ohm-link-source { font-size: 0; letter-spacing: 0; }
+:root[data-theme="dark"] .ohm-prose .ohm-link { color: var(--ohm-green-light); background: color-mix(in oklab, var(--ohm-green-light) 14%, transparent); }
+:root[data-theme="dark"] .ohm-prose .ohm-link:hover { background: color-mix(in oklab, var(--ohm-green-light) 26%, transparent); }
+
+/* @mentions read as links; ⌘-click follows them while editing. */
 .ohm-prose .ohm-ref { color: var(--ohm-forest); text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--ohm-forest) 35%, transparent); text-underline-offset: 3px; cursor: pointer; }
 :root[data-theme="dark"] .ohm-prose .ohm-ref, :root[data-theme="dark"] .ohm-prose a { color: var(--ohm-green-light); }
 

@@ -3,6 +3,7 @@ import { Extension, type Editor, type Range } from "@tiptap/react"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
 import Suggestion, { type SuggestionKeyDownProps } from "@tiptap/suggestion"
+import { bySlug, titleOf } from "@/data/sample"
 
 // ─── "/" menu ──────────────────────────────────────────────────────────────────
 // The suggestion plugin finds "/query"; the React menu (SlashMenu) draws it from this small store.
@@ -59,22 +60,43 @@ export const References = (onFollow: (ref: { slug?: string; handle?: string }) =
           props: {
             decorations(state) {
               const decos: Decoration[] = []
+              const { from: selFrom, to: selTo } = state.selection
               state.doc.descendants((node, pos) => {
                 if (!node.isText || !node.text) return
                 for (const m of node.text.matchAll(REF)) {
                   const from = pos + m.index!, to = from + m[0].length
+                  const slug = m[1], handle = m[2]
+                  const target = slug ? bySlug(slug) : undefined
+                  // While the caret is in it, the link shows as written, so it can be edited.
+                  const editing = selTo >= from && selFrom <= to
+                  if (slug && !editing) {
+                    // [[slug]] reads as the linked page's title: a green chunk. The raw text stays in
+                    // the page (and in its Markdown), hidden.
+                    decos.push(Decoration.widget(from, () => {
+                      const chip = document.createElement("span")
+                      chip.className = target ? "ohm-link" : "ohm-link is-missing"
+                      chip.dataset.slug = slug
+                      chip.textContent = target ? titleOf(target) : slug
+                      return chip
+                    }, { side: -1, key: `link:${slug}:${from}` }))
+                    decos.push(Decoration.inline(from, to, { class: "ohm-link-source" }))
+                    continue
+                  }
                   decos.push(Decoration.inline(from, to, {
-                    class: "ohm-ref",
-                    "data-slug": m[1] ?? "",
-                    "data-handle": m[2] ?? "",
+                    class: slug ? "ohm-link is-raw" : "ohm-ref",
+                    "data-slug": slug ?? "",
+                    "data-handle": handle ?? "",
                   }))
                 }
               })
               return DecorationSet.create(state.doc, decos)
             },
             handleClick(view, _pos, event) {
-              const el = (event.target as HTMLElement).closest<HTMLElement>(".ohm-ref")
-              if (!el || !(event.metaKey || event.ctrlKey || !view.editable)) return false
+              const el = (event.target as HTMLElement).closest<HTMLElement>(".ohm-link:not(.is-raw), .ohm-ref")
+              if (!el) return false
+              // A link chip opens on a plain click; raw text and mentions need ⌘ while editing.
+              const chip = el.classList.contains("ohm-link")
+              if (!chip && !(event.metaKey || event.ctrlKey || !view.editable)) return false
               onFollow({ slug: el.dataset.slug || undefined, handle: el.dataset.handle || undefined })
               return true
             },

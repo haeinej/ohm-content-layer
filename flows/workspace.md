@@ -27,7 +27,7 @@ The rack sits on the page itself. The side panel and the main panel are separate
 | ohm dot | Nothing. The brand mark, at icon size |
 | Search (⌘K) | Unchanged. Search opens over everything |
 | New post (⌘N) | Unchanged. A private draft opens in the editor |
-| **Personal repository** | The repository, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders, **cortex** (a minimal brain) and **vault** (a minimal box), are bold forest rows that open in place. Their icons are outlines when closed and filled when open. A chevron-all button opens or closes everything, and a Tree/Graph switch shows the same scope as a graph inside the panel. Drag a page from the tree onto the main panel to open it, or onto a vault folder to file it there. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device. Hover a page for its **⋯** (right-click opens the same menu): **Open in ›** (this window, a new tab, the graph), **Pin** (P: pinned pages show on top), **Mark as unread** (U: a forest dot and bold title until opened), **Rename** (R), **Fork** (F: a private copy, opened), **Move to section ›**, **Archive** (A: out of the tree, into Archived at the bottom, with Restore), **Delete** (D, red, asks first). The letters work while the menu is open or the row has focus |
+| **Personal repository** | The repository, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders, **cortex** (a minimal brain) and **vault** (a minimal box), are bold forest rows that open in place. Their icons are outlines when closed and filled when open. A chevron-all button opens or closes everything, and a Tree/Graph switch shows the same scope as a graph inside the panel. Drag a page from the tree onto the main panel to open it, or onto a vault folder to file it there. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device. Hover a page for its **⋯** (right-click opens the same menu): **Open in ›** (this window, a new tab, the graph), **Pin** (P: pinned pages show on top), **Mark as unread** (U: a forest dot and bold title until opened), **Rename** (R: in place on the row, the name selected; Enter or leaving keeps it, Escape puts it back), **Move to section ›**, **Archive** (A: out of the tree, into Archived at the bottom, with Restore), **Delete** (D, red, asks first). The letters work while the menu is open or the row has focus |
 | **Visibility** | *View as* Only you, Friends or Public, with a check beside the current one. The repository, the graph and the page then show only what that audience can see, with a "Viewing as…" bar and Back to you |
 | **Inbox** | Replies, mentions, friend requests and cortex notes, newest first, with new ones marked. One about a post opens that post; the others open in the main panel |
 | **Notifications** (bell) | Unchanged. A panel opens beside the rack, after agentic-twitter's notification center. **Agent** shows what an agent is doing now (its status), then what agents did through the page's WebMCP tools. **System** shows the workspace's notices. Each item shows how long ago it happened, can be removed on hover, and opens the page it is about. Clear all empties the list. A dot on the bell means something is unread; it pulses light green while an agent is working. Opening a tab marks it read |
@@ -70,8 +70,9 @@ How it looks and behaves, as Obsidian's graph view does (from the screen recordi
 Every page opens in the main panel in one block editor, built after the reference recordings (Tiptap underneath, so the page is Markdown).
 
 - **Path.** The toolbar starts with the page's path in a pill, such as `vault / writing / journal / Monday, rain`.
+  - **Rename:** click the page's name to rename it in place, with a forest ring around it and the text selected.
   - **Save by dragging:** drag the pill out of the window to save the page as a `.md` file, or onto a vault folder in the side panel to file it there.
-  - **Its menu:** Open file… (a `.md` or `.txt` file becomes a new private page), Save as Markdown, and Move to (a vault folder).
+  - **The ⌄ beside it** opens the page's menu, as a session list has it: Open in › (new tab, graph), Rename (R), Open file…, Save as Markdown, Move to section ›, Archive (A), Delete (D, asks first).
 - **Toolbar.** After the path, a pill of inserts: Text, Image, Table, and + for everything. On the right: History and you. Toolbar inserts go after the block the caret is in, never inside a table or list.
 - **Dropping.**
   - **Images** dropped or pasted onto the page go in where they land. Image in the toolbar or `/` opens a file picker.
@@ -89,10 +90,15 @@ Every page opens in the main panel in one block editor, built after the referenc
   - Columns resize by dragging their edges.
   - **Cells:** the cell with the caret is outlined in forest, and a selection of cells is tinted. Over a cell selection, the floating bar keeps only Ask for change and the marks.
 - **Selected text** brings up the floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), Bold, Italic, Underline, Strikethrough, Code, and **Text ▾** to turn the block into another kind (with a check on the current one).
-- **Links.** `[[slug]]` and `@handle` read as links. Click to follow them on a read-only page, or ⌘-click while editing. They stay plain text in the Markdown, so search and the graph still find them.
+- **Links.** A `[[slug]]` reads as a chunk of green text: the linked page's title, with the brackets hidden. While the caret is inside it, it shows as written, so it can be edited, as in Obsidian's live preview.
+  - **Hover:** a card shows the linked page (its path, title and opening lines), and the page is shaded green in the side panel's tree.
+  - **Click:** opens the page.
+  - **Missing pages:** a link to a page that doesn't exist reads muted and struck through.
+  - **Mentions:** an `@handle` reads as a link; ⌘-click follows it while editing.
+  - **Markdown:** both stay plain text, so search and the graph still find them.
 - **Saving.** A private page saves as you type, and it stays private. A page other people can see opens read-only, with "changing it asks first". The `workspace.save-draft` tool takes Markdown and writes into the open page.
 - **Motion.** Menus, handles and the floating bar fade and scale in on ohm's durations and easing. Reduced motion turns this off.
-- **Not in the editor:** templates, the image placeholder with Generate and Attach, comments, and Share. All were removed on request; who a page is for is set in Visibility.
+- **Not in the editor:** templates, the image placeholder with Generate and Attach, comments, Share, and Fork. All were removed on request; who a page is for is set in Visibility.
 - **Code:** in `src/editor/`.
   - `PageEditor.tsx`: the page, the path pill and the block menu.
   - `TableControls.tsx`: row and column handles and the add bars.
@@ -162,7 +168,7 @@ Publishing is not part of this flow. It will be its own flow, with `consequentia
 | --- | --- |
 | State and the shared handlers | `src/workspace/store.ts` |
 | Rack | `src/workspace/Rack.tsx`; the bell: `NotificationCenter.tsx`, `notifications.ts` |
-| Side panel: repo, visibility, inbox, you | `src/workspace/SidePanel.tsx`, `Surface.tsx`; the ⋯ menu: `RowMenu.tsx` |
+| Side panel: repo, visibility, inbox, you | `src/workspace/SidePanel.tsx`, `Surface.tsx`; the ⋯ menu: `RowMenu.tsx`; rename in place and delete: `PageActions.tsx` |
 | Main panel and settings | `src/workspace/MainPanel.tsx`, `Settings.tsx`, `settings-tabs.ts` |
 | The page editor | `src/editor/` |
 | Search sheet and the one search path (vault, cortex, people, settings) | `src/workspace/SearchOverlay.tsx`, `src/data/search.ts` (`setSearchProvider`) |

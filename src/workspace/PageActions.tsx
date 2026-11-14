@@ -1,0 +1,83 @@
+// What a page can do, shared by the tree's ⋯ and the editor's path: renaming in place, and deleting
+// after asking. Both menus call these, so a page behaves the same wherever you reach it.
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { notify } from "@/components/ui/notice"
+import { byId, titleOf } from "@/data/sample"
+import { cn } from "@/lib/cn"
+import { deleteDoc, renameDoc } from "./store"
+
+/**
+ * A name edited in place: the text selected, a forest ring. Enter or leaving keeps it; Escape puts
+ * it back. Nothing is saved when it is empty or unchanged.
+ */
+export function InlineRename({ id, className, onDone }: { id: string; className?: string; onDone: () => void }) {
+  const doc = byId(id)
+  const [value, setValue] = useState(doc?.title ?? "")
+  const ref = useRef<HTMLInputElement>(null)
+  const finished = useRef(false)
+  useEffect(() => { ref.current?.focus(); ref.current?.select() }, [])
+  const finish = (keep: boolean) => {
+    if (finished.current) return
+    finished.current = true
+    const next = value.trim()
+    if (keep && doc && next && next !== doc.title) renameDoc(id, next)
+    onDone()
+  }
+  if (!doc) return null
+  return (
+    <input ref={ref} value={value} aria-label="Name" spellCheck={false}
+      onChange={e => setValue(e.target.value)}
+      onKeyDown={e => {
+        e.stopPropagation()
+        if (e.key === "Enter") { e.preventDefault(); finish(true) }
+        if (e.key === "Escape") { e.preventDefault(); finish(false) }
+      }}
+      onBlur={() => finish(true)}
+      onPointerDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
+      className={cn(
+        "min-w-0 rounded-md bg-background px-1.5 text-foreground outline-none ring-2 ring-primary/70 selection:bg-primary/25 dark:ring-(--ohm-green-light)/70",
+        "animate-in fade-in-0 duration-(--ohm-duration-press)",
+        className,
+      )} />
+  )
+}
+
+// ─── Delete, after asking ─────────────────────────────────────────────────────
+
+let asking: string | null = null
+const listeners = new Set<() => void>()
+export function requestDelete(id: string) { asking = id; listeners.forEach(l => l()) }
+const close = () => { asking = null; listeners.forEach(l => l()) }
+
+/** Mounted once; any menu asks through requestDelete. */
+export function DeleteDialog() {
+  const id = useSyncExternalStore(l => (listeners.add(l), () => listeners.delete(l)), () => asking)
+  const doc = id ? byId(id) : undefined
+  return (
+    <Dialog open={!!doc} onOpenChange={o => !o && close()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete “{doc && titleOf(doc)}”?</DialogTitle>
+          <DialogDescription>
+            {doc?.visibility === "private"
+              ? "It is removed from your vault. This cannot be undone."
+              : "It is removed from your vault. If it is published, taking it down from your repository is its own step, and copies others made stay where they are."}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={close}>Cancel</Button>
+          <Button variant="destructive" onClick={() => {
+            if (!doc) return
+            const t = titleOf(doc)
+            deleteDoc(doc.id)
+            notify({ message: `Deleted “${t}”`, tone: "info" })
+            close()
+          }}>Delete</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

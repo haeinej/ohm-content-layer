@@ -230,20 +230,6 @@ export function renameDoc(id: string, title: string) {
   set(bump())
 }
 
-/** A private copy beside the original, opened in the editor. */
-export function forkDoc(id: string) {
-  const doc = byId(id)
-  if (!doc) return
-  const draft = createDraft({ label: doc.kind === "post" ? doc.label : "other", title: `${titleOf(doc)} (fork)` })
-  const copy = byId(draft.id)!
-  copy.sublabel = doc.kind === "post" ? doc.sublabel : undefined
-  // Older pages start with "# Title"; the copy has its own title, so that line goes.
-  copy.body = doc.body.replace(new RegExp(`^#\\s+${doc.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n*`), "")
-  copy.icon = doc.icon
-  set(bump())
-  return draft
-}
-
 /** Removes a page from the vault. Taking a published one down from the repository is its own step. */
 export function deleteDoc(id: string) {
   for (const list of [posts, all]) {

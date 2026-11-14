@@ -154,3 +154,9 @@
 :root[data-theme="dark"] [data-slot=file-tree-item][data-unread]::after { background: var(--ohm-green-light); }
 /* While the ⋯ is over a row, the dot steps aside. */
 [data-slot=file-tree-item]:hover[data-unread]::after { opacity: 0; }
+
+/* The page a hovered [[link]] points to: shaded green, the same shape as every row's shade. */
+[data-slot=file-tree-item][data-linked]::before { background-color: color-mix(in oklab, var(--ohm-green-light) 32%, var(--ohm-card)); }
+[data-slot=file-tree-item][data-linked] { color: var(--ohm-forest); }
+:root[data-theme="dark"] [data-slot=file-tree-item][data-linked] { color: var(--ohm-green-light); }
+:root[data-theme="dark"] [data-slot=file-tree-item][data-linked]::before { background-color: color-mix(in oklab, var(--ohm-green-light) 16%, var(--ohm-card)); }
