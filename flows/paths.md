@@ -31,13 +31,16 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | A9 | Preview a link | Hover a green `[[link]]` | A card shows the page's path, title and opening lines; the page is shaded green in the tree | Check where a link goes without leaving | *UI only* |
 | A10 | Open by dragging | Drag a page from the tree onto the main panel | That page is open | Open by direct manipulation | *UI only* |
 | A11 | Open a file | Drop a `.md` or `.txt` on the main panel, or Path ⌄ → Open file… | A new **private** page with the file's name and text is open | Bring writing in from your disk | *UI only* |
+| A13 | **Back and forward** | Toolbar ← →, or ⌘[ and ⌘] | The previous or next page you opened is open again, revealed in the tree | Retrace your steps | *UI only* |
 | A12 | Open in a new tab | Row ⋯ or Path ⌄ → Open in › New tab | The page opens in a new tab (`?open=<id>`) | Keep two pages side by side | *UI only* |
 
 ## B. The personal repository (side panel)
 
 | # | Path | Entry → steps | End state | For | Agent |
 | --- | --- | --- | --- | --- | --- |
-| B1 | Show or hide the panel | Rack Personal repo | The panel shows or hides | Make room, or come back to your files | *UI only* |
+| B1 | Show or hide the panel | Rack Personal repo, or ⌘\ (brings back the panel you last had) | The panel shows or hides; the open page never changes | Make room, or come back to your files | *UI only* |
+| B1a | **Reveal the open page** | Automatic: open a page from anywhere | Its folders open in the tree; it scrolls into view, is selected and flashes once | Always know where you are | Any tool that opens a page |
+| B1b | Reveal a folder from the path | Click a folder in the path pill | The panel shows the repository with that folder open, scrolled to, flashing | Jump from where a page lives to its neighbours | *UI only* |
 | B2 | Choose what shows | Your pill (picture and name) → All, or Cortex and/or Vault | The tree and graph show only those | Focus on memory, or on writing | *UI only* |
 | B3 | Open and close folders | Click a folder or the cortex/vault row; the header chevron opens or closes everything | Folders open or closed (cortex, vault, labels, sublabels) | Walk the hierarchy | *UI only* |
 | B4 | Expand one side | Cortex or vault ⋯ → Expand all / Collapse all (E) | Everything inside that one opens or closes | Survey one side at once | *UI only* |
@@ -50,8 +53,8 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | B11 | **Rename a page** | Row ⋯ → Rename (R), or click the page's name in the path pill | The name, in place, ringed in forest; Enter or leaving keeps it, Escape puts it back | Fix or improve a title | *UI only* (or `workspace.save-draft` with `title`, private pages) |
 | B12 | **Rename a folder** | Folder ⋯ → Rename (R) | The label or sublabel is renamed; every page in it is refiled; it stays open. The notice counts published pages whose address follows on the next publish | Keep your sections in your own words | *UI only* |
 | B13 | Move a page | Row ⋯ or Path ⌄ → Move to section ›, or drag the row (or the path pill) onto a vault folder | The page is filed there | Reorganise | *UI only* |
-| B14 | Archive | Row ⋯ or Path ⌄ → Archive (A) | The page leaves the tree for Archived · n at the bottom; Restore brings it back | Clear clutter without deleting | *UI only* |
-| B15 | Delete | Row ⋯ or Path ⌄ → Delete (D) → **confirm** | The page is removed from the vault. For a published page, the dialog says taking it down is its own step | Remove what you don't want | *UI only* · **asks first** |
+| B14 | Archive | Row ⋯ or Path ⌄ → Archive (A) | The page leaves the tree for Archived · n at the bottom; Restore brings it back. If it is open, it stays open with an "archived" bar and Restore | Clear clutter without deleting | *UI only* |
+| B15 | Delete | Row ⋯ or Path ⌄ → Delete (D) → **confirm** | The page is removed from the vault. If it was open, the page you had before it opens (never a blank editor). For a published page, the dialog says taking it down is its own step | Remove what you don't want | *UI only* · **asks first** |
 | B16 | Shortcuts on a row | Focus a row → P, U, R, A, D (pages) or N, R (folders) | As B9–B15, without opening the menu | Work fast from the keyboard | *UI only* |
 
 ## C. Visibility (inside the personal repository)
@@ -61,7 +64,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | C1 | Show who each page is for | Repository header eye | Each page shows an icon at its end: globe (Everyone), people (Friends), lock (Only you); the label is on hover | See at a glance what is shared | *UI only* |
 | C2 | **Make a page less private** | Click a page's icon → Friends or Everyone → **confirm** | The page is *marked* for that audience. It is **not published**: it reaches your site and other apps only when you publish | Decide who a page is for | *UI only* · **asks first** |
 | C3 | Make a page more private | Click its icon → Friends or Only you | Marked at once (no confirmation needed) | Pull something back | *UI only* |
-| C4 | **View as someone else** | With visibility shown: View as You / Friends / Public | The tree, graph and page show only what that audience can see; the cortex is locked; a bar says "Viewing as…" with Back to you | Check what others actually see before you publish | *UI only* |
+| C4 | **View as someone else** | With visibility shown: View as You / Friends / Public | The tree, graph and page show only what that audience can see; the cortex is locked; a bar says "Viewing as…" with Back to you. If the open page is one they can't see, the editor says so instead of showing it | Check what others actually see before you publish | *UI only* |
 | C5 | Back to yourself | Back to you, choose You, or hide visibility | Everything is visible again | Return to editing | *UI only* |
 
 ## D. The graph
@@ -112,6 +115,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | # | Path | Entry → steps | End state | For | Agent |
 | --- | --- | --- | --- | --- | --- |
 | G1 | Open settings | Rack avatar | The side panel shows you (picture, name, handle) and the settings sections; the main panel shows one | Manage your account and workspace | *UI only* |
+| G1a | Leave settings | Done, or the avatar again | The page and panel you came from are back | Return to work where you left it | *UI only* |
 | G2 | Your profile | Settings → Your profile | Name, description and picture fields; Review changes notes that publishing your profile asks first | Shape how other apps show you | *UI only* · publishing **asks first** |
 | G3 | Identity | Settings → Identity | Your DID (copy), handle, server | Know and share your root identity | *UI only* |
 | G4 | **Agents** | Settings → Agents → Let agents use this page; one switch per tool | Tools are offered to an agent, or withdrawn, at once | Control what an agent can do here | Governs every tool |
@@ -138,13 +142,15 @@ Nothing an agent can do here is public. Making a page visible to others, deletin
 
 | After… | It is true that… |
 | --- | --- |
-| Opening anything | One page is open in the editor; the tree shows it selected; its unread dot is gone |
+| Opening anything | One page is open in the editor; the tree has revealed it and shows it selected; the graph rings it; it is in your back/forward history; its unread dot is gone |
 | Writing | The page is saved and still private |
 | Renaming or moving | The tree, path pill, editor title, search and graph all agree. For a published page, its address follows when you next publish |
 | Marking who a page is for | It is marked, not published. Showing it to more people needed your yes |
 | Viewing as Friends or Public | You see exactly what they would; your cortex is hidden; you are one click from Back to you |
 | Archiving | Out of the tree, kept, restorable |
-| Deleting | Gone from the vault, after your yes. Published copies are handled by a separate take-down step |
+| Deleting | Gone from the vault, after your yes; you are on the page you had before. Published copies are handled by a separate take-down step |
+| Hiding the panel | The page you were on is still open; ⌘\\ brings the panel back as it was |
+| Leaving settings | You are back on the page and panel you came from |
 | An agent acting | You saw it working, the bell recorded what it did, and nothing became public |
 
 ## Not yet (reserved paths)

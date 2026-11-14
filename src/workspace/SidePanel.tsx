@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { cortex, inbox, people, posts, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
+import { byId, cortex, inbox, people, posts, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
@@ -184,6 +184,27 @@ function RepoPanel() {
     ...(showVault ? ["prime:vault", ...folderIds(vaultTree)] : []),
   ], [cortexTree, vaultTree, showCortex, showVault])
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["prime:cortex", "prime:vault", ...folderIds(vaultTree)]))
+  // The tree follows the open page: when something asks to be revealed (a page opened from anywhere,
+  // or a folder from the path pill), the way to it opens, it scrolls into view and flashes once.
+  const { reveal } = useWorkspace()
+  useEffect(() => {
+    if (!reveal || repoMode !== "tree") return
+    const doc = byId(reveal.target)
+    const [prime, path] = doc ? [doc.kind === "post" ? "vault" : "cortex", doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label]
+      : (reveal.target.split(":") as [string, string])
+    const parts = path.split("/")
+    const ways = [`prime:${prime}`, ...parts.map((_, i) => `${prime}:${parts.slice(0, i + 1).join("/")}`)]
+    setExpanded(s => (ways.every(w => s.has(w)) ? s : new Set([...s, ...ways])))
+    const t = setTimeout(() => {
+      const row = treeRef.current?.querySelector<HTMLElement>(`[data-slot=file-tree-item][data-id="${CSS.escape(reveal.target)}"]`)
+      if (!row) return
+      row.scrollIntoView({ block: "nearest", behavior: "smooth" })
+      row.setAttribute("data-flash", "")
+      setTimeout(() => row.removeAttribute("data-flash"), 900)
+    }, 60)
+    return () => clearTimeout(t)
+  }, [reveal?.n, repoMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // A renamed folder stays as open as it was, with its subfolders.
   useEffect(() => {
     const moved = (e: Event) => {

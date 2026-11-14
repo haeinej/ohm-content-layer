@@ -6,7 +6,7 @@ import { MainPanel } from "@/workspace/MainPanel"
 import { Rack } from "@/workspace/Rack"
 import { SearchOverlay } from "@/workspace/SearchOverlay"
 import { SidePanel } from "@/workspace/SidePanel"
-import { createDraft, setSearchOpen, showGraph, useWorkspace } from "@/workspace/store"
+import { createDraft, go, setSearchOpen, showGraph, togglePanel, useWorkspace } from "@/workspace/store"
 import { useWorkspaceTools } from "@/workspace/tools"
 
 export function App() {
@@ -17,7 +17,10 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.isComposing) return
       const k = e.key.toLowerCase()
-      const run = { k: () => setSearchOpen(!searchOpen), n: () => createDraft(), g: () => showGraph() }[k]
+      const run = {
+        k: () => setSearchOpen(!searchOpen), n: () => createDraft(), g: () => showGraph(),
+        "[": () => go(-1), "]": () => go(1), "\\": () => togglePanel(),
+      }[k]
       if (run) { e.preventDefault(); run() }
     }
     window.addEventListener("keydown", onKey, true)

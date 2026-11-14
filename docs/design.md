@@ -57,6 +57,22 @@ Each is one closed shape and one inner mark, on Lucide's 24 grid with a stroke o
 
 Nodes are coloured by kind, from ohm's palette only: the person forest, the cortex light green, vault labels ink, sublabels ink at 60%, posts grey, other people hollow. Red is never used here; it means destructive.
 
+## The side panel and the editor: one active page
+
+The workspace is a navigator (the side panel) and an editor (the main panel), as VS Code, Obsidian, Notion and Finder are. They stay connected through one idea: the open page. These are the rules, and the code that keeps them:
+
+1. **One active page drives everything.** The tree's selection, the graph's ring, the path pill and the title all follow it. Every change of open page goes through one place, `set` in `src/workspace/store.ts`, so no path can skip a rule.
+2. **The tree follows the editor.** Opening a page from anywhere (search, a link, the graph, the inbox, an agent's tool) reveals it in the tree. Its folders open, it scrolls into view, and it flashes once.
+3. **The two sides are independent.** Hiding the panel (its rack button, or ⌘\) never closes the page, and closing a page never changes the panel. The panel keeps its own open folders, scope, width and scroll, and ⌘\ brings back the panel you last had.
+4. **Navigation has history.** Back and forward in the toolbar, or ⌘[ and ⌘], walk the pages you opened. A page opened again moves to the end, not twice.
+5. **Modes return you.** Settings remembers the page and panel you came from; Done, or the avatar again, takes you back.
+6. **Destructive actions land you somewhere.**
+   - **Delete:** deleting the open page lands on the page before it in history (or after it), never a blank editor.
+   - **Archive:** archiving the open page keeps it open, with a bar that says so and offers Restore.
+7. **The path is a breadcrumb.** Each folder in the path pill reveals itself in the tree.
+8. **Filters never lie.** While viewing as Friends or Public, a page that audience can't see is not shown. The editor says who can't see it and offers Back to you.
+9. **Narrow screens:** the panel lies over the editor, and closes when something opens.
+
 ## Upstream
 
 Two of these belong in ohm-ui, so that every app gets them: one radius for every surface, and the compact density. Until they are there, `src/theme.css` is the only place they live.

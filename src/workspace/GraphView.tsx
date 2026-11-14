@@ -63,7 +63,9 @@ const floating = "rounded-2xl bg-popover text-popover-foreground shade-3"
 
 /** Lives in the side panel, in the personal repository. What it draws follows the repository's scope (all, cortex, vault) and who you are looking as. */
 export function GraphView() {
-  const { rev, scope, audience, graphCenter: center } = useWorkspace()
+  const { rev, scope, audience, graphCenter: center, view } = useWorkspace()
+  // The open page is ringed in the graph too: one active page, everywhere.
+  const activeId = view.kind === "doc" ? view.id : null
   const include = useMemo(() => scopeFolders(scope), [scope])
   const [filters, setFilters] = useState({ people: DEFAULT_FILTERS.people, links: DEFAULT_FILTERS.links })
   const graph = useMemo(() => buildGraph({ center, ...include, audience, ...filters }), [center, include, audience, filters, rev]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -260,7 +262,7 @@ export function GraphView() {
                 {/* A larger, invisible target: small nodes are easy to hit. */}
                 <circle r={Math.max(r + 6, 12)} className="fill-transparent" />
                 {/* Dots sized by connections, as in Obsidian, coloured by what they are (KIND_FILL). */}
-                {isLit && n.layer !== 0 && <circle r={r + 3.5} className="fill-none stroke-primary dark:stroke-foreground" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
+                {(isLit || n.id === activeId) && n.layer !== 0 && <circle r={r + 3.5} className="fill-none stroke-primary dark:stroke-foreground" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
                 <circle r={r} strokeWidth={1.5} vectorEffect="non-scaling-stroke"
                   className={cn("transition-[fill,stroke] duration-(--ohm-duration-open) ease-(--ohm-ease-out)", kindFill(n))} />
               </g>

@@ -2,7 +2,7 @@ import { AgentStatus } from "@/components/agent-status"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { notify } from "@/components/ui/notice"
-import { byId, inbox } from "@/data/sample"
+import { byId, inbox, sees, titleOf } from "@/data/sample"
 import { PageEditor } from "@/editor/PageEditor"
 import { cn } from "@/lib/cn"
 import { SettingsView } from "./Settings"
@@ -25,7 +25,18 @@ export function MainPanel() {
       )}
       {agent && <AgentStatus state={agent.state} label={agent.label} className="absolute top-16 right-4 z-10 animate-in fade-in-0 slide-in-from-top-1" />}
 
-      {doc ? (
+      {doc && audience !== "personal" && !sees(audience, doc) ? (
+        // Viewing as someone else never shows what they couldn't see.
+        <Empty className="flex-1">
+          <EmptyHeader>
+            <EmptyTitle>{audience === "friends" ? "Friends" : "Anyone"} can't see this page</EmptyTitle>
+            <EmptyDescription>“{titleOf(doc)}” is for {doc.kind === "post" && doc.visibility === "friends" ? "friends" : "you only"}.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent className="flex-row justify-center">
+            <Button variant="ghost" onClick={() => setAudience("personal")}>Back to you</Button>
+          </EmptyContent>
+        </Empty>
+      ) : doc ? (
         <PageEditor key={doc.id} doc={doc} />
       ) : view.kind === "settings" ? (
         <>

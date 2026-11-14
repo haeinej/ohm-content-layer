@@ -164,3 +164,8 @@
 /* With visibility shown, rows leave room at their end for the who-it-is-for pill. */
 [data-show-visibility] [data-slot=file-tree-item], [data-show-visibility] [data-row-id] { padding-inline-end: 4.25rem; }
 [data-show-visibility] [data-slot=file-tree-item][data-unread]::after { inset-inline-end: 4.5rem; }
+
+/* A row the tree has just revealed flashes once, so the eye finds it. */
+@keyframes ux-flash { 0% { background-color: color-mix(in oklab, var(--ohm-green-light) 45%, var(--ohm-card)); } 100% { background-color: var(--ux-row-selected); } }
+[data-slot=file-tree-item][data-flash]::before { animation: ux-flash 900ms var(--ohm-ease-out); }
+@media (prefers-reduced-motion: reduce) { [data-slot=file-tree-item][data-flash]::before { animation: none; } }

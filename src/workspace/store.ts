@@ -45,6 +45,15 @@ type State = {
   rev: number
   appearance: Appearance
   density: Density
+  /** Pages opened, oldest first, and where we are in them: back and forward walk this. */
+  history: string[]
+  at: number
+  /** Where to go back to when settings close. */
+  returnTo: { view: View; side: Side } | null
+  /** Ask the tree to show something (a page or a folder): it opens the way to it and scrolls to it. */
+  reveal: { target: string; n: number } | null
+  /** The panel last shown, for ⌘\ to bring back. */
+  lastSide: Exclude<Side, null>
   agentsAllowed: boolean
   offered: Record<ToolName, boolean>
 }
@@ -57,10 +66,22 @@ let state: State = {
   side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal", showVisibility: false,
   graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0,
   appearance: "system", density: savedDensity(), agentsAllowed: true,
+  history: [], at: -1, returnTo: null, reveal: null, lastSide: "repo",
   offered: { "workspace.search": true, "workspace.open": true, "workspace.graph": true, "workspace.create": true, "workspace.save-draft": true },
 }
 const listeners = new Set<() => void>()
+let walking = false
 const set = (patch: Partial<State>) => {
+  // The one place the open page changes: record it in history, and have the tree reveal it.
+  const next = patch.view
+  if (next?.kind === "doc" && !(state.view.kind === "doc" && state.view.id === next.id)) {
+    if (!walking) {
+      const history = [...state.history.slice(0, state.at + 1).filter(id => id !== next.id), next.id].slice(-50)
+      patch = { ...patch, history, at: history.length - 1 }
+    }
+    patch = { ...patch, reveal: { target: next.id, n: (state.reveal?.n ?? 0) + 1 } }
+  }
+  if (patch.side) patch = { ...patch, lastSide: patch.side }
   state = { ...state, ...patch }
   listeners.forEach(l => l())
 }
@@ -70,7 +91,39 @@ export const useWorkspace = () =>
   useSyncExternalStore(cb => (listeners.add(cb), () => listeners.delete(cb)), () => state)
 
 // Rack
-export const toggleSide = (side: Exclude<Side, null>) => set({ side: state.side === side ? null : side })
+export const toggleSide = (side: Exclude<Side, null>) => {
+  if (state.side === "profile" && state.view.kind === "settings") return closeSettings()
+  set({ side: state.side === side ? null : side })
+}
+/** ⌘\: hide the side panel, or bring back the one last shown. The page stays as it is either way. */
+export const togglePanel = () => set({ side: state.side ? null : state.lastSide })
+
+// History
+const existing = (id: string) => !!byId(id)
+export const canGo = (dir: -1 | 1) => {
+  for (let i = state.at + dir; i >= 0 && i < state.history.length; i += dir) if (existing(state.history[i])) return true
+  return false
+}
+export function go(dir: -1 | 1) {
+  for (let i = state.at + dir; i >= 0 && i < state.history.length; i += dir) {
+    const id = state.history[i]
+    if (!existing(id)) continue
+    walking = true
+    set({ view: { kind: "doc", id, mode: "read" }, at: i, ...sideAfterOpen() })
+    walking = false
+    return true
+  }
+  return false
+}
+
+/** Shows a folder in the tree: the panel opens on the repository, and the way to it opens. */
+export function revealFolder(prime: "vault" | "cortex", path: string) {
+  set({
+    side: "repo", repoMode: "tree",
+    scope: { ...state.scope, [prime]: true },
+    reveal: { target: `${prime}:${path}`, n: (state.reveal?.n ?? 0) + 1 },
+  })
+}
 export const setSearchOpen = (searchOpen: boolean) => set({ searchOpen })
 export const setAgent = (agent: State["agent"]) => set({ agent })
 
@@ -107,9 +160,16 @@ export function openInbox(id: string) {
 
 // Profile and settings
 export function openSettings(tab: SettingsTab = "profile") {
-  set({ side: narrow() && state.side === "profile" ? null : "profile", view: { kind: "settings", tab }, searchOpen: false })
+  // Remember where you were, once, so leaving settings goes back there.
+  const returnTo = state.view.kind === "settings" ? state.returnTo : { view: state.view, side: state.side === "profile" ? state.lastSide : state.side }
+  set({ side: narrow() && state.side === "profile" ? null : "profile", view: { kind: "settings", tab }, searchOpen: false, returnTo })
 }
-export const closeSettings = () => set({ side: "repo", view: { kind: "empty" } })
+/** Leaving settings: back to the page and panel you came from. */
+export function closeSettings() {
+  const back = state.returnTo
+  const view = back?.view.kind === "doc" && !byId(back.view.id) ? { kind: "empty" as const } : back?.view ?? { kind: "empty" as const }
+  set({ view, side: back?.side === "profile" ? "repo" : back?.side ?? "repo", returnTo: null })
+}
 export function setAppearance(appearance: Appearance) {
   document.documentElement.dataset.theme = appearance
   set({ appearance })
@@ -241,7 +301,20 @@ export function deleteDoc(id: string) {
     if (i >= 0) list.splice(i, 1)
   }
   for (const s of Object.values(marks)) s.delete(id)
-  set({ ...bump(), view: state.view.kind === "doc" && state.view.id === id ? { kind: "empty" } : state.view })
+  const wasOpen = state.view.kind === "doc" && state.view.id === id
+  // Take it out of history; the position moves back one if it was at or before where we are.
+  const idx = state.history.indexOf(id)
+  const history = state.history.filter(h => h !== id)
+  const at = idx >= 0 && idx <= state.at ? state.at - 1 : state.at
+  set({ ...bump(), history, at })
+  if (!wasOpen) return
+  // Deleting the open page lands on the page before it (or after it), never a blank editor.
+  const landing = history[at] ?? history[at + 1]
+  if (landing && byId(landing)) {
+    walking = true
+    set({ view: { kind: "doc", id: landing, mode: "read" }, at: history.indexOf(landing) })
+    walking = false
+  } else set({ view: { kind: "empty" } })
 }
 
 /**

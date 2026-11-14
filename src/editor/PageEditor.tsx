@@ -15,7 +15,7 @@ import Highlight from "@tiptap/extension-highlight"
 import { Markdown } from "@tiptap/markdown"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import {
-  ChevronDownIcon, ClockIcon, CopyIcon, DownloadIcon, FileTextIcon, FolderInputIcon, FolderOpenIcon, GripVerticalIcon, ImageIcon,
+  ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon, ClockIcon, CopyIcon, DownloadIcon, FileTextIcon, FolderInputIcon, FolderOpenIcon, GripVerticalIcon, ImageIcon,
   LockIcon, PlusIcon, SmilePlusIcon, TableIcon, Trash2Icon, TypeIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -32,7 +32,7 @@ import { byId, bySlug, posts, titleOf, type Doc } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
-import { autosave, marks, me, moveDoc, open, openFile, saveDraft, setIcon, showGraph, toggleArchive, useWorkspace } from "@/workspace/store"
+import { autosave, canGo, go, marks, me, moveDoc, open, openFile, revealFolder, saveDraft, setIcon, showGraph, toggleArchive, useWorkspace } from "@/workspace/store"
 import { InlineRename, requestDelete } from "@/workspace/PageActions"
 import { withAgent } from "@/workspace/tools"
 import { insertImage, insertImageFiles, insertTable, insertText } from "./commands"
@@ -109,12 +109,19 @@ function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown
       className={cn(pill, "h-9 min-w-0 max-w-[min(480px,58vw)] cursor-grab gap-1.5 ps-3 pe-0.5 text-small text-muted-foreground active:cursor-grabbing")}>
       <Icon icon={FileTextIcon} size="sm" className="flex-none" />
       <span className="flex min-w-0 items-center gap-1">
-        {path.slice(0, -1).map((seg, i) => (
-          <span key={i} className="flex min-w-0 flex-shrink items-center gap-1">
-            <span className="truncate">{seg}</span>
-            <span aria-hidden className="text-muted-foreground/60">/</span>
-          </span>
-        ))}
+        {path.slice(0, -1).map((seg, i) => {
+          // Each folder in the path shows itself in the tree.
+          const prime = path[0] as "vault" | "cortex"
+          const folder = path.slice(1, i + 1).join("/")
+          return (
+            <span key={i} className="flex min-w-0 flex-shrink items-center gap-1">
+              <button type="button" title={`Show ${seg} in the repository`}
+                onClick={() => (i === 0 ? revealFolder(prime, "") : revealFolder(prime, folder))}
+                className="truncate rounded-md px-0.5 transition-colors hover:bg-background hover:text-foreground">{seg}</button>
+              <span aria-hidden className="text-muted-foreground/60">/</span>
+            </span>
+          )
+        })}
         {renaming ? (
           <InlineRename id={doc.id} className="h-7 w-48 text-small font-medium"
             onDone={() => { setRenaming(false); onRenamed(byId(doc.id)?.title ?? doc.title) }} />
@@ -334,6 +341,10 @@ export function PageEditor({ doc }: { doc: Doc }) {
       {/* Toolbar: the page's path, then inserts; history, comments, you and sharing on the right. */}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
         <div className="flex min-w-0 items-center gap-1.5">
+          <div className={pill}>
+            <ToolButton label="Back (⌘[)" icon={ArrowLeftIcon} disabled={!canGo(-1)} onClick={() => go(-1)} />
+            <ToolButton label="Forward (⌘])" icon={ArrowRightIcon} disabled={!canGo(1)} onClick={() => go(1)} />
+          </div>
           <PathPill doc={doc} markdown={() => toMarkdown(editor)} onPickFile={() => fileInput.current?.click()} onRenamed={setTitle} />
           {editable && (
             <div className={pill}>
@@ -365,6 +376,12 @@ export function PageEditor({ doc }: { doc: Doc }) {
         </div>
       </div>
 
+      {marks.archived.has(doc.id) && (
+        <div role="status" className="mx-3 flex items-center justify-between gap-2 rounded-xl bg-muted px-4 py-2 text-small animate-in fade-in-0">
+          <span>This page is archived: it is out of your tree, and kept.</span>
+          <Button size="xs" variant="ghost" onClick={() => toggleArchive(doc.id)}>Restore</Button>
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[720px] px-14 pt-10 pb-40 max-md:px-6">
           {doc.icon && (
