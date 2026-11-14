@@ -72,6 +72,13 @@ export function forAgent({ fields, own, about }) {
 }
 export const shownValue = (field, value) => HIDDEN.includes(field) ? '(hidden)' : value;
 
+// A waiting proposal as an agent sees it. For a hidden field the evidence is hidden too: a quote
+// or passage that states a birthdate is the birthdate. Only where it came from is kept.
+export function proposalForAgent({ id, field, value, source }) {
+  if (!HIDDEN.includes(field)) return { id, field, value, source };
+  return { id, field, value: '(hidden)', source: { kind: source?.kind, ...(source?.post ? { post: source.post } : {}), hidden: true } };
+}
+
 export function checkField(field, value) {
   if (!Object.hasOwn(IDENTITY, field)) throw new Refused('InvalidIdentity', `${field} is not an identity field. The fields are: ${FIELDS.join(', ')}`);
   const checked = IDENTITY[field].check(value);
