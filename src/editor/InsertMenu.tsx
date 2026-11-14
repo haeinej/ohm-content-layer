@@ -23,7 +23,7 @@ export function InsertList({ groups, active, onPick, onHover }: {
             return (
               <button key={item.id} type="button" role="option" aria-selected={active === index} data-index={index}
                 onMouseMove={() => onHover?.(index)} onMouseDown={e => e.preventDefault()} onClick={() => onPick(item)}
-                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-body transition-colors duration-(--ohm-duration-press) aria-selected:bg-foreground/8">
+                className="ux-menu-row flex w-full items-center gap-2.5 text-left">
                 <Icon icon={item.icon} size="sm" className="text-muted-foreground" />
                 <span className="font-medium whitespace-nowrap">{item.label}</span>
                 {item.hint && <span className="truncate text-muted-foreground">{item.hint}</span>}
@@ -36,7 +36,7 @@ export function InsertList({ groups, active, onPick, onHover }: {
   )
 }
 
-const menuSurface = "rounded-lg bg-popover p-1 text-popover-foreground shade-4 backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-(--ohm-duration-open)"
+const menuSurface = "rounded-2xl bg-popover p-1 text-popover-foreground shade-4 backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-(--ohm-duration-open)"
 
 /** The "/" menu: follows the caret, filters as you type, arrows and Enter to pick. */
 export function SlashMenu() {

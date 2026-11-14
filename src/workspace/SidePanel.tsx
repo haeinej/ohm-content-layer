@@ -116,7 +116,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
 function PrimeRow({ prime, open: isOpen, onOpen, locked }: { prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean }) {
   return (
     <button type="button" aria-expanded={isOpen} onClick={onOpen} disabled={locked}
-      className="flex min-h-9 w-full items-center gap-1.5 rounded-md px-1.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted disabled:hover:bg-transparent">
+      className="flex min-h-9 w-full items-center gap-1.5 rounded-lg px-1.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted disabled:hover:bg-transparent">
       <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground transition-transform", locked && "invisible")} />
       <Icon icon={isOpen ? FolderOpenIcon : FolderIcon} size="sm" strokeWidth={2.5} className="text-primary dark:text-foreground" />
       <span className="text-body font-bold text-primary dark:text-foreground">{prime}</span>
@@ -204,7 +204,7 @@ function RepoPanel() {
           </>}
         </div>
       ) : (
-        <div className="-mx-1 flex min-h-0 flex-1 overflow-hidden rounded-md bg-background">
+        <div className="-mx-1 flex min-h-0 flex-1 overflow-hidden rounded-2xl bg-background">
           <GraphView />
         </div>
       )}
@@ -229,7 +229,7 @@ function VisibilityPanel() {
       <div role="radiogroup" aria-label="View as" className="flex flex-col gap-0.5">
         {AUDIENCES.map(a => (
           <button key={a.id} type="button" role="radio" aria-checked={audience === a.id} onClick={() => setAudience(a.id)}
-            className="flex min-h-12 items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted aria-checked:bg-muted">
+            className="flex min-h-12 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted aria-checked:bg-muted">
             <Icon icon={a.icon} size="sm" className="text-muted-foreground" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-body font-medium">{a.label}</span>
@@ -268,7 +268,7 @@ function InboxPanel() {
           return (
             <li key={i.id}>
               <button type="button" onClick={() => openInbox(i.id)} aria-current={current || undefined}
-                className="flex w-full items-start gap-3 rounded-md px-2.5 py-2.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted aria-[current=true]:bg-muted">
+                className="flex w-full items-start gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-muted aria-[current=true]:bg-muted">
                 <Avatar className="mt-0.5 size-8"><AvatarFallback className="bg-muted text-small text-muted-foreground">
                   {i.from === "cortex" ? <Icon icon={BrainIcon} size="sm" /> : i.from.slice(0, 1).toUpperCase()}
                 </AvatarFallback></Avatar>

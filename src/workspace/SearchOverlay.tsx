@@ -85,7 +85,7 @@ export function SearchOverlay() {
         "backdrop:bg-(--ohm-overlay) max-sm:p-2.5",
       )}
     >
-      <div className="mx-auto flex max-h-full min-h-0 w-[min(640px,100%)] flex-col rounded-lg bg-popover p-2.5 shade-5 backdrop-blur-xl"
+      <div className="mx-auto flex max-h-full min-h-0 w-[min(640px,100%)] flex-col rounded-2xl bg-popover p-2.5 shade-5 backdrop-blur-xl"
         onClick={e => e.stopPropagation()}>
         <div role="group" aria-label="Search categories" className="flex flex-none gap-1 overflow-x-auto px-1 pt-0.5 pb-2.5">
           <Button size="sm" variant="ghost" className={filter} aria-pressed={scope === "all"} onClick={() => filterBy("all")}>All</Button>
@@ -93,7 +93,7 @@ export function SearchOverlay() {
             <Button key={c.scope} size="sm" variant="ghost" className={filter} aria-pressed={scope === c.scope} onClick={() => filterBy(c.scope)}>{c.label}</Button>
           ))}
         </div>
-        <form className="flex flex-none items-center gap-2.5 rounded-md bg-muted py-1.5 ps-3 pe-1.5" onSubmit={e => { e.preventDefault(); submit() }}>
+        <form className="flex flex-none items-center gap-2.5 rounded-xl bg-muted py-1.5 ps-3 pe-1.5" onSubmit={e => { e.preventDefault(); submit() }}>
           <span className="flex size-icon flex-none items-center justify-center" aria-hidden>
             <span className="size-icon rounded-full bg-primary dark:bg-foreground" />
           </span>
@@ -137,7 +137,7 @@ export function SearchOverlay() {
                         <li key={h.id}>
                           <button type="button" role="option" id={`search-hit-${i}`} aria-selected={navigated && active === i}
                             onPointerMove={() => setSelected(i)} onClick={() => go(h)}
-                            className="flex min-h-15 w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-muted aria-selected:bg-muted">
+                            className="ux-menu-row flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted">
                             <Icon icon={g.icon} size="sm" className="text-muted-foreground" />
                             <span className="min-w-0 flex-1">
                               <strong className="block truncate text-body font-medium">{h.title}</strong>

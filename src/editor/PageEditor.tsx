@@ -305,7 +305,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
                 <PopoverTrigger render={<Button size="icon-sm" variant="ghost" aria-label="Insert" className={pillButton} />}>
                   <Icon icon={PlusIcon} size="sm" />
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto rounded-lg p-1">
+                <PopoverContent align="start" className="w-auto p-1">
                   <PlusMenu editor={editor} onClose={() => setPlusOpen(false)} />
                 </PopoverContent>
               </Popover>
@@ -326,7 +326,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
                 <Icon icon={MessageSquareIcon} size="sm" />
                 {comments.length > 0 && <span className="absolute top-1 right-1 size-1.5 rounded-full bg-primary dark:bg-foreground" />}
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 rounded-lg">
+              <PopoverContent align="end" className="w-80">
                 <p className="text-small text-muted-foreground">Comments</p>
                 {comments.length ? (
                   <ul className="flex flex-col gap-3">
@@ -366,7 +366,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
                 }>
                   <Icon icon={SmilePlusIcon} size="sm" />
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto rounded-lg">
+                <PopoverContent align="start" className="w-auto">
                   <IconPicker value={doc.icon} onPick={e => { setIcon(doc.id, e); setIconOpen(false) }} />
                 </PopoverContent>
               </Popover>
@@ -408,7 +408,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
 
       {/* Dropping: a page or text file opens; an image goes into the page. */}
       {dropping && (
-        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-md bg-background/70 ring-2 ring-primary/40 backdrop-blur-[2px] animate-in fade-in-0 duration-(--ohm-duration-state)">
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl bg-background/70 ring-2 ring-primary/40 backdrop-blur-[2px] animate-in fade-in-0 duration-(--ohm-duration-state)">
           <span className="rounded-full bg-popover px-4 py-2 text-body shade-3">
             {dropping === "image" ? "Drop to add the image here" : "Drop to open"}
           </span>

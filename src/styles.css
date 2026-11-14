@@ -1,4 +1,5 @@
 @import "./ohm/ohm.css";
+@import "./theme.css";
 @source "./";
 
 html, body, #root { height: 100%; }

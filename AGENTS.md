@@ -4,6 +4,7 @@ ohm-ux is where ohm's **user flows** are designed and built. Every flow has two 
 
 - How ohm looks: ohm-ui's `DESIGN.md` (github.com/haeinej/ohm-ui). It outranks this file on any visual question.
 - Which component to use: ohm-ui's `skills/use-ohm-ui/SKILL.md`.
+- ohm-ux's own design layer (radius, density, menus, tree rows): [docs/design.md](docs/design.md).
 - The WebMCP API as this repo uses it: [docs/webmcp.md](docs/webmcp.md).
 - Writing a new flow: copy [flows/TEMPLATE.md](flows/TEMPLATE.md).
 
@@ -52,6 +53,8 @@ ohm-ux is where ohm's **user flows** are designed and built. Every flow has two 
 ### Design
 
 20. **ohm-ui only, tokens only.** Install components with `npx shadcn add @ohm/<name>`. Choose variants and don't restyle. App CSS is for layout only. Follow ohm-ui's rules: theme, don't fork; no edges; one primary per view; Coconat only for `h1` and `h2`.
+21. **One radius for every surface.** Panels, menus, popovers, tooltips and sheets are `rounded-2xl` (the card token); rows are `rounded-lg`; items and small controls are `rounded-md`. Never set a radius in pixels, and never give a surface a different radius from the menus beside it. The density setting decides how round these are, in [src/theme.css](src/theme.css). See [docs/design.md](docs/design.md) for why: hand-set radii on panels are what made the menus look rounder than the panels before.
+22. **Menus are compact.** Tight rows, and the highlighted row is filled forest with white contents. Restyle ohm-ui components only by slot rules in `src/theme.css`, never by editing the installed copies.
 
 ## Running it
 

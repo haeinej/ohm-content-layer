@@ -32,6 +32,7 @@ npm install && npm run dev   # http://localhost:5190
 ## Where things are
 
 - [AGENTS.md](AGENTS.md): the rules every flow follows
+- [docs/design.md](docs/design.md): ohm-ux's design layer: one radius for every surface, density, compact menus
 - [docs/webmcp.md](docs/webmcp.md): the WebMCP API as of the 13 November 2026 draft, and what changed from earlier guides
 - [flows/TEMPLATE.md](flows/TEMPLATE.md): start a new flow by copying this
 - [src/webmcp.ts](src/webmcp.ts): the one helper for registering tools

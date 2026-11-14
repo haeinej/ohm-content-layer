@@ -10,5 +10,5 @@ export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: LucideIcon; 
   { id: "agents", label: "Agents", icon: BotIcon, description: "What an agent in your browser can do on this page, through WebMCP.", keywords: "settings agents webmcp tools ai assistant permissions model context" },
   { id: "vault", label: "Vault", icon: LibraryIcon, description: "Your labels, and how new posts start.", keywords: "settings vault labels sections posts private public publish" },
   { id: "cortex", label: "Cortex", icon: BrainIcon, description: "What your agents remember about you, and the notes waiting to settle.", keywords: "settings cortex memory memories notes skills settle" },
-  { id: "appearance", label: "Appearance", icon: SunMoonIcon, description: "Light or dark on this device.", keywords: "settings appearance theme dark mode light mode system display" },
+  { id: "appearance", label: "Appearance", icon: SunMoonIcon, description: "Light or dark, and how tight corners and menus are, on this device.", keywords: "settings appearance theme dark mode light mode system display density compact corners radius menus rounded" },
 ]

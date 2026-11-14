@@ -48,7 +48,7 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 const structural = (n: GraphNode) => n.layer === 0 || n.type === "label" || n.type === "sublabel"
 
 /** A floating control over the graph: the popover surface, solid in dark. */
-const floating = "rounded-md bg-popover text-popover-foreground shade-3"
+const floating = "rounded-2xl bg-popover text-popover-foreground shade-3"
 
 /** Lives in the side panel, in the personal repository. What it draws follows the repository's scope (all, cortex, vault) and who you are looking as. */
 export function GraphView() {
@@ -304,7 +304,7 @@ export function GraphView() {
           <PopoverTrigger render={<Button size="icon-sm" variant="ghost" aria-label="Graph settings" className={cn(floating, "pointer-events-auto")} />}>
             <Icon icon={SlidersHorizontalIcon} size="sm" />
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-64 rounded-md">
+          <PopoverContent align="end" className="w-64">
             <p className="text-small text-muted-foreground">Show</p>
             {([
               ["links", "Links between posts"],

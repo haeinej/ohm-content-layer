@@ -4,9 +4,10 @@ import { setSideWidth, SIDE_WIDTH, useWorkspace } from "./store"
 
 /**
  * The two panels' material, after agentic-twitter's directory and centre: a card lifted off the
- * page by shade in light and by tone in dark, with small corners (the item radius, not the card's).
+ * page by shade in light and by tone in dark. Corners are the card token, the same as every menu and
+ * popover; the density setting (src/theme.css) sets how round that is.
  */
-export const surface = "rounded-md bg-card text-card-foreground"
+export const surface = "rounded-2xl bg-card text-card-foreground"
 
 /** The handle on a side panel's right edge: drag to resize, arrows to nudge, double-click to reset. */
 function ResizeHandle() {

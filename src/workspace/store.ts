@@ -13,6 +13,11 @@ export type View =
   | { kind: "inbox"; id: string }
   | { kind: "settings"; tab: SettingsTab }
 export type Appearance = "system" | "light" | "dark"
+/** How tight corners and menus are; src/theme.css holds the values. */
+export type Density = "compact" | "comfortable" | "rounded"
+const savedDensity = (): Density => {
+  try { const d = localStorage.getItem("ohm-ux:density"); return d === "comfortable" || d === "rounded" ? d : "compact" } catch { return "compact" }
+}
 /** Which of the repository's two prime folders are shown. "All" is both. */
 export type RepoScope = { cortex: boolean; vault: boolean }
 export const SIDE_WIDTH = { min: 220, max: 640, initial: 300 }
@@ -37,6 +42,7 @@ type State = {
   agent: { state: AgentState; label: string } | null
   rev: number
   appearance: Appearance
+  density: Density
   agentsAllowed: boolean
   offered: Record<ToolName, boolean>
 }
@@ -48,7 +54,7 @@ const sideAfterOpen = (): Partial<State> => (narrow() ? { side: null } : {})
 let state: State = {
   side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal",
   graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0,
-  appearance: "system", agentsAllowed: true,
+  appearance: "system", density: savedDensity(), agentsAllowed: true,
   offered: { "workspace.search": true, "workspace.open": true, "workspace.graph": true, "workspace.create": true, "workspace.save-draft": true },
 }
 const listeners = new Set<() => void>()
@@ -104,6 +110,13 @@ export function setAppearance(appearance: Appearance) {
   document.documentElement.dataset.theme = appearance
   set({ appearance })
 }
+export function setDensity(density: Density) {
+  document.documentElement.dataset.density = density
+  try { localStorage.setItem("ohm-ux:density", density) } catch { /* a convenience only */ }
+  set({ density })
+}
+/** Applies the saved density before the first paint. */
+export const applyDensity = () => { document.documentElement.dataset.density = state.density }
 export const setAgentsAllowed = (agentsAllowed: boolean) => set({ agentsAllowed })
 export const setOffered = (name: ToolName, on: boolean) => set({ offered: { ...state.offered, [name]: on } })
 

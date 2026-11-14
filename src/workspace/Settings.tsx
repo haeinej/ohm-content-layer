@@ -14,7 +14,7 @@ import { cortex, posts } from "@/data/sample"
 import { SETTINGS_TABS, type SettingsTab } from "./settings-tabs"
 import { panelTitle } from "./Surface"
 import {
-  me, setAgentsAllowed, setAppearance, setOffered, useWorkspace, type Appearance, type ToolName,
+  me, setAgentsAllowed, setAppearance, setDensity, setOffered, useWorkspace, type Appearance, type Density, type ToolName,
 } from "./store"
 import { cn } from "@/lib/cn"
 
@@ -23,7 +23,7 @@ function Section({ title, intro, children }: { title: string; intro?: string; ch
     <section className="mb-8">
       <h3 className="mb-3 text-h3">{title}</h3>
       {/* A toned block; controls on it sit on paper so their fills still read. */}
-      <div className="rounded-md bg-muted px-4 py-1 [--secondary:var(--ohm-paper)] [--input:var(--ohm-paper)]">
+      <div className="rounded-2xl bg-muted px-4 py-1 [--secondary:var(--ohm-paper)] [--input:var(--ohm-paper)]">
         {intro && <p className="pt-3 pb-1 text-body text-muted-foreground">{intro}</p>}
         <ul>{children}</ul>
       </div>
@@ -67,7 +67,7 @@ const TOOLS: { name: ToolName; title: string; does: string; reads: boolean }[] =
 ]
 
 function Page({ tab }: { tab: SettingsTab }) {
-  const { appearance, agentsAllowed, offered } = useWorkspace()
+  const { appearance, density, agentsAllowed, offered } = useWorkspace()
   switch (tab) {
     case "profile":
       return <>
@@ -123,13 +123,24 @@ function Page({ tab }: { tab: SettingsTab }) {
         <Row title="Skills" note={`${cortex.filter(c => c.kind === "skill").length} installed`} />
       </Section>
     case "appearance":
-      return <Section title="Theme">
-        <Row title="Appearance" action={(["system", "light", "dark"] as Appearance[]).map(m => (
-          <Button key={m} variant={appearance === m ? "default" : "secondary"} aria-pressed={appearance === m} onClick={() => setAppearance(m)} className="capitalize">
-            {m}
-          </Button>
-        ))} />
-      </Section>
+      return <>
+        <Section title="Theme">
+          <Row title="Appearance" action={(["system", "light", "dark"] as Appearance[]).map(m => (
+            <Button key={m} variant={appearance === m ? "default" : "secondary"} aria-pressed={appearance === m} onClick={() => setAppearance(m)} className="capitalize">
+              {m}
+            </Button>
+          ))} />
+        </Section>
+        <Section title="Density">
+          <Row title="Corners and menus"
+            note="One radius for panels, menus and popovers. Compact menus have tight rows, and the highlighted one is filled forest."
+            action={(["compact", "comfortable", "rounded"] as Density[]).map(d => (
+              <Button key={d} variant={density === d ? "default" : "secondary"} aria-pressed={density === d} onClick={() => setDensity(d)} className="capitalize">
+                {d}
+              </Button>
+            ))} />
+        </Section>
+      </>
   }
 }
 
