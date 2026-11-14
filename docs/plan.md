@@ -294,6 +294,7 @@ Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are bu
 | Commands `init`, `mcp`, `identity`, `confirm`, `reject`, `clear`, `approve`, `event` | All | `event` takes structured vault events; add `status` |
 | The rulebook in `agents/AGENTS.md`, with the identity policy | Secrets, git and identity sections | Rewrite around filing and working memory |
 | Git policy files, with `.cortex/identity.jsonl` as append-only | Both | |
+| MCP over HTTP (`src/http.mjs`): the Streamable HTTP transport of the initialize-based revisions at `/mcp`, a session ID from `initialize`, tools and agent name for each session, answers as JSON, a bearer token from `cortex token` in `agents/secrets/mcp-token`, `cortex serve` bound to 127.0.0.1 unless told otherwise | All | Done (step 6), with a token. OAuth for ChatGPT and Claude's web connectors, TLS and hosting are not built |
 
 ## Build order
 
@@ -302,7 +303,7 @@ Built in the `ohm-cortex` repository and tested (49 tests). Steps 1 and 2 are bu
 3. **Working memory.** *Done.* One file per agent, a tool to update its own, refresh at start and distill and merge at end, with the rules for when something becomes a memory in the playbook. Callable without hooks. Done when something noticed in two sessions becomes a memory in the third, with nobody asked.
 4. **Filing rules and advice.** The rulebook rewritten, a filing skill template, and a "how should I file this" answer built from `vault.md` and skills. Done when the answer for a source names a section, its conventions and related posts, and nothing is written to the vault.
 5. **`cortex status`.** Everything waiting or broken, in one answer. Done when every item it lists has a way to clear it.
-6. **Remote MCP over HTTP,** with sign-in, so ChatGPT and browser clients can reach a cortex. Done when a client connected over HTTP reads the playbook as its instructions and calls `cortex_start`.
+6. **Remote MCP over HTTP,** *Done, with a bearer token; OAuth waits for a decision.* With sign-in, so ChatGPT and browser clients can reach a cortex. Done when a client connected over HTTP reads the playbook as its instructions and calls `cortex_start`.
 7. **The hooks adapter.** `cortex hook <moment>` for Claude Code, then Codex, answering from the folder with no network wait. Done when, with neither model calling a tool, a session starts with working memory refreshed and ends with it distilled.
 8. **Sync with a host.** The folder kept in step with ohm's service, folder first. Done when a cortex removed from the host is restored from the folder unchanged, and the other way round.
 
