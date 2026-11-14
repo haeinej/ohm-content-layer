@@ -5,6 +5,7 @@
 //   .cortex/                                             what is waiting, and what was replaced
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
+import { checkField, checkSource, FIELDS, IDENTITY, readIdentity, writeIdentity } from './identity.mjs';
 import { cleanMemory, cortexVersion, InvalidMemory, KINDS, memoryFile, memoryVersion, NAME, readMemoryFile, Refused, splitFront, writeFront } from './core.mjs';
 
 const bytes = text => new TextEncoder().encode(text).length;
@@ -24,12 +25,23 @@ async function put(path, content) {
   await rename(partial, path);
 }
 
+// Names that mean the person, or the signed-in account. An agent never writes under one of them.
+export const RESERVED = ['member', 'account'];
+export const agentName = given => {
+  const name = typeof given === 'string' && given.trim() ? given.trim().slice(0, 100) : 'agent';
+  return RESERVED.includes(name.toLowerCase()) ? `agent:${name}` : name;
+};
+
 // A new cortex is a copy of the template. An existing one is never written over.
-export async function initCortex(dir, template) {
+export async function initCortex(dir, template, { account } = {}) {
+  // Checked before anything is copied, so a refusal leaves the folder as it was.
+  const checked = account === undefined ? undefined : checkField('account', account);
   if ((await names(dir)).some(entry => !entry.name.startsWith('.'))) throw new Refused('NameTaken', `${dir} already holds files. A cortex is started in an empty folder.`);
   await cp(template, dir, { recursive: true, filter: source => !source.endsWith('.gitkeep') });
   for (const folder of ['agents/secrets', 'memory', 'skills', 'tools', '.cortex']) await mkdir(join(dir, folder), { recursive: true });
-  await openCortex(dir).reindex();
+  const cortex = openCortex(dir, { actor: 'account' });
+  if (checked !== undefined) await cortex.setAccount(checked);
+  await cortex.reindex();
   return { dir };
 }
 
@@ -134,41 +146,129 @@ export function openCortex(dir, { actor = 'member', now = () => new Date() } = {
     return { name: entry.name.slice(0, -3), description: String(properties.description ?? ''), on: properties.on === true };
   });
 
+  const identityLog = at('.cortex', 'identity.jsonl');
+  const factKey = (field, value) => JSON.stringify([field, value ?? null]);
+  const recordIdentity = async entry => {
+    await mkdir(dirname(identityLog), { recursive: true });
+    await appendFile(identityLog, `${JSON.stringify({ ...entry, by: actor, when: now().toISOString() })}\n`);
+  };
+  // Changes one field of identity.md and keeps the rest of the file, the person's own fields and
+  // anything they wrote that cannot be read, as it was. The earlier file is kept in history.
+  async function setField(field, value) {
+    const content = await text(at('identity.md')) ?? '';
+    const { properties, body, version } = await readIdentity(content);
+    const next = { ...properties };
+    if (value === undefined) delete next[field]; else next[field] = value;
+    if (content) await keep('identity', 'identity', content, version);
+    await put(at('identity.md'), writeIdentity(next, body));
+  }
+  async function waitingFor(ref) {
+    const waiting = await cortex.identityProposals();
+    const named = (await cortex.identityLog()).find(entry => entry.type === 'proposed' && entry.id === ref);
+    const byId = named && waiting.find(proposal => factKey(proposal.field, proposal.value) === factKey(named.field, named.value));
+    if (byId) return byId;
+    const forField = waiting.filter(proposal => proposal.field === ref);
+    if (forField.length === 1) return forField[0];
+    if (forField.length > 1) throw new Refused('Ambiguous', `More than one proposal is waiting for ${ref}. Name one by its ID: ${forField.map(proposal => `${proposal.id} (${JSON.stringify(proposal.value)})`).join(', ')}`);
+    throw new Refused('NotFound', `No identity proposal is waiting for ${ref}`);
+  }
+
   const cortex = {
     dir, reindex,
 
     async start() {
       await reindex();
       const { memories, problems } = await all();
-      const identity = await cortex.identity();
+      const { fields, own, about, problems: identityProblems } = await cortex.identity();
       const pending = [...(await notes()).values()].filter(note => !note.settledAt);
+      const found = [...identityProblems, ...problems];
       return {
         rules: await text(at('agents', 'AGENTS.md')) ?? '',
-        identity,
+        identity: { ...fields, ...(Object.keys(own).length ? { own } : {}), about },
         always: memories.filter(({ memory }) => memory.always),
         memories: memories.filter(({ memory }) => !memory.always).map(({ memory: { name, description, kind } }) => ({ name, description, kind })),
         // Only what the person has approved or switched on is handed over as usable.
         skills: (await skillsIn(at('skills'))).map(({ name, description }) => ({ name, description })),
         tools: (await toolsIn(at('tools'))).filter(tool => tool.on).map(({ name, description }) => ({ name, description })),
         notes: pending,
-        waiting: { skills: (await skillsIn(at('.cortex', 'proposed', 'skills'))).map(skill => skill.name), tools: (await toolsIn(at('.cortex', 'proposed', 'tools'))).map(tool => tool.name) },
-        ...(problems.length ? { problems } : {}),
+        waiting: {
+          identity: (await cortex.identityProposals()).map(({ id, field, value, source }) => ({ id, field, value, source })),
+          skills: (await skillsIn(at('.cortex', 'proposed', 'skills'))).map(skill => skill.name),
+          tools: (await toolsIn(at('.cortex', 'proposed', 'tools'))).map(tool => tool.name),
+        },
+        ...(found.length ? { problems: found } : {}),
       };
     },
 
-    async identity() {
-      const content = await text(at('identity.md')) ?? '';
-      return { text: content, version: await cortexVersion({ identity: content }) };
+    identity: async () => readIdentity(await text(at('identity.md'))),
+
+    // Every proposal, confirmation, rejection and clearing, in the order it happened.
+    async identityLog() {
+      return ((await text(identityLog)) ?? '').split('\n').filter(Boolean).flatMap(entry => { try { return [JSON.parse(entry)]; } catch { return []; } });
     },
 
-    async writeIdentity(given, { replaces } = {}) {
-      if (typeof given !== 'string' || bytes(given) > 8192) throw new Refused('InvalidRequest', 'identity is Markdown, at most 8 KB');
-      const current = await cortex.identity();
-      if (current.text === given) return { version: current.version, unchanged: true };
-      if (replaces !== current.version) throw changed('identity', current.version);
-      await keep('identity', 'identity', current.text, current.version);
-      await put(at('identity.md'), given);
-      return { version: (await cortex.identity()).version };
+    // A proposal is known by its field and value: two with different evidence for the same value
+    // are one, and the first one's evidence is shown. Read in order, so a fact confirmed, cleared
+    // and then proposed again is waiting again. One the field already holds is not waiting.
+    async identityProposals() {
+      const waiting = new Map();
+      for (const entry of await cortex.identityLog()) {
+        const key = factKey(entry.field, entry.value);
+        if (entry.type === 'proposed') { if (!waiting.has(key)) waiting.set(key, entry); }
+        else if (entry.type === 'confirmed' || entry.type === 'rejected') waiting.delete(key);
+      }
+      const { fields } = await cortex.identity();
+      return [...waiting.values()].filter(entry => factKey(entry.field, fields[entry.field]) !== factKey(entry.field, entry.value));
+    },
+
+    // An agent proposes. Nothing it proposes changes identity.md until the person confirms it.
+    async proposeIdentity({ field, value, source } = {}) {
+      if (!Object.hasOwn(IDENTITY, field)) throw new Refused('InvalidIdentity', `${field} is not an identity field. The fields are: ${FIELDS.join(', ')}`);
+      const evidence = checkSource(field, source);
+      const checked = checkField(field, value);
+      const id = `i${(await cortexVersion({ field, value: checked, source: evidence })).slice(1, 13)}`;
+      const key = factKey(field, checked);
+      // A no stands for the value, whatever evidence comes with it next time.
+      if ((await cortex.identityLog()).some(entry => entry.type === 'rejected' && factKey(entry.field, entry.value) === key)) {
+        throw new Refused('AlreadyRejected', `The person already said no to ${field} being ${JSON.stringify(checked)}. Do not propose it again`);
+      }
+      const { fields } = await cortex.identity();
+      if (factKey(field, fields[field]) === key) return { id, field, confirmed: true, unchanged: true };
+      const same = (await cortex.identityProposals()).find(proposal => factKey(proposal.field, proposal.value) === key);
+      if (same) return { id: same.id, field, waiting: true, unchanged: true };
+      await recordIdentity({ type: 'proposed', id, field, value: checked, source: evidence });
+      return { id, field, waiting: true, ...(fields[field] !== undefined ? { current: fields[field] } : {}) };
+    },
+
+    // The person's answer to a proposal, by its ID, or by the field when only one is waiting for it.
+    async confirmIdentity(ref) {
+      const proposal = await waitingFor(ref);
+      await setField(proposal.field, proposal.value);
+      await recordIdentity({ type: 'confirmed', id: proposal.id, field: proposal.field, value: proposal.value, source: proposal.source });
+      return { id: proposal.id, field: proposal.field, value: proposal.value, confirmed: true };
+    },
+
+    async rejectIdentity(ref) {
+      const proposal = await waitingFor(ref);
+      await recordIdentity({ type: 'rejected', id: proposal.id, field: proposal.field, value: proposal.value });
+      return { id: proposal.id, field: proposal.field, rejected: true };
+    },
+
+    async clearIdentity(field) {
+      if (!Object.hasOwn(IDENTITY, field)) throw new Refused('InvalidIdentity', `${field} is not an identity field`);
+      const { properties } = await cortex.identity();
+      if (properties[field] === undefined) return { field, cleared: true, unchanged: true };
+      await setField(field, undefined);
+      await recordIdentity({ type: 'cleared', field });
+      return { field, cleared: true };
+    },
+
+    // The one field set without a proposal: it is what the signed-in account says it is.
+    async setAccount(value) {
+      const checked = checkField('account', value);
+      await setField('account', checked);
+      await recordIdentity({ type: 'confirmed', field: 'account', value: checked, source: { kind: 'account' } });
+      return { field: 'account', value: checked };
     },
 
     async list({ kind } = {}) {

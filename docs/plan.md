@@ -114,7 +114,8 @@ Behind each value, `.cortex/identity.jsonl` records where it came from: the pers
 5. **A confirmed field is not overwritten by a proposal.** If the vault later says something different, the new value is proposed beside the old one, and the confirmed one stands until the person chooses.
 6. **Sensitive fields stay in.** Email addresses, birthdate and city are never sent to another service, put in a URL, or included in anything published. They are shown to the agent so it can help, not so it can share.
 7. **Every change is kept.** An earlier value can be read back and restored.
-8. **Proposals do not nag.** A rejected proposal is not made again from the same evidence.
+8. **Proposals do not nag.** A value the person turned down is not proposed again for that field, whatever the evidence. The person can still set it themselves. Two proposals of the same value are one.
+9. **An agent never writes as the person.** The names `member` and `account` are reserved; an agent that connects under one is recorded as `agent:<name>`.
 
 ## How the vault is read: `vault.md`
 
@@ -259,21 +260,21 @@ Cortex reads through this contract and never writes. Saving goes through the vau
 
 ## What exists now, and what changes
 
-Built in `/Users/jeonghaein/development/cortex`, tested (11 tests), not yet committed past the first skeleton:
+Built in the `ohm-cortex` repository and tested (24 tests). Step 1, strict identity, is on the `identity` branch:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
 | The folder store (`src/folder.mjs`) | Memories, history, notes, skill proposals, tool proposals | Add `vault.md`, working memory, identity fields and proposals |
-| `identity.md` as free text, rewritten against a version | History of changes | Becomes strict fields plus `about`; the agent proposes instead of rewriting |
+| Strict identity (`src/identity.mjs`): fixed typed fields, proposals with evidence in `.cortex/identity.jsonl`, `cortex confirm`, `reject`, `clear` and `identity`, `init --account` | History of changes | Done (step 1). Vault evidence is checked for shape only until the vault contract exists |
 | Memory kinds `person`, `preference`, `project`, `reference` | Rules for names, descriptions, versions | Drop `project` |
-| Ten MCP tools | All but `cortex_identity` | `cortex_identity` becomes a proposal tool; add working memory and filing advice |
-| Commands `init`, `mcp`, `approve`, `event` | All | `event` takes structured vault events; add `status` and `confirm` |
-| The rulebook in `agents/AGENTS.md` | Secrets and git sections | Rewrite around filing, identity policy and working memory |
-| Git policy files | Both | Add `.cortex/identity.jsonl` as append-only |
+| Ten MCP tools, with `cortex_propose_identity` in place of `cortex_identity` | All | Add working memory and filing advice |
+| Commands `init`, `mcp`, `identity`, `confirm`, `reject`, `clear`, `approve`, `event` | All | `event` takes structured vault events; add `status` |
+| The rulebook in `agents/AGENTS.md`, with the identity policy | Secrets, git and identity sections | Rewrite around filing and working memory |
+| Git policy files, with `.cortex/identity.jsonl` as append-only | Both | |
 
 ## Build order
 
-1. **Identity.** Fixed fields, validation, `.cortex/identity.jsonl`, proposals with evidence, `cortex confirm`. Done when a proposal without a post and passage is refused, a confirmed field is not overwritten by a proposal, and pronouns cannot be proposed from anything but the person's own words.
+1. **Identity.** *Done.* Fixed fields, validation, `.cortex/identity.jsonl`, proposals with evidence, `cortex confirm`. Done when a proposal without a post and passage is refused, a confirmed field is not overwritten by a proposal, and pronouns cannot be proposed from anything but the person's own words.
 2. **Vault contract and `vault.md`.** The contract as an interface, a folder vault that implements it for tests, structured events, and `vault.md` kept in step. Done when removing a post in the test vault flags the memory that pointed at it.
 3. **Working memory.** The file, a tool to update it, refresh at start and distill at end, callable without hooks. Done when something noticed in two sessions becomes a memory in the third, with nobody asked.
 4. **Filing rules and advice.** The rulebook rewritten, a filing skill template, and a "how should I file this" answer built from `vault.md` and skills. Done when the answer for a source names a section, its conventions and related posts, and nothing is written to the vault.

@@ -1,6 +1,4 @@
 ---
-account:
-kind:
----
 
-Whether this is a person or a company, what they do, and how they sound has not been composed with them yet. Do not guess it.
+---
+<!-- Who this cortex belongs to. Each field above is set only when you confirm it. Write a few lines about yourself here, in your own words. -->

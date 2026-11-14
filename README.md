@@ -23,7 +23,7 @@ For the person, it is three folders: what my agent has learned, what it knows ho
 | --- | --- | --- | --- |
 | Rulebook | `agents/AGENTS.md` | Cortex itself, plus the person's own additions | Every session |
 | Secrets | `agents/secrets/` | The person only | Never by the agent. Never committed |
-| Identity | `identity.md` | The person, or the agent with them | Every session, in full |
+| Identity | `identity.md` | The person confirms; the agent only proposes, with evidence | Every session, in full |
 | Memory | `memory/` | The agent, freely. The person, any time | Index every session, a memory when it fits |
 | Skills | `skills/` | The agent proposes. The person approves | Descriptions every session, a skill when it fits |
 | Tools | `tools/` | The person only. The agent may propose | The list every session |
@@ -47,7 +47,11 @@ node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
 
 | Command | Who runs it | What it does |
 | --- | --- | --- |
-| `cortex init [dir]` | The person | Starts a cortex in an empty folder |
+| `cortex init [dir] [--account <did>]` | The person | Starts a cortex in an empty folder, optionally with the signed-in account |
+| `cortex identity [dir]` | The person | Shows the confirmed identity and the facts an agent proposed |
+| `cortex confirm <field or id> [dir]` | The person | Accepts a proposed identity fact |
+| `cortex reject <field or id> [dir]` | The person | Turns one down; that value is not proposed again |
+| `cortex clear <field> [dir]` | The person | Removes an identity field |
 | `cortex mcp [dir]` | An agent | Serves the ten `cortex_*` tools over standard input and output |
 | `cortex approve <skill> [dir]` | The person | Moves a skill an agent proposed into `skills/` |
 | `cortex event <text> [dir]` | A host | Records a change from outside, for the agent to settle |
@@ -65,6 +69,6 @@ test/       run with npm test
 
 ## Status
 
-Built: the folder store, the ten tools, and the four commands, tested against temporary folders. No real agent has been connected yet.
+Built: the folder store, strict identity, the ten tools and the commands above, tested against temporary folders. No real agent has been connected yet. See [docs/plan.md](docs/plan.md) for what comes next.
 
 Not built: the hooks adapter for Claude Code and Codex, turns, syncing a cortex to a host, and switching tools on from anywhere but the file itself.

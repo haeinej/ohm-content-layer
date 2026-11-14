@@ -28,7 +28,8 @@ test('a new cortex has the rulebook, an identity, one starting memory and an ind
   const { dir, cortex } = await fresh();
   const start = await cortex.start();
   assert.match(start.rules, /How to keep this cortex/);
-  assert.match(start.identity.text, /Do not guess/);
+  assert.deepEqual(start.identity, { about: '' });
+  assert.deepEqual(start.waiting.identity, []);
   assert.deepEqual(start.always.map(item => item.memory.name), ['working-style']);
   assert.deepEqual([start.memories, start.skills, start.tools, start.notes], [[], [], [], []]);
   assert.match(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /\[working-style\]\(working-style\.md\)/);
@@ -140,15 +141,6 @@ test('an agent can ask for a tool, and cannot add one or switch one on', async (
   await writeFile(join(dir, 'tools', 'mail.md'), '---\nname: mail\ndescription: Send mail\non: false\n---\n');
   assert.deepEqual((await cortex.start()).tools, [{ name: 'calendar', description: 'Read the calendar' }]);
   await assert.rejects(cortex.proposeTool({ name: 'calendar', description: 'x', inputs: 'x', outputs: 'x' }), refused('NameTaken'));
-});
-
-test('identity is rewritten against the version read, and the earlier text is kept', async () => {
-  const { dir, cortex } = await fresh();
-  const { version } = await cortex.identity();
-  await assert.rejects(cortex.writeIdentity('A person.', { replaces: 'cstale' }), refused('Changed'));
-  await cortex.writeIdentity('---\nkind: person\n---\nA writer. Plain sentences.', { replaces: version });
-  assert.match((await cortex.start()).identity.text, /A writer/);
-  assert.equal((await readdir(join(dir, '.cortex', 'history', 'identity', 'identity'))).length, 1);
 });
 
 test('an agent keeps a cortex through the tools alone', async () => {
