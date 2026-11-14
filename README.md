@@ -31,6 +31,7 @@ npm install && npm run dev   # http://localhost:5190
 
 ## Where things are
 
+- [flows/paths.md](flows/paths.md): every interaction path, what it is for, its end state, and the WebMCP tool for it
 - [AGENTS.md](AGENTS.md): the rules every flow follows
 - [docs/design.md](docs/design.md): ohm-ux's design layer: one radius for every surface, density, compact menus
 - [docs/webmcp.md](docs/webmcp.md): the WebMCP API as of the 13 November 2026 draft, and what changed from earlier guides

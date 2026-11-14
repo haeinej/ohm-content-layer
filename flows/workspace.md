@@ -1,5 +1,7 @@
 # Workspace
 
+Every path through it, with its purpose and end state: [paths.md](paths.md).
+
 A light, Obsidian-like home for one person's vault and cortex: find something, read it, write it, see how it connects. This is a wireframe. Data is synthetic and nothing is saved.
 
 - **Flow id:** `workspace`. Tools are named `workspace.<step>`.

@@ -7,6 +7,7 @@ ohm-ux is where ohm's **user flows** are designed and built. Every flow has two 
 - ohm-ux's own design layer (radius, density, menus, tree rows): [docs/design.md](docs/design.md).
 - The WebMCP API as this repo uses it: [docs/webmcp.md](docs/webmcp.md).
 - Writing a new flow: copy [flows/TEMPLATE.md](flows/TEMPLATE.md).
+- Every interaction path in the workspace, with its purpose, end state and tool: [flows/paths.md](flows/paths.md). When you add, change or remove a path, update it there.
 
 ## The rules
 
