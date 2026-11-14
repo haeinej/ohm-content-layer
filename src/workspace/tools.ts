@@ -2,7 +2,7 @@
 import { useEffect } from "react"
 import { search, type SearchInput } from "@/data/search"
 import { registerStepTool } from "@/webmcp"
-import { createDraft, open, setAgent, showGraph } from "./store"
+import { createDraft, open, setAgent, showGraph, useWorkspace, type ToolName } from "./store"
 
 /** Show the agent at work while a tool runs (AGENTS.md rule 13). UI calls never go through this. */
 export function withAgent<I, O>(label: string, fn: (input: I, signal: AbortSignal) => Promise<O>) {
@@ -25,10 +25,15 @@ export function withAgent<I, O>(label: string, fn: (input: I, signal: AbortSigna
 
 /** Registered for as long as the workspace is on screen. */
 export function useWorkspaceTools() {
+  // Settings › Agents decides whether the page offers tools, and which.
+  const { agentsAllowed, offered } = useWorkspace()
+  const key = agentsAllowed ? Object.entries(offered).filter(([, on]) => on).map(([n]) => n).join(",") : ""
   useEffect(() => {
+    if (!key) return
+    const on = new Set(key.split(","))
     const ac = new AbortController()
     const register = (...args: Parameters<typeof registerStepTool<any, any>>) =>
-      registerStepTool(...args).catch(console.error)
+      on.has(args[0].name as ToolName) ? registerStepTool(...args).catch(console.error) : undefined
 
     register({
       name: "workspace.search",
@@ -39,7 +44,7 @@ export function useWorkspaceTools() {
         type: "object",
         properties: {
           query: { type: "string", minLength: 1, maxLength: 200 },
-          scope: { enum: ["all", "vault", "cortex"], default: "all" },
+          scope: { enum: ["all", "vault", "cortex", "people", "settings"], default: "all" },
           limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
         },
         required: ["query"],
@@ -72,7 +77,7 @@ export function useWorkspaceTools() {
     register({
       name: "workspace.graph",
       title: "Show graph",
-      description: "Shows the graph centred on a person, by handle or DID. With no center, centres on the owner. Returns the number of nodes and edges.",
+      description: "Shows the graph in the side panel, centred on a person, by handle or DID. With no center, centres on the owner. It draws what the personal repo includes and what the current audience can see. Returns the number of nodes and edges.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         type: "object",
@@ -95,5 +100,5 @@ export function useWorkspaceTools() {
     }, ac.signal)
 
     return () => ac.abort()
-  }, [])
+  }, [key])
 }

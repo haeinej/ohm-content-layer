@@ -4,55 +4,65 @@ A light, Obsidian-like home for one person's vault and cortex: find something, r
 
 - **Flow id:** `workspace`. Tools are named `workspace.<step>`.
 - **Starts from:** the app's root, with the person signed in.
-- **Ends in:** a post open to read, a post open to edit, or the graph.
+- **Ends in:** a post open to read or edit, the graph, a change of who a post is for, or an inbox item.
 
 ## Layout
 
 ```
-┌──┬──────────────┬──────────────────────────────────────────┐
-│R │ Side panel   │ Main panel                                │
-│A │ (cortex or   │  post view · editor · graph               │
-│C │  vault tree, │                                           │
-│K │  read-only)  │                                           │
-└──┴──────────────┴──────────────────────────────────────────┘
-          Search: an overlay above everything (⌘K)
+┌──────┬────────────────┬────────────────────────────────────────┐
+│ rack │ side panel     │ main panel                              │
+│ (on  │ (a card, shade │ (a card, shade 2)                       │
+│ the  │  3)            │  post · editor · inbox item · settings  │
+│ page)│ repo · visib-  │                                         │
+│      │ ility · inbox  │                                         │
+│      │ · you          │                                         │
+└──────┴────────────────┴────────────────────────────────────────┘
+          Search: a sheet over the dimmed workspace (⌘K)
 ```
 
-| Region | What it is | ohm-ui |
-| --- | --- | --- |
-| **Rack** | A narrow column of icons on the left: Search, Create, Cortex, Vault, Graph. One is on a tone when its view is open | `FileTreeTab`-style buttons, `Tooltip`, `Kbd` |
-| **Side panel** | A static, read-only view of the repository: the vault's labels › sublabels › posts, or the cortex's memories, notes, skills and tools. Opens when Cortex or Vault is chosen, and closes when chosen again | `FileTreePanel`, `FileTree` |
-| **Main panel** | Whatever is open: a post rendered, the editor, or the graph | `Panel`, `Badge`, `Textarea`, `Input`, `Empty` |
-| **Search** | An overlay on top of the screen. It searches through the `workspace.search` tool, the same path an agent uses, so a real search service can be connected behind it later | `Command` in a `Dialog` |
+The rack sits on the page itself. The side panel and the main panel are separate cards beside it. After agentic-twitter's directory and centre, they are lifted by shade in light and by tone in dark. Their corners use the item radius (12), not the card radius (24).
 
-Rack buttons and what they do:
-
-| Rack | Does | Main panel | Side panel |
-| --- | --- | --- | --- |
-| Search | Opens the search overlay (⌘K) | unchanged | unchanged |
-| Create | Opens a new private draft in the editor | editor | unchanged |
-| Cortex | Shows the cortex tree | unchanged | cortex |
-| Vault | Shows the vault tree | unchanged | vault |
-| Graph | Shows the graph, centred on the person | graph | unchanged |
+| Rack | Side panel becomes |
+| --- | --- |
+| ohm dot | Nothing. The brand mark, at icon size |
+| Search (⌘K) | Unchanged. Search opens over everything |
+| New post (⌘N) | Unchanged. A private draft opens in the editor |
+| **Personal repo** | The repository, read-only. Its two top-level folders, **cortex** and **vault**, each have a check (include it or leave it out) and a chevron (open it). A chevron-all button opens or closes everything. A Tree/Graph switch shows the same repository as a graph, inside the side panel, which widens to fit |
+| **Visibility** | *View as* Only you, Friends or Public. The repo, the graph and the main panel then show only what that audience can see, with a "Viewing as…" bar and Back to you. Below that, every post grouped by who it is for, with a select to change it. Making a post visible to more people asks first, in a dialog. Marking is not publishing |
+| **Inbox** | Replies, mentions, friend requests and cortex notes, newest first, with new ones marked. One about a post opens that post; the others open in the main panel |
+| You (avatar) | Your name and handle, then the settings sections: Your profile, Identity, Agents, Vault, Cortex, Appearance, and Sign out |
 
 ## The graph
 
-The graph is centred on a person: by default the owner, whose DID is the root of everything they have. It is laid out in rings, so where a node sits says what it is:
+The graph lives in the side panel, in the personal repo. It is a hierarchy centred on one person, which then intertwines:
 
-| Ring | Nodes | Edge to |
+```
+person ── cortex (memories, skills, notes) ── vault labels ── sublabels ── posts ── people mentioned
+```
+
+| Layer | Nodes | Hangs from |
 | --- | --- | --- |
-| 0 (centre) | The person (handle, DID) | none |
-| 1 | Vault labels (sections), plus one **cortex** node | the person |
-| 2 | Posts around their label; memories and skills around the cortex | their label or the cortex |
-| 3 | Other people the posts mention (`@handle`) | each post that mentions them |
+| 0 | The person (forest, pinned at the centre) | none |
+| 1 · cortex | Memories, notes, skills and tools, evenly spaced on a dotted ring close to the person | the person |
+| 2 | Vault labels | the memories that know about them (dashed edges in the key: *Knows*); the person when none does |
+| 3 | Sublabels | their label |
+| 4 | Posts | their sublabel or label |
+| 5 | People mentioned | each post that mentions them |
 
-Links between posts (`[[slug]]` in a body) are drawn as quieter chords across the rings.
+The cortex is the closest layer, and it connects the person to their vault. Across the hierarchy, `[[links]]` between posts and memories about particular posts tie branches together.
 
-- Each label gets a slice of the circle in proportion to how many posts it holds, and its posts fan out inside that slice. The layout is computed from the tree, not simulated, so it is the same every time and needs no graph library.
-- **Selecting** a post opens it in the main panel. Selecting a label or the cortex highlights its slice.
-- **Re-centring:** selecting another person makes them the centre. Their ring 1 holds the posts that mention them, grouped by label. "Back to me" returns to the owner.
-- Private posts are drawn hollow, friends-only posts in a muted tone and public posts filled. Colour doesn't carry meaning here, except forest for the centre.
-- Built in `src/graph/layout.ts` (where nodes go) and `src/workspace/GraphView.tsx` (drawing them as SVG).
+How it behaves, as Obsidian's graph view does (from the screen recording):
+
+- **Force layout** (d3-force): low friction and slow cooling, so nodes overshoot slightly and settle with a wobble. A soft radial force keeps each layer at its distance. A gentle pull toward each label's own direction gives every branch its own sector, while links can still tug across.
+- **Hover** lights the node and its edges in forest and fades everything else.
+- **Drag** pins a node under the pointer. Its neighbours follow on springs and spring back when it is released.
+- **Pan and zoom** (d3-zoom). Labels for the upper layers always show. Labels for posts and memories fade in as you zoom, and for the hovered node's neighbours.
+- **Size** follows how connected a node is.
+- **Fit:** the graph stays fitted to the panel as the panel widens and the layout settles, until you pan or zoom yourself.
+- **Popover:** turns links between posts and people mentioned on or off, and lays the graph out again.
+- **Clicking:** a post or memory opens it in the main panel. Clicking a person re-centres on them, showing the posts that mention them; "Back to me" returns.
+- **What it draws:** the repo's cortex and vault checks, and the audience. The cortex is only ever yours.
+- **Code:** built in `src/graph/model.ts` (nodes, layers and edges) and `src/workspace/GraphView.tsx` (forces, interaction, drawing).
 
 ## Steps and tools
 
@@ -60,7 +70,7 @@ Links between posts (`[[slug]]` in a body) are drawn as quieter chords across th
 | --- | --- | --- | --- | --- | --- |
 | 1 | Search | Open result | `workspace.search` | `readOnlyHint`, `untrustedContentHint` | none |
 | 2 | Open | Open | `workspace.open` | `readOnlyHint` | none |
-| 3 | Graph | Show graph | `workspace.graph` | `readOnlyHint` | none |
+| 3 | Graph | Show graph | `workspace.graph` (opens it in the side panel) | `readOnlyHint` | none |
 | 4 | Create | New post | `workspace.create` | none (only a local draft) | none |
 | 5 | Edit | Save draft | `workspace.save-draft` | none (private, local) | none |
 
@@ -114,9 +124,9 @@ Publishing is not part of this flow. It will be its own flow, with `consequentia
 | --- | --- |
 | State and the shared handlers | `src/workspace/store.ts` |
 | Rack | `src/workspace/Rack.tsx` |
-| Side panel | `src/workspace/SidePanel.tsx` |
-| Main panel, post view, editor | `src/workspace/MainPanel.tsx`, `DocView.tsx`, `Editor.tsx` |
-| Search overlay and the one search path | `src/workspace/SearchOverlay.tsx`, `src/data/search.ts` (`setSearchProvider`) |
+| Side panel: repo, visibility, inbox, you | `src/workspace/SidePanel.tsx`, `Surface.tsx` |
+| Main panel, post view, editor, settings | `src/workspace/MainPanel.tsx`, `DocView.tsx`, `Editor.tsx`, `Settings.tsx`, `settings-tabs.ts` |
+| Search sheet and the one search path (vault, cortex, people, settings) | `src/workspace/SearchOverlay.tsx`, `src/data/search.ts` (`setSearchProvider`) |
 | Tools | `src/workspace/tools.ts`; `workspace.save-draft` in `Editor.tsx` |
 | Synthetic data | `src/data/sample.ts` |
 
@@ -127,3 +137,7 @@ On a phone the side panel lies over the main panel. It starts closed, and closes
 - [x] By hand, in light and dark, on a phone and a desktop (wireframe level; the graph is small on a phone)
 - [x] By tools, through the development stand-in: `getTools()` lists `workspace.*` and adds `workspace.save-draft` while a private post is in the editor. `executeTool` searches, opens, creates and saves, reaching the same states as the hand walk
 - [x] No tool here writes anything public. A post that isn't private gets no `workspace.save-draft`, and `saveDraft` refuses it with `NotAllowedError`
+
+## Not yet tools
+
+Changing who a post is for, and acting on inbox items, are only in the UI so far. When they become tools, making a post less private is `consequentialHint` and goes through the same dialog (AGENTS.md rule 11). Settings › Agents already turns each tool on or off.

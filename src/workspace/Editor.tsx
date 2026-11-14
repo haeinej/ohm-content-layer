@@ -6,7 +6,7 @@ import { notify } from "@/components/ui/notice"
 import type { Doc } from "@/data/sample"
 import { registerStepTool } from "@/webmcp"
 import { withAgent } from "./tools"
-import { open, saveDraft } from "./store"
+import { open, saveDraft, useWorkspace } from "./store"
 
 /** The editor. Save draft is the one primary action, and the `workspace.save-draft` tool while it is open. */
 export function Editor({ doc }: { doc: Doc }) {
@@ -15,6 +15,8 @@ export function Editor({ doc }: { doc: Doc }) {
   const latest = useRef({ title, body })
   latest.current = { title, body }
   const editable = doc.visibility === "private"
+  const { agentsAllowed, offered } = useWorkspace()
+  const offer = agentsAllowed && offered["workspace.save-draft"]
 
   const save = (input: { title?: string; body?: string }) => {
     const out = saveDraft(input)
@@ -23,7 +25,7 @@ export function Editor({ doc }: { doc: Doc }) {
   }
 
   useEffect(() => {
-    if (!editable) return
+    if (!editable || !offer) return
     const ac = new AbortController()
     registerStepTool<{ title?: string; body?: string }, ReturnType<typeof saveDraft>>({
       name: "workspace.save-draft",
@@ -44,7 +46,7 @@ export function Editor({ doc }: { doc: Doc }) {
       run: withAgent("Saving draft", async input => save({ ...latest.current, ...input })),
     }, ac.signal).catch(console.error)
     return () => ac.abort()
-  }, [doc.id, editable])
+  }, [doc.id, editable, offer])
 
   return (
     <form

@@ -1,128 +1,340 @@
-import { useMemo, useState } from "react"
+// The graph, as Obsidian's graph view behaves: a live force layout you pan, zoom and drag; nodes
+// sized by how connected they are; hovering lights a node and its edges and fades everything else;
+// dragging pulls the neighbours along on springs and lets them wobble back; labels come in as you
+// zoom. Unlike a global graph it is a hierarchy centred on one person (graph/model.ts): the person
+// is pinned at the centre and a soft radial force holds each layer at its distance, loosely enough
+// that links between posts can pull branches together.
+import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  forceCollide, forceLink, forceManyBody, forceRadial, forceSimulation, forceX, forceY,
+  type Simulation, type SimulationLinkDatum, type SimulationNodeDatum,
+} from "d3-force"
+import { select } from "d3-selection"
+import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom"
+import { MaximizeIcon, MinusIcon, PlusIcon, SlidersHorizontalIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { buildGraph, type GraphNode } from "@/graph/layout"
+import { Icon } from "@/components/ui/icon"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Switch } from "@/components/ui/switch"
+import { buildGraph, DEFAULT_FILTERS, type EdgeKind, type GraphNode, type NodeType } from "@/graph/model"
 import { cn } from "@/lib/cn"
 import { me, open, showGraph, useWorkspace } from "./store"
 
-const NODE = { 0: 22, 1: 12, 2: 7, 3: 10 } as const
+type SimNode = GraphNode & SimulationNodeDatum
+type SimLink = SimulationLinkDatum<SimNode> & { kind: EdgeKind }
 
-/** The graph, centred on one person. Rings: person, groups, posts, other people. */
-export function GraphView({ center }: { center: string }) {
-  const { rev } = useWorkspace()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const g = useMemo(() => buildGraph(center), [center, rev])
+/** How far out each kind of node settles. The cortex is the closest layer to the person. */
+const DISTANCE: Record<NodeType, number> = { person: 0, memory: 110, label: 220, sublabel: 300, post: 385 }
+const OTHER_PEOPLE = 490
+const CORTEX_RING = DISTANCE.memory
+const ringOf = (n: GraphNode) => (n.layer === 5 ? OTHER_PEOPLE : DISTANCE[n.type])
+const SPRING: Record<EdgeKind, { length: number; strength: number }> = {
+  hierarchy: { length: 90, strength: 0.6 },
+  knows: { length: 120, strength: 0.35 },
+  about: { length: 170, strength: 0.05 },
+  link: { length: 110, strength: 0.18 },
+  mention: { length: 120, strength: 0.08 },
+}
+
+/** Where each node was last, so re-centring or filtering moves nodes instead of re-scattering them. */
+const last = new Map<string, { x: number; y: number }>()
+
+const radiusOf = (n: GraphNode) => {
+  const base = n.layer === 0 ? 13 : n.type === "label" ? 7 : n.type === "sublabel" ? 5 : n.type === "memory" ? 4.5 : 3.5
+  return base + Math.sqrt(n.degree) * 1.3
+}
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+/** Labels that always show: the person and the hierarchy's upper layers. */
+const structural = (n: GraphNode) => n.layer === 0 || n.type === "label" || n.type === "sublabel"
+
+/** A floating control over the graph: the popover surface, solid in dark. */
+const floating = "rounded-md bg-popover text-popover-foreground shade-3"
+
+/** Lives in the side panel, in the personal repo. What it draws follows the repo's checked folders and who you are looking as. */
+export function GraphView() {
+  const { rev, include, audience, graphCenter: center } = useWorkspace()
+  const [filters, setFilters] = useState({ people: DEFAULT_FILTERS.people, links: DEFAULT_FILTERS.links })
+  const graph = useMemo(() => buildGraph({ center, ...include, audience, ...filters }), [center, include, audience, filters, rev]) // eslint-disable-line react-hooks/exhaustive-deps
+  const hasCortex = graph.nodes.some(n => n.type === "memory")
+
+  const svgRef = useRef<SVGSVGElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null)
+  const userMoved = useRef(false)
+  const simRef = useRef<Simulation<SimNode, SimLink> | null>(null)
+  const [size, setSize] = useState({ w: 0, h: 0 })
+  const [t, setT] = useState<ZoomTransform>(zoomIdentity)
+  const [, setFrame] = useState(0)
   const [hover, setHover] = useState<string | null>(null)
-  const [focusGroup, setFocusGroup] = useState<string | null>(null)
-  const byId = new Map(g.nodes.map(n => [n.id, n]))
+  const [dragging, setDragging] = useState<string | null>(null)
+
+  useEffect(() => {
+    const el = boxRef.current!
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Each label gets its own direction from the person, spread evenly, and its sublabels and posts
+  // lean that way; memories spread evenly around the cortex ring. A gentle pull toward those
+  // directions keeps the hierarchy readable as sectors, while links can still tug across them.
+  const { nodes, links, aim } = useMemo(() => {
+    const angleOf = new Map<string, number>()
+    const branches = [...new Set(graph.nodes.filter(n => n.type === "label").map(n => n.branch))]
+    branches.forEach((b, i) => angleOf.set(b, (i / branches.length) * Math.PI * 2 - Math.PI / 2))
+    const memoryList = graph.nodes.filter(m => m.type === "memory")
+    const aim = new Map<string, { x: number; y: number }>()
+    for (const n of graph.nodes) {
+      const a = n.type === "memory" ? (memoryList.indexOf(n) / memoryList.length) * Math.PI * 2 - Math.PI / 2 + Math.PI / memoryList.length : angleOf.get(n.branch)
+      if (a !== undefined && n.layer > 0 && n.layer < 5) aim.set(n.id, { x: Math.cos(a) * ringOf(n), y: Math.sin(a) * ringOf(n) })
+    }
+    const nodes: SimNode[] = graph.nodes.map(n => {
+      if (n.layer === 0) return { ...n, x: 0, y: 0, fx: 0, fy: 0 }
+      const p = last.get(n.id)
+      const target = aim.get(n.id)
+      const a = Math.random() * Math.PI * 2
+      const seed = target ? { x: target.x + (Math.random() - 0.5) * 30, y: target.y + (Math.random() - 0.5) * 30 } : { x: Math.cos(a) * ringOf(n), y: Math.sin(a) * ringOf(n) }
+      return { ...n, ...(p ?? seed) }
+    })
+    const links: SimLink[] = graph.edges.map(e => ({ source: e.source, target: e.target, kind: e.kind }))
+    return { nodes, links, aim }
+  }, [graph])
+
+  useEffect(() => {
+    const sim = forceSimulation<SimNode, SimLink>(nodes)
+      .force("link", forceLink<SimNode, SimLink>(links).id(d => d.id)
+        .distance(l => SPRING[l.kind].length).strength(l => SPRING[l.kind].strength))
+      .force("charge", forceManyBody<SimNode>().strength(n => (n.type === "label" ? -280 : n.type === "memory" ? -200 : -120)).distanceMax(500))
+      .force("collide", forceCollide<SimNode>(n => radiusOf(n) + 6).strength(0.7))
+      .force("radial", forceRadial<SimNode>(ringOf, 0, 0).strength(n => (n.layer === 0 ? 0 : n.type === "memory" ? 0.8 : n.layer === 4 ? 0.12 : 0.3)))
+      .force("aimX", forceX<SimNode>(n => aim.get(n.id)?.x ?? 0).strength(n => (aim.has(n.id) ? (n.type === "post" ? 0.03 : 0.08) : 0)))
+      .force("aimY", forceY<SimNode>(n => aim.get(n.id)?.y ?? 0).strength(n => (aim.has(n.id) ? (n.type === "post" ? 0.03 : 0.08) : 0)))
+      // Low friction and slow cooling: nodes overshoot a little and wobble into place.
+      .velocityDecay(0.22)
+      .alphaDecay(0.012)
+    simRef.current = sim
+    sim.stop().tick(reducedMotion() ? 400 : 220)
+    const remember = () => nodes.forEach(n => last.set(n.id, { x: n.x!, y: n.y! }))
+    remember()
+    setFrame(f => f + 1)
+    if (!reducedMotion()) sim.on("tick", () => { remember(); setFrame(f => f + 1) }).alpha(0.25).restart()
+    return () => { sim.stop() }
+  }, [nodes, links, aim])
+
+  // Zoom and pan; pointer-downs on nodes drag them instead.
+  useEffect(() => {
+    const svg = select(svgRef.current!)
+    const z = d3zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.25, 5])
+      .filter(e => e.type === "wheel" || (!(e.target as Element).closest("[data-node]") && !e.button))
+      .on("zoom", e => {
+        setT(e.transform)
+        // Once you pan or zoom yourself, the view stays where you put it.
+        if (e.sourceEvent) userMoved.current = true
+      })
+    zoomRef.current = z
+    svg.call(z).on("dblclick.zoom", null)
+    return () => { svg.on(".zoom", null) }
+  }, [])
+
+  const fit = () => {
+    if (!nodes.length || !svgRef.current || !zoomRef.current || !size.w) return
+    const xs = nodes.map(n => n.x!), ys = nodes.map(n => n.y!)
+    const pad = 70
+    const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad
+    const k = Math.min(1.6, Math.max(0.25, Math.min(size.w / (maxX - minX), size.h / (maxY - minY))))
+    select(svgRef.current).call(zoomRef.current.transform,
+      zoomIdentity.translate(size.w / 2 - (k * (minX + maxX)) / 2, size.h / 2 - (k * (minY + maxY)) / 2).scale(k))
+  }
+  // Keep the whole graph in view as the panel resizes and the layout settles, until you pan or
+  // zoom yourself; a change in what is drawn starts that over.
+  const shape = `${center}|${include.cortex}|${include.vault}|${audience}`
+  useEffect(() => { userMoved.current = false }, [shape])
+  const fitRef = useRef(fit)
+  fitRef.current = fit
+  useEffect(() => { if (size.w && !userMoved.current) fit() }, [size, shape]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const sim = simRef.current
+    sim?.on("end.fit", () => { if (!userMoved.current) fitRef.current() })
+    return () => { sim?.on("end.fit", null) }
+  }, [nodes])
+
+  const zoomBy = (factor: number) => select(svgRef.current!).call(zoomRef.current!.scaleBy, factor)
+
+  // The lit node: the one under the pointer, or the one being dragged.
+  const lit = dragging ?? hover
   const near = useMemo(() => {
-    if (!hover) return null
-    const s = new Set([hover])
-    for (const e of g.edges) {
-      if (e.from === hover) s.add(e.to)
-      if (e.to === hover) s.add(e.from)
+    if (!lit) return null
+    const s = new Set([lit])
+    for (const l of links) {
+      const a = (l.source as SimNode).id, b = (l.target as SimNode).id
+      if (a === lit) s.add(b)
+      if (b === lit) s.add(a)
     }
     return s
-  }, [hover, g])
+  }, [lit, links])
 
-  const dim = (n: GraphNode) =>
-    (near && !near.has(n.id)) || (focusGroup && "group" in n && n.group !== focusGroup)
-
-  const select = (n: GraphNode) => {
-    if (n.type === "doc") open(n.doc.id)
-    else if (n.type === "group") setFocusGroup(focusGroup === n.group ? null : n.group)
-    else if (n.ring === 3) showGraph(n.person.handle)
+  // Dragging pins the node under the pointer and keeps the layout warm, so neighbours follow on
+  // their springs; letting go releases it to wobble back. A press without movement is a click.
+  const drag = useRef<{ id: string; moved: boolean; x0: number; y0: number } | null>(null)
+  const toGraph = (e: React.PointerEvent) => {
+    const r = svgRef.current!.getBoundingClientRect()
+    return t.invert([e.clientX - r.left, e.clientY - r.top])
+  }
+  const onDown = (e: React.PointerEvent, n: SimNode) => {
+    if (e.button !== 0) return
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    drag.current = { id: n.id, moved: false, x0: e.clientX, y0: e.clientY }
+  }
+  const onMove = (e: React.PointerEvent, n: SimNode) => {
+    const d = drag.current
+    if (!d || d.id !== n.id) return
+    if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 4) return
+    if (!d.moved) { d.moved = true; setDragging(n.id) }
+    const [x, y] = toGraph(e)
+    n.fx = x; n.fy = y
+    if (!reducedMotion()) simRef.current?.alphaTarget(0.35).restart()
+    else { simRef.current?.tick(1); setFrame(f => f + 1) }
+  }
+  const onUp = (n: SimNode) => {
+    const d = drag.current
+    drag.current = null
+    setDragging(null)
+    if (n.layer === 0) { n.fx = 0; n.fy = 0 } else { n.fx = null; n.fy = null }
+    simRef.current?.alphaTarget(0)
+    if (d && !d.moved) activate(n)
+  }
+  const activate = (n: GraphNode) => {
+    if (n.doc) open(n.doc.id)
+    else if (n.type === "person" && n.layer === 5) showGraph(n.person!.handle)
   }
 
-  const isMe = g.center.did === me.did
-  const title = (n: GraphNode) => n.type === "person" ? `@${n.person.handle}` : n.type === "group" ? n.name : n.doc.title
+  const isMe = graph.center.did === me.did
+  const k = t.k
+  // Detail labels fade in between these zoom levels.
+  const detail = Math.max(0, Math.min(1, (k - 0.9) / 0.5))
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-2 px-6 pt-4">
-        <p className="text-small text-muted-foreground">
-          Centred on <span className="text-foreground">@{g.center.handle}</span> · {g.nodes.length - 1} around
-          {!isMe && " · posts that mention them"}
-        </p>
-        {!isMe && <Button size="sm" variant="ghost" onClick={() => showGraph()}>Back to me</Button>}
-      </div>
-      <svg
-        role="img"
-        aria-label={`Graph centred on @${g.center.handle}`}
-        viewBox={`0 0 ${g.size} ${g.size}`}
-        className="min-h-0 w-full flex-1 select-none"
-      >
-        {[150, 290, 430].map(r => (
-          <circle key={r} cx={g.size / 2} cy={g.size / 2} r={r} className="fill-none stroke-border" strokeDasharray="2 6" />
-        ))}
-        {g.edges.map((e, i) => {
-          const a = byId.get(e.from)!, b = byId.get(e.to)!
-          const on = near ? near.has(e.from) && near.has(e.to) : true
-          if (e.kind === "link") {
-            const mx = g.size / 2 + ((a.x + b.x) / 2 - g.size / 2) * 0.55
-            const my = g.size / 2 + ((a.y + b.y) / 2 - g.size / 2) * 0.55
-            return <path key={i} d={`M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`}
-              className={cn("fill-none stroke-muted-foreground transition-opacity", on ? "opacity-50" : "opacity-10")} strokeDasharray="4 4" />
-          }
-          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-            className={cn("transition-opacity", e.kind === "mention" ? "stroke-muted-foreground" : "stroke-border", on ? "opacity-80" : "opacity-10")} />
-        })}
-        {g.nodes.map(n => {
-          const r = NODE[n.ring]
-          const vis = n.type === "doc" ? n.doc.visibility : "public"
-          const showLabel = n.ring !== 2 || hover === n.id || (focusGroup && n.type === "doc" && n.group === focusGroup)
-          const right = n.x >= g.size / 2
-          return (
-            <g
-              key={n.id}
-              role="button"
-              tabIndex={0}
-              aria-label={title(n)}
-              className={cn("cursor-pointer outline-none transition-opacity", dim(n) && "opacity-25")}
-              onMouseEnter={() => setHover(n.id)}
-              onMouseLeave={() => setHover(null)}
-              onFocus={() => setHover(n.id)}
-              onBlur={() => setHover(null)}
-              onClick={() => select(n)}
-              onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), select(n))}
-            >
-              <title>{title(n)}</title>
-              {n.ring === 0 && <circle cx={n.x} cy={n.y} r={r + 8} className="fill-none stroke-muted-foreground" strokeDasharray="3 4" />}
-              <circle
-                cx={n.x} cy={n.y} r={r}
+    <div ref={boxRef} className="relative min-h-0 flex-1 overflow-hidden">
+      <svg ref={svgRef} role="img" aria-label={`Graph centred on @${graph.center.handle}`}
+        className={cn("absolute inset-0 size-full touch-none select-none", dragging ? "cursor-grabbing" : "cursor-grab")}>
+        <g transform={t.toString()}>
+          {/* The cortex is a layer, not a node: a quiet ring its memories sit on. */}
+          {hasCortex && (
+            <circle r={CORTEX_RING} vectorEffect="non-scaling-stroke" strokeDasharray="2 5"
+              className={cn("fill-none stroke-muted-foreground transition-opacity", lit ? "opacity-10" : "opacity-40")} />
+          )}
+          {links.map((l, i) => {
+            const a = l.source as SimNode, b = l.target as SimNode
+            const on = lit ? a.id === lit || b.id === lit : null
+            return (
+              <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} vectorEffect="non-scaling-stroke"
+                strokeWidth={on ? 1.5 : 1}
+                strokeDasharray={l.kind === "about" ? "3 4" : undefined}
                 className={cn(
-                  "stroke-2",
-                  n.ring === 0 ? "fill-primary stroke-primary"
-                    : n.type === "group" ? "fill-background stroke-foreground"
-                    : n.type === "person" ? "fill-muted stroke-muted-foreground"
-                    : vis === "public" ? "fill-foreground stroke-foreground"
-                    : vis === "friends" ? "fill-muted-foreground stroke-muted-foreground"
-                    : "fill-background stroke-foreground",
-                  (hover === n.id) && "stroke-primary",
-                )}
-              />
-              {showLabel && (
-                <text
-                  x={n.ring === 0 ? n.x : n.x + (right ? r + 8 : -r - 8)}
-                  y={n.ring === 0 ? n.y + r + 26 : n.y + 5}
-                  textAnchor={n.ring === 0 ? "middle" : right ? "start" : "end"}
-                  // Sizes in viewBox units: the drawing scales as a whole.
-                  fontSize={n.ring === 0 ? 20 : n.ring === 1 ? 17 : 15}
-                  className={cn("fill-foreground", n.ring <= 1 && "font-semibold")}
-                >
-                  {n.ring === 0 ? `@${n.person.handle}` : title(n)}
-                </text>
-              )}
-            </g>
-          )
-        })}
+                  "transition-[opacity,stroke] duration-(--ohm-duration-state)",
+                  on ? "stroke-primary dark:stroke-foreground" : l.kind === "hierarchy" ? "stroke-muted-foreground" : "stroke-muted-foreground",
+                  on === false ? "opacity-[.06]" : on ? "opacity-100" : l.kind === "hierarchy" ? "opacity-40" : "opacity-25",
+                )} />
+            )
+          })}
+          {nodes.map(n => {
+            const r = radiusOf(n)
+            const isLit = n.id === lit
+            const faded = near && !near.has(n.id)
+            const priv = n.doc?.visibility === "private"
+            return (
+              <g key={n.id} data-node transform={`translate(${n.x},${n.y})`} role="button" tabIndex={0} aria-label={n.name}
+                className={cn("cursor-pointer outline-none transition-opacity duration-(--ohm-duration-state)", faded && "opacity-20")}
+                onPointerEnter={() => setHover(n.id)} onPointerLeave={() => setHover(h => (h === n.id ? null : h))}
+                onFocus={() => setHover(n.id)} onBlur={() => setHover(null)}
+                onPointerDown={e => onDown(e, n)} onPointerMove={e => onMove(e, n)} onPointerUp={() => onUp(n)}
+                onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), activate(n))}>
+                {/* A larger, invisible target: small nodes are easy to hit. */}
+                <circle r={Math.max(r + 6, 12)} className="fill-transparent" />
+                <circle r={r} vectorEffect="non-scaling-stroke" strokeWidth={1.5}
+                  className={cn(
+                    "transition-[fill,stroke] duration-(--ohm-duration-state)",
+                    isLit || n.layer === 0 ? "fill-primary stroke-primary dark:fill-foreground dark:stroke-foreground"
+                      : n.type === "memory" ? "fill-card stroke-foreground"
+                      : n.type === "label" || n.type === "sublabel" ? "fill-foreground stroke-foreground"
+                      : n.layer === 5 ? "fill-card stroke-muted-foreground"
+                      : priv ? "fill-card stroke-muted-foreground"
+                      : n.doc?.visibility === "friends" ? "fill-muted-foreground/60 stroke-muted-foreground/60"
+                      : "fill-muted-foreground stroke-muted-foreground",
+                  )} />
+              </g>
+            )
+          })}
+        </g>
+        {/* Labels in screen space, so they stay one size at any zoom. */}
+        <g className="pointer-events-none">
+          {hasCortex && (() => {
+            const [x, y] = t.apply([0, -CORTEX_RING])
+            return <text x={x} y={y - 8} textAnchor="middle" className="fill-muted-foreground text-small font-semibold">cortex</text>
+          })()}
+          {nodes.map(n => {
+            const show = structural(n) ? 1 : near?.has(n.id) ? 1 : detail
+            if (!show) return null
+            const [x, y] = t.apply([n.x!, n.y!])
+            const r = radiusOf(n) * k
+            const faded = near && !near.has(n.id)
+            return (
+              <text key={n.id} x={x} y={y + r + 13} textAnchor="middle" opacity={faded ? 0.15 : show}
+                className={cn("text-small transition-opacity duration-(--ohm-duration-state)",
+                  n.id === lit || structural(n) ? "fill-foreground" : "fill-muted-foreground",
+                  (n.layer === 0 || n.type === "label") && "font-semibold")}>
+                {n.name.length > 32 ? `${n.name.slice(0, 31)}…` : n.name}
+              </text>
+            )
+          })}
+        </g>
       </svg>
-      <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 pb-4 text-small text-muted-foreground" aria-label="Key">
-        <li className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-foreground" />Public</li>
-        <li className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-muted-foreground" />Friends</li>
-        <li className="flex items-center gap-1.5"><span className="size-2.5 rounded-full border-2 border-foreground" />Private</li>
-        <li className="flex items-center gap-1.5"><span className="h-0 w-4 border-t-2 border-dashed border-muted-foreground" />Link</li>
-        <li>Select a person to centre on them</li>
-      </ul>
+
+      {/* Chrome floats over the graph; only the controls carry a material. */}
+      <div className="pointer-events-none absolute inset-x-2 top-2 flex items-start justify-between gap-2">
+        <div className={cn(floating, "pointer-events-auto flex items-center gap-2 py-1 ps-3 pe-1 text-small")}>
+          <span className="size-2 rounded-full bg-primary dark:bg-foreground" aria-hidden />
+          <span className="truncate font-semibold">@{graph.center.handle}</span>
+          <span className="text-muted-foreground max-[420px]:hidden">· {graph.nodes.length - 1}</span>
+          {!isMe ? <Button size="xs" variant="ghost" onClick={() => showGraph()}>Back to me</Button> : <span className="w-1" />}
+        </div>
+        <Popover>
+          <PopoverTrigger render={<Button size="icon-sm" variant="ghost" aria-label="Graph settings" className={cn(floating, "pointer-events-auto")} />}>
+            <Icon icon={SlidersHorizontalIcon} size="sm" />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 rounded-md">
+            <p className="text-small text-muted-foreground">Show</p>
+            {([
+              ["links", "Links between posts"],
+              ["people", "People mentioned"],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex min-h-9 items-center justify-between gap-3 text-body">
+                {label}
+                <Switch checked={filters[key]} onCheckedChange={v => setFilters(f => ({ ...f, [key]: v }))} />
+              </label>
+            ))}
+            <Button size="sm" variant="secondary" className="mt-1 w-full"
+              onClick={() => { last.clear(); userMoved.current = false; setFilters(f => ({ ...f })) }}>
+              Lay out again
+            </Button>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
+        <ul aria-label="Key" className={cn(floating, "pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1 text-small text-muted-foreground")}>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full border-[1.5px] border-foreground" />Memory</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-foreground" />Label</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted-foreground" />Post</li>
+          <li className="flex items-center gap-1.5"><span className="h-0 w-3 border-t-[1.5px] border-dashed border-muted-foreground" />Knows</li>
+        </ul>
+        <div className={cn(floating, "pointer-events-auto flex flex-col p-0.5")} role="group" aria-label="Zoom">
+          <Button size="icon-sm" variant="ghost" aria-label="Zoom in" onClick={() => zoomBy(1.3)}><Icon icon={PlusIcon} size="sm" /></Button>
+          <Button size="icon-sm" variant="ghost" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.3)}><Icon icon={MinusIcon} size="sm" /></Button>
+          <Button size="icon-sm" variant="ghost" aria-label="Fit to view" onClick={fit}><Icon icon={MaximizeIcon} size="sm" /></Button>
+        </div>
+      </div>
     </div>
   )
 }

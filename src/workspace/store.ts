@@ -1,33 +1,54 @@
 // Workspace state, and the handlers both the UI and the WebMCP tools call (AGENTS.md rule 2).
 import { useSyncExternalStore } from "react"
-import { all, byId, owner, posts, type Doc } from "@/data/sample"
-import { buildGraph } from "@/graph/layout"
+import { all, byId, inbox, owner, posts, type Audience, type Doc, type Visibility } from "@/data/sample"
+import { buildGraph } from "@/graph/model"
 import type { AgentState } from "@/components/agent-status"
+import type { SettingsTab } from "./settings-tabs"
 
-export type Side = "vault" | "cortex" | null
+/** What the side panel shows. The rack chooses it. */
+export type Side = "repo" | "visibility" | "inbox" | "profile" | null
 export type View =
   | { kind: "empty" }
   | { kind: "doc"; id: string; mode: "read" | "edit" }
-  | { kind: "graph"; center: string }
+  | { kind: "inbox"; id: string }
+  | { kind: "settings"; tab: SettingsTab }
+export type Appearance = "system" | "light" | "dark"
+export type ToolName = "workspace.search" | "workspace.open" | "workspace.graph" | "workspace.create" | "workspace.save-draft"
 
 type State = {
   side: Side
+  /** The personal repo: as a tree, or as the graph. */
+  repoMode: "tree" | "graph"
+  /** The repo's two prime folders, checked in or out of the side panel and the graph. */
+  include: { cortex: boolean; vault: boolean }
+  /** Who you are looking as: yourself, a friend, or anyone. */
+  audience: Audience
+  graphCenter: string
   view: View
   searchOpen: boolean
   agent: { state: AgentState; label: string } | null
   rev: number
+  appearance: Appearance
+  agentsAllowed: boolean
+  offered: Record<ToolName, boolean>
 }
 
 /** On a phone the side panel lies over the main panel, so it starts closed and closes when something opens. */
 const narrow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
-const sideAfterOpen = () => (narrow() ? { side: null } : {})
+const sideAfterOpen = (): Partial<State> => (narrow() ? { side: null } : {})
 
-let state: State = { side: narrow() ? null : "vault", view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0 }
+let state: State = {
+  side: narrow() ? null : "repo", repoMode: "tree", include: { cortex: true, vault: true }, audience: "personal",
+  graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0,
+  appearance: "system", agentsAllowed: true,
+  offered: { "workspace.search": true, "workspace.open": true, "workspace.graph": true, "workspace.create": true, "workspace.save-draft": true },
+}
 const listeners = new Set<() => void>()
 const set = (patch: Partial<State>) => {
   state = { ...state, ...patch }
   listeners.forEach(l => l())
 }
+const bump = () => ({ rev: state.rev + 1 })
 
 export const useWorkspace = () =>
   useSyncExternalStore(cb => (listeners.add(cb), () => listeners.delete(cb)), () => state)
@@ -37,6 +58,40 @@ export const toggleSide = (side: Exclude<Side, null>) => set({ side: state.side 
 export const setSearchOpen = (searchOpen: boolean) => set({ searchOpen })
 export const setAgent = (agent: State["agent"]) => set({ agent })
 
+// Personal repo
+export const setRepoMode = (repoMode: State["repoMode"]) => set({ repoMode, side: "repo" })
+export const setInclude = (folder: keyof State["include"], on: boolean) => set({ include: { ...state.include, [folder]: on } })
+
+// Visibility
+export const setAudience = (audience: Audience) => set({ audience })
+/** Marks who a post is for. Marking is not publishing; making a post less private asks first (the panel's dialog). */
+export function setVisibility(id: string, visibility: Visibility) {
+  const doc = byId(id)
+  if (!doc || doc.kind !== "post") throw new DOMException("Only posts have a visibility", "DataError")
+  doc.visibility = visibility
+  set(bump())
+}
+
+// Inbox
+export function openInbox(id: string) {
+  const item = inbox.find(i => i.id === id)
+  if (!item) throw new DOMException(`Nothing in the inbox with id ${id}`, "NotFoundError")
+  item.unread = false
+  set({ view: item.ref ? { kind: "doc", id: item.ref, mode: "read" } : { kind: "inbox", id }, ...bump(), ...sideAfterOpen() })
+}
+
+// Profile and settings
+export function openSettings(tab: SettingsTab = "profile") {
+  set({ side: narrow() && state.side === "profile" ? null : "profile", view: { kind: "settings", tab }, searchOpen: false })
+}
+export const closeSettings = () => set({ side: "repo", view: { kind: "empty" } })
+export function setAppearance(appearance: Appearance) {
+  document.documentElement.dataset.theme = appearance
+  set({ appearance })
+}
+export const setAgentsAllowed = (agentsAllowed: boolean) => set({ agentsAllowed })
+export const setOffered = (name: ToolName, on: boolean) => set({ offered: { ...state.offered, [name]: on } })
+
 // Handlers shared by the UI and the tools.
 export function open(id: string, mode: "read" | "edit" = "read") {
   const doc = byId(id)
@@ -45,9 +100,10 @@ export function open(id: string, mode: "read" | "edit" = "read") {
   return { id, title: doc.title, view: mode, next: mode === "edit" ? "workspace.save-draft" : "workspace.open" }
 }
 
+/** The graph lives in the side panel, in the personal repo. */
 export function showGraph(center?: string) {
-  const g = buildGraph(center)
-  set({ view: { kind: "graph", center: g.center.handle }, searchOpen: false, ...sideAfterOpen() })
+  const g = buildGraph({ center, audience: state.audience, ...state.include })
+  set({ side: "repo", repoMode: "graph", graphCenter: g.center.handle, searchOpen: false })
   return { center: g.center.handle, nodes: g.nodes.length, edges: g.edges.length }
 }
 
@@ -62,7 +118,7 @@ export function createDraft(input: { label?: string; title?: string } = {}) {
   }
   posts.push(doc)
   all.push(doc)
-  set({ view: { kind: "doc", id: doc.id, mode: "edit" }, rev: state.rev + 1, searchOpen: false, ...sideAfterOpen() })
+  set({ view: { kind: "doc", id: doc.id, mode: "edit" }, ...bump(), searchOpen: false, ...sideAfterOpen() })
   return { id: doc.id, slug, view: "edit", next: "workspace.save-draft" }
 }
 
@@ -78,7 +134,7 @@ export function saveDraft(input: { title?: string; body?: string }) {
   if (input.body !== undefined) doc.body = input.body
   if (doc.id.startsWith("draft-")) doc.slug = slugify(doc.title) || doc.slug
   doc.updated = new Date().toISOString().slice(0, 10)
-  set({ view: { kind: "doc", id: doc.id, mode: "read" }, rev: state.rev + 1 })
+  set({ view: { kind: "doc", id: doc.id, mode: "read" }, ...bump() })
   return { id: doc.id, slug: doc.slug, visibility: doc.visibility }
 }
 

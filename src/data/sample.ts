@@ -14,6 +14,8 @@ export type Doc = {
   visibility: Visibility
   body: string
   updated: string
+  /** Cortex only: the parts of the vault this is about, as `label`, `label/sublabel` or a post's slug. */
+  about?: string[]
 }
 
 export type Person = { did: string; handle: string; name: string }
@@ -64,29 +66,39 @@ export const posts: Doc[] = [
     body: "# Film scans\n\nA roll from the summer. @june.example lent the camera.",
   },
   {
-    id: "p8", kind: "post", title: "ohm workspace", slug: "ohm-workspace", label: "projects",
+    id: "p8", kind: "post", title: "ohm workspace", slug: "ohm-workspace", label: "projects", sublabel: "tools",
     visibility: "public", updated: "2026-11-14",
     body: "# ohm workspace\n\nA light place to read and write a vault. Built with @theo.example.\n\nStarted from [[slow-software]].",
   },
   {
+    id: "p10", kind: "post", title: "Graph sketches", slug: "graph-sketches", label: "projects", sublabel: "tools",
+    visibility: "private", updated: "2026-11-12",
+    body: "# Graph sketches\n\nA person in the middle, their memory around them, then the vault. Notes for [[ohm-workspace]], after [[garden-of-notes]].",
+  },
+  {
+    id: "p11", kind: "post", title: "Yanaka at dusk", slug: "yanaka-dusk", label: "photos", sublabel: "tokyo",
+    visibility: "friends", updated: "2026-09-16",
+    body: "# Yanaka at dusk\n\nThe same street as [[tokyo-walks]], later. Shot on the camera from [[film-scans]].",
+  },
+  {
     id: "p9", kind: "post", title: "Reading list", slug: "reading-list", label: "other",
     visibility: "private", updated: "2026-10-01",
-    body: "# Reading list\n\n- A pattern language\n- Notes on the synthesis of form",
+    body: "# Reading list\n\n- A pattern language\n- Notes on the synthesis of form\n\nFor [[slow-software]] and [[ohm-workspace]].",
   },
 ]
 
 export const cortex: Doc[] = [
-  { id: "c1", kind: "memory", title: "Writes in short paragraphs", slug: "short-paragraphs", label: "memories", sublabel: "always", visibility: "private", updated: "2026-11-01",
+  { id: "c1", kind: "memory", title: "Writes in short paragraphs", slug: "short-paragraphs", label: "memories", sublabel: "always", about: ["writing/essays", "writing/journal"], visibility: "private", updated: "2026-11-01",
     body: "# Writes in short paragraphs\n\nStated. Keep drafts to short paragraphs; no headings inside a post under 300 words." },
-  { id: "c2", kind: "memory", title: "Prefers private first", slug: "private-first", label: "memories", sublabel: "always", visibility: "private", updated: "2026-10-12",
+  { id: "c2", kind: "memory", title: "Prefers private first", slug: "private-first", label: "memories", sublabel: "always", about: ["writing", "photos", "monday-rain"], visibility: "private", updated: "2026-10-12",
     body: "# Prefers private first\n\nInferred from three sessions. New things start private and are shared later." },
-  { id: "c3", kind: "memory", title: "Photo captions are one line", slug: "photo-captions", label: "memories", visibility: "private", updated: "2026-09-20",
+  { id: "c3", kind: "memory", title: "Photo captions are one line", slug: "photo-captions", label: "memories", about: ["photos/tokyo", "film-scans"], visibility: "private", updated: "2026-09-20",
     body: "# Photo captions are one line\n\nSeen in two sessions, project photos." },
-  { id: "c4", kind: "note", title: "Asked to rename 'journal'", slug: "rename-journal", label: "notes", sublabel: "waiting", visibility: "private", updated: "2026-11-13",
+  { id: "c4", kind: "note", title: "Asked to rename 'journal'", slug: "rename-journal", label: "notes", sublabel: "waiting", about: ["writing/journal"], visibility: "private", updated: "2026-11-13",
     body: "# Asked to rename 'journal'\n\nOne session. Might want 'diary'. Not settled." },
-  { id: "c5", kind: "skill", title: "Suggest labels", slug: "suggest-labels", label: "skills", visibility: "private", updated: "2026-10-30",
+  { id: "c5", kind: "skill", title: "Suggest labels", slug: "suggest-labels", label: "skills", about: ["other", "projects"], visibility: "private", updated: "2026-10-30",
     body: "# Suggest labels\n\nOffer the plain default and ask." },
-  { id: "c6", kind: "tool", title: "vault_search", slug: "vault-search", label: "tools", visibility: "private", updated: "2026-10-30",
+  { id: "c6", kind: "tool", title: "vault_search", slug: "vault-search", label: "tools", about: ["writing", "photos", "projects"], visibility: "private", updated: "2026-10-30",
     body: "# vault_search\n\nSearches the vault by text." },
 ]
 
@@ -100,3 +112,27 @@ export const personByHandle = (h: string) => people.find(p => p.handle === h || 
 export const mentions = (doc: Doc) => [...doc.body.matchAll(/@([a-z0-9.-]+\.[a-z]+)/gi)].map(m => m[1])
 /** `[[slug]]` links in a body. */
 export const links = (doc: Doc) => [...doc.body.matchAll(/\[\[([a-z0-9-]+)\]\]/gi)].map(m => m[1])
+
+export type InboxItem = {
+  id: string
+  kind: "mention" | "reply" | "friend" | "note"
+  from: string
+  text: string
+  at: string
+  /** The post or cortex item it is about. */
+  ref?: string
+  unread: boolean
+}
+
+export const inbox: InboxItem[] = [
+  { id: "i1", kind: "reply", from: "june.example", text: "Writing everything twice is the only way I know.", at: "2026-11-14", ref: "p1", unread: true },
+  { id: "i2", kind: "mention", from: "theo.example", text: "Mentioned you in “Owning nothing, kindly”.", at: "2026-11-13", unread: true },
+  { id: "i3", kind: "friend", from: "sana.example", text: "Wants to be friends. Friends see posts you mark for friends.", at: "2026-11-12", unread: true },
+  { id: "i4", kind: "note", from: "cortex", text: "A note is waiting to settle: asked to rename “journal”.", at: "2026-11-13", ref: "c4", unread: false },
+  { id: "i5", kind: "reply", from: "sana.example", text: "Day two was the better light.", at: "2026-09-16", ref: "p6", unread: false },
+]
+
+export type Audience = "personal" | "friends" | "public"
+/** Who sees what: you see everything; friends see friends and public posts; everyone sees public ones. */
+export const sees = (audience: Audience, d: Doc) =>
+  audience === "personal" || (d.kind === "post" && (d.visibility === "public" || (audience === "friends" && d.visibility === "friends")))
