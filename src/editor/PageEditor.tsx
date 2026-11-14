@@ -1,8 +1,9 @@
-// The page editor: a block editor in the manner of the recording. An icon and title on top, template
-// chips while the page is empty, "/" for commands, a floating toolbar on selected text, a handle to
-// drag blocks, and a toolbar of inserts above. Private posts save as you type; others are read-only
-// here, because changing what other people see asks first (AGENTS.md rule 11).
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+// The page editor: a block editor in the manner of the reference recordings. The page's path on top
+// (drag it out to save it as Markdown, or onto a vault folder to file it), then the title, "/" for
+// commands, a floating toolbar on selected text, a handle on each block with its menu, tables with
+// row and column handles, and images by dropping or pasting files. Private posts save as you type;
+// others are read-only here, because changing what other people see asks first (AGENTS.md rule 11).
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { EditorContent, useEditor, type Editor } from "@tiptap/react"
 import DragHandle from "@tiptap/extension-drag-handle-react"
 import StarterKit from "@tiptap/starter-kit"
@@ -12,39 +13,46 @@ import { TableKit } from "@tiptap/extension-table"
 import Image from "@tiptap/extension-image"
 import Highlight from "@tiptap/extension-highlight"
 import { Markdown } from "@tiptap/markdown"
+import type { Node as PMNode } from "@tiptap/pm/model"
 import {
-  ChevronDownIcon, ClockIcon, EllipsisIcon, GripVerticalIcon, ImageIcon, LockIcon, MessageSquareIcon, PlusIcon,
-  SmilePlusIcon, StickyNoteIcon, TableIcon, TypeIcon,
+  ChevronDownIcon, ClockIcon, CopyIcon, DownloadIcon, FileTextIcon, FolderInputIcon, FolderOpenIcon, GripVerticalIcon, ImageIcon,
+  LockIcon, MessageSquareIcon, PlusIcon, SmilePlusIcon, TableIcon, Trash2Icon, TypeIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub,
+  DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { bySlug, type Doc } from "@/data/sample"
+import { bySlug, posts, titleOf, type Doc } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
-import { autosave, me, open, saveDraft, setIcon, showGraph, toggleSide, useWorkspace } from "@/workspace/store"
+import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
+import { autosave, me, moveDoc, open, openFile, saveDraft, setIcon, showGraph, toggleSide, useWorkspace } from "@/workspace/store"
 import { withAgent } from "@/workspace/tools"
-import { insertImage, insertTable, insertText } from "./commands"
+import { insertImage, insertImageFiles, insertTable, insertText } from "./commands"
 import { useComments } from "./comments"
-import { ImagePlaceholder, References, SlashCommand } from "./extensions"
+import { ActiveCell, References, SlashCommand } from "./extensions"
 import { IconPicker } from "./IconPicker"
 import { PlusMenu, SlashMenu } from "./InsertMenu"
 import { SelectionToolbar } from "./SelectionToolbar"
-import { TemplateGallery } from "./TemplateGallery"
-import { QUICK_TEMPLATES, type Template } from "./templates"
+import { LastEdited, TableControls } from "./TableControls"
 import "./editor.css"
 
 /** Bodies written before the editor start with "# Title"; the title has its own field now. */
 const withoutTitle = (body: string, title: string) => body.replace(new RegExp(`^#\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n*`), "")
 
 /** The page as Markdown, with [[links]] kept as written: the serializer escapes their brackets. */
-const toMarkdown = (e: Editor) => e.getMarkdown().replace(/\\\[\\\[([a-z0-9-]+)\\\]\\\]/gi, "[[$1]]")
+const unescapeLinks = (md: string) => md.replace(/\\\[\\\[([a-z0-9-]+)\\\]\\\]/gi, "[[$1]]")
+const toMarkdown = (e: Editor) => unescapeLinks(e.getMarkdown())
 
 const pill = "flex items-center gap-0.5 rounded-full bg-muted p-0.5"
 const pillButton = "size-8 rounded-full text-muted-foreground hover:bg-background hover:text-foreground aria-expanded:bg-background aria-expanded:text-foreground"
+const lastEdited = (d: Doc) => new Date(`${d.updated}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
 
 function ToolButton({ label, icon, onClick, ...props }: { label: string; icon: typeof TypeIcon; onClick?: () => void } & React.ComponentProps<typeof Button>) {
   return (
@@ -66,15 +74,113 @@ function useAutoHeight(ref: React.RefObject<HTMLTextAreaElement | null>, value: 
   }, [ref, value])
 }
 
+/** Where a page lives: vault › label › sublabel › title, or cortex › folder › title. */
+const pathOf = (d: Doc) => [d.kind === "post" ? "vault" : "cortex", d.label, d.sublabel, titleOf(d)].filter(Boolean) as string[]
+
+/**
+ * The page's path, in a pill. Drag it out to save the page as a .md file, or onto a vault folder in
+ * the side panel to file it there. Its menu opens a file, saves, and moves.
+ */
+function PathPill({ doc, markdown, editable, onPickFile }: { doc: Doc; markdown: () => string; editable: boolean; onPickFile: () => void }) {
+  const path = pathOf(doc)
+  const folders = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of posts) { set.add(p.label); if (p.sublabel) set.add(`${p.label}/${p.sublabel}`) }
+    return [...set].sort()
+  }, [doc.updated, doc.label, doc.sublabel]) // eslint-disable-line react-hooks/exhaustive-deps
+  const here = doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={
+        <button type="button" draggable aria-label={`${path.join(" / ")}. Drag out to save as Markdown`}
+          onDragStart={e => dragOutAsMarkdown(e.dataTransfer, doc.id, doc.title, `# ${titleOf(doc)}\n\n${markdown()}`)}
+          className={cn(pill, "h-9 min-w-0 max-w-[min(440px,55vw)] cursor-grab gap-1.5 ps-3 pe-2 text-small text-muted-foreground transition-colors duration-(--ohm-duration-state) hover:text-foreground active:cursor-grabbing aria-expanded:text-foreground")} />
+      }>
+        <Icon icon={FileTextIcon} size="sm" className="flex-none" />
+        <span className="flex min-w-0 items-center gap-1">
+          {path.map((seg, i) => (
+            <span key={i} className={cn("flex min-w-0 items-center gap-1", i < path.length - 1 ? "flex-shrink" : "flex-shrink-0")}>
+              <span className={cn("truncate", i === path.length - 1 && "max-w-48 font-medium text-foreground")}>{seg}</span>
+              {i < path.length - 1 && <span aria-hidden className="text-muted-foreground/60">/</span>}
+            </span>
+          ))}
+        </span>
+        <Icon icon={ChevronDownIcon} size="xs" className="flex-none" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-60">
+        <DropdownMenuItem className="flex items-center gap-2" onClick={onPickFile}><Icon icon={FolderOpenIcon} size="sm" />Open file…</DropdownMenuItem>
+        <DropdownMenuItem className="flex items-center gap-2" onClick={() => saveAsMarkdown(doc.title, `# ${titleOf(doc)}\n\n${markdown()}`)}><Icon icon={DownloadIcon} size="sm" />Save as Markdown</DropdownMenuItem>
+        {doc.kind === "post" && editable && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="flex items-center gap-2"><Icon icon={FolderInputIcon} size="sm" />Move to</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="max-h-72 w-52 overflow-y-auto">
+              {folders.map(f => (
+                <DropdownMenuCheckboxItem key={f} checked={f === here} onCheckedChange={() => {
+                  const [label, sublabel] = f.split("/")
+                  moveDoc(doc.id, label, sublabel)
+                  notify({ message: `Filed under ${f.replace("/", " › ")}`, tone: "info" })
+                }}>{f.replace("/", " › ")}</DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+        <DropdownMenuSeparator />
+        <p className="px-3 py-1.5 text-small text-muted-foreground">Drag the path out to save it, or onto a folder to file it.</p>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** The block handle's menu: for a table, its own options; for any block, insert, duplicate, copy, delete. */
+function BlockMenu({ editor, block, updated, onClose }: { editor: Editor; block: { node: PMNode; pos: number }; updated: string; onClose: () => void }) {
+  const { node, pos } = block
+  const isTable = node.type.name === "table"
+  const end = pos + node.nodeSize
+  const json = node.toJSON()
+  const md = () => unescapeLinks(editor.markdown?.serialize({ type: "doc", content: [json] }) ?? node.textContent)
+  const headerRow = isTable && (node.firstChild?.firstChild?.type.name === "tableHeader")
+  let headerCol = isTable
+  if (isTable) node.forEach(r => { if (r.firstChild?.type.name !== "tableHeader") headerCol = false })
+  const inTable = (fn: () => void) => { editor.chain().focus().setTextSelection(pos + 3).run(); fn() }
+  const done = (fn: () => void) => () => { fn(); onClose() }
+  return <>
+    <DropdownMenuItem className="flex items-center gap-2" onClick={done(() => editor.chain().focus().insertContentAt(end, { type: "paragraph" }).setTextSelection(end + 1).run())}>
+      <Icon icon={PlusIcon} size="sm" />Insert below
+    </DropdownMenuItem>
+    {!isTable && (
+      <DropdownMenuItem className="flex items-center gap-2" onClick={done(() => editor.chain().focus().insertContentAt(end, json).run())}>
+        <Icon icon={CopyIcon} size="sm" />Duplicate
+      </DropdownMenuItem>
+    )}
+    <DropdownMenuItem className="flex items-center gap-2" onClick={done(() => { void navigator.clipboard?.writeText(md()); notify({ message: "Copied as Markdown", tone: "info" }) })}>
+      <Icon icon={CopyIcon} size="sm" />Copy as Markdown
+    </DropdownMenuItem>
+    {isTable && <>
+      <DropdownMenuSeparator />
+      <DropdownMenuCheckboxItem checked={headerRow} onCheckedChange={() => inTable(() => editor.chain().focus().toggleHeaderRow().run())}>Header row</DropdownMenuCheckboxItem>
+      <DropdownMenuCheckboxItem checked={headerCol} onCheckedChange={() => inTable(() => editor.chain().focus().toggleHeaderColumn().run())}>Header column</DropdownMenuCheckboxItem>
+    </>}
+    <DropdownMenuSeparator />
+    <DropdownMenuItem variant="destructive" className="flex items-center gap-2" onClick={done(() => editor.chain().focus().deleteRange({ from: pos, to: end }).run())}>
+      <Icon icon={Trash2Icon} size="sm" />{isTable ? "Delete table" : "Delete"}
+    </DropdownMenuItem>
+    <LastEdited date={updated} />
+  </>
+}
+
 export function PageEditor({ doc }: { doc: Doc }) {
   const { agentsAllowed, offered } = useWorkspace()
   const editable = doc.kind === "post" && doc.visibility === "private"
   const [title, setTitle] = useState(doc.title)
-  const [isEmpty, setIsEmpty] = useState(!doc.body.trim())
-  const [gallery, setGallery] = useState(false)
   const [plusOpen, setPlusOpen] = useState(false)
   const [iconOpen, setIconOpen] = useState(false)
+  const [block, setBlock] = useState<{ node: PMNode; pos: number } | null>(null)
+  const [blockMenu, setBlockMenu] = useState(false)
+  const [dropping, setDropping] = useState<"open" | "image" | null>(null)
+  const [canvas, setCanvas] = useState<HTMLDivElement | null>(null)
   const titleRef = useRef<HTMLTextAreaElement>(null)
+  const imageInput = useRef<HTMLInputElement>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
   useAutoHeight(titleRef, title)
   const comments = useComments(doc.id)
   const save = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -89,8 +195,8 @@ export function PageEditor({ doc }: { doc: Doc }) {
         includeChildren: false,
       }),
       TaskList, TaskItem.configure({ nested: true }),
-      TableKit.configure({ table: { resizable: false } }),
-      Image, Highlight, ImagePlaceholder, SlashCommand, Markdown,
+      TableKit.configure({ table: { resizable: true, lastColumnResizable: false } }),
+      Image, Highlight, SlashCommand, ActiveCell, Markdown,
       References(ref => {
         if (ref.slug) { const d = bySlug(ref.slug); if (d) open(d.id) }
         if (ref.handle) showGraph(ref.handle)
@@ -98,16 +204,49 @@ export function PageEditor({ doc }: { doc: Doc }) {
     ],
     content: withoutTitle(doc.body, doc.title),
     contentType: "markdown",
-    editorProps: { attributes: { class: "ohm-prose", "aria-label": "Page" } },
+    editorProps: {
+      attributes: { class: "ohm-prose", "aria-label": "Page" },
+      // Images dropped or pasted go into the page where they land; pages and text files open.
+      handleDrop: (view, event) => {
+        const dt = (event as DragEvent).dataTransfer
+        if (!dt) return false
+        const files = [...dt.files]
+        if (files.some(f => f.type.startsWith("image/"))) {
+          if (!view.editable) return false
+          event.preventDefault()
+          const at = view.posAtCoords({ left: (event as DragEvent).clientX, top: (event as DragEvent).clientY })
+          const $pos = at ? view.state.doc.resolve(at.pos) : null
+          insertImageFiles(editorRef.current!, files, $pos && $pos.depth > 0 ? $pos.after(1) : undefined)
+          return true
+        }
+        if (dt.types.includes(DOC_DRAG) || files.length) {
+          event.preventDefault()
+          void openDropped(dt)
+          return true
+        }
+        return false
+      },
+      handlePaste: (_view, event) => {
+        const files = [...(event.clipboardData?.files ?? [])]
+        return files.length > 0 && insertImageFiles(editorRef.current!, files)
+      },
+    },
     onUpdate: ({ editor: e }) => {
-      setIsEmpty(e.isEmpty)
       if (save.current) clearTimeout(save.current)
       save.current = setTimeout(() => autosave(doc.id, { body: toMarkdown(e) }), 400)
     },
   }, [doc.id])
+  const editorRef = useRef<Editor | null>(null)
+  editorRef.current = editor
 
   useEffect(() => () => { if (save.current) clearTimeout(save.current) }, [])
   useEffect(() => { if (editable && !doc.title) titleRef.current?.focus() }, [doc.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The toolbar's Image and the "/" menu's Image both ask for a file.
+  useEffect(() => {
+    const pick = () => imageInput.current?.click()
+    window.addEventListener("ohm:pick-image", pick)
+    return () => window.removeEventListener("ohm:pick-image", pick)
+  }, [])
 
   // The page's one primary action is saving, and it is also a tool while a private page is open.
   const offer = editable && agentsAllowed && offered["workspace.save-draft"]
@@ -135,29 +274,28 @@ export function PageEditor({ doc }: { doc: Doc }) {
     return () => ac.abort()
   }, [offer, editor, doc.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const useTemplate = (t: Template) => {
-    if (!editor) return
-    editor.chain().focus().setContent(t.markdown, { contentType: "markdown" }).run()
-    if (!title.trim()) { setTitle(t.name); autosave(doc.id, { title: t.name }) }
-    if (!doc.icon) setIcon(doc.id, t.emoji)
-    setGallery(false)
-  }
-
   if (!editor) return null
+  const updated = lastEdited(doc)
+  const dragKind = (dt: DataTransfer) =>
+    [...dt.items].some(i => i.kind === "file" && i.type.startsWith("image/")) ? (editable ? "image" : null)
+      : dt.types.includes(DOC_DRAG) || dt.types.includes("Files") ? "open" : null
+
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* Toolbar: the page's icon, then inserts; history, comments, you and sharing on the right. */}
+    <div className="relative flex min-h-0 flex-1 flex-col"
+      onDragEnter={e => { const k = dragKind(e.dataTransfer); if (k) setDropping(k) }}
+      onDragOver={e => { if (dragKind(e.dataTransfer)) e.preventDefault() }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(null) }}
+      onDrop={e => {
+        setDropping(null)
+        if (e.defaultPrevented) return
+        e.preventDefault()
+        if (dragKind(e.dataTransfer) === "image") insertImageFiles(editor, [...e.dataTransfer.files])
+        else void openDropped(e.dataTransfer)
+      }}>
+      {/* Toolbar: the page's path, then inserts; history, comments, you and sharing on the right. */}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
-        <div className="flex items-center gap-1.5">
-          <Popover open={iconOpen} onOpenChange={setIconOpen}>
-            <PopoverTrigger render={<button type="button" aria-label="Page icon" disabled={!editable} className={cn(pill, "h-9 gap-1 ps-2.5 pe-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60")} />}>
-              {doc.icon ? <span className="text-[16px] leading-none">{doc.icon}</span> : <Icon icon={StickyNoteIcon} size="sm" />}
-              <Icon icon={ChevronDownIcon} size="xs" />
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto rounded-lg">
-              <IconPicker value={doc.icon} onPick={e => { setIcon(doc.id, e); setIconOpen(false) }} />
-            </PopoverContent>
-          </Popover>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <PathPill doc={doc} editable={editable} markdown={() => toMarkdown(editor)} onPickFile={() => fileInput.current?.click()} />
           {editable && (
             <div className={pill}>
               <ToolButton label="Text" icon={TypeIcon} onClick={() => insertText(editor)} />
@@ -174,15 +312,15 @@ export function PageEditor({ doc }: { doc: Doc }) {
             </div>
           )}
           {!editable && (
-            <span className="flex items-center gap-1.5 ps-1 text-small text-muted-foreground">
+            <span className="flex items-center gap-1.5 ps-1 text-small whitespace-nowrap text-muted-foreground">
               <Icon icon={LockIcon} size="xs" />
               {doc.kind === "post" ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-none items-center gap-1.5">
           <div className={pill}>
-            <ToolButton label="History" icon={ClockIcon} onClick={() => notify({ message: `Saved ${doc.updated}. Earlier versions are not part of this wireframe`, tone: "info" })} />
+            <ToolButton label="History" icon={ClockIcon} onClick={() => notify({ message: `Last edited ${updated}. Earlier versions are not part of this wireframe`, tone: "info" })} />
             <Popover>
               <PopoverTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`Comments, ${comments.length}`} className={cn(pillButton, "relative")} />}>
                 <Icon icon={MessageSquareIcon} size="sm" />
@@ -194,7 +332,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
                   <ul className="flex flex-col gap-3">
                     {comments.map(c => (
                       <li key={c.id} className="flex flex-col gap-1">
-                        <span className="border-s-2 border-border ps-2 text-small text-muted-foreground line-clamp-2">{c.quote}</span>
+                        <span className="line-clamp-2 border-s-2 border-border ps-2 text-small text-muted-foreground">{c.quote}</span>
                         <span className="text-body">{c.text}</span>
                       </li>
                     ))}
@@ -214,16 +352,24 @@ export function PageEditor({ doc }: { doc: Doc }) {
         <div className="mx-auto w-full max-w-[720px] px-14 pt-10 pb-40 max-md:px-6">
           {doc.icon && (
             <button type="button" aria-label="Change icon" disabled={!editable} onClick={() => setIconOpen(true)}
-              className="mb-3 -ms-1 rounded-md p-1 text-[44px] leading-none transition-transform duration-(--ohm-duration-press) ease-(--ohm-ease-out) hover:bg-muted active:scale-95 animate-in fade-in-0 zoom-in-90">
+              className="mb-3 -ms-1 rounded-md p-1 text-[44px] leading-none transition-transform duration-(--ohm-duration-press) ease-(--ohm-ease-out) animate-in fade-in-0 zoom-in-90 hover:bg-muted active:scale-95">
               {doc.icon}
             </button>
           )}
           <div className="group/title relative">
-            {editable && !doc.icon && (
-              <button type="button" aria-label="Add icon" onClick={() => setIconOpen(true)}
-                className="absolute top-1.5 -left-8 flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity duration-(--ohm-duration-state) group-hover/title:opacity-100 hover:bg-muted focus-visible:opacity-100">
-                <Icon icon={SmilePlusIcon} size="sm" />
-              </button>
+            {editable && (
+              <Popover open={iconOpen} onOpenChange={setIconOpen}>
+                <PopoverTrigger render={
+                  <button type="button" aria-label={doc.icon ? "Change icon" : "Add icon"}
+                    className={cn("absolute top-1.5 -left-8 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-opacity duration-(--ohm-duration-state) hover:bg-muted focus-visible:opacity-100",
+                      doc.icon ? "pointer-events-none opacity-0" : "opacity-0 group-hover/title:opacity-100")} />
+                }>
+                  <Icon icon={SmilePlusIcon} size="sm" />
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto rounded-lg">
+                  <IconPicker value={doc.icon} onPick={e => { setIcon(doc.id, e); setIconOpen(false) }} />
+                </PopoverContent>
+              </Popover>
             )}
             <textarea ref={titleRef} rows={1} value={title} readOnly={!editable} placeholder="Untitled page" aria-label="Title"
               onChange={e => { setTitle(e.target.value); autosave(doc.id, { title: e.target.value }) }}
@@ -238,35 +384,44 @@ export function PageEditor({ doc }: { doc: Doc }) {
               className="block w-full resize-none overflow-hidden bg-transparent text-h2 font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60" />
           </div>
 
-          {editable && isEmpty && (
-            <div className="mt-4 flex flex-wrap items-center gap-1 animate-in fade-in-0 duration-(--ohm-duration-open)">
-              {QUICK_TEMPLATES.map(t => (
-                <Button key={t.id} size="sm" variant="ghost" className="h-8 rounded-full px-3 font-normal text-muted-foreground hover:text-foreground" onClick={() => useTemplate(t)}>
-                  <Icon icon={t.icon} size="sm" /> {t.name}
-                </Button>
-              ))}
-              <Button size="icon-sm" variant="ghost" aria-label="More templates" className="rounded-full text-muted-foreground" onClick={() => setGallery(true)}>
-                <Icon icon={EllipsisIcon} size="sm" />
-              </Button>
-            </div>
-          )}
-
-          <div className="relative mt-6">
+          <div ref={setCanvas} className="relative mt-6">
             {editable && (
-              <DragHandle editor={editor}>
-                <div className="flex h-6 w-5 cursor-grab items-center justify-center rounded text-muted-foreground opacity-70 transition-opacity hover:bg-muted hover:opacity-100 active:cursor-grabbing">
-                  <Icon icon={GripVerticalIcon} size="sm" />
-                </div>
+              <DragHandle editor={editor} onNodeChange={({ node, pos }) => { if (!blockMenu) setBlock(node ? { node, pos } : null) }}>
+                <DropdownMenu open={blockMenu} onOpenChange={setBlockMenu}>
+                  <DropdownMenuTrigger render={
+                    <button type="button" aria-label="Block menu" onDragStart={() => setBlockMenu(false)}
+                      className="flex h-6 w-5 cursor-grab items-center justify-center rounded text-muted-foreground opacity-70 transition-opacity hover:bg-muted hover:opacity-100 active:cursor-grabbing aria-expanded:bg-muted aria-expanded:opacity-100" />
+                  }>
+                    <Icon icon={GripVerticalIcon} size="sm" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" side="left" className="w-56">
+                    {block && <BlockMenu editor={editor} block={block} updated={updated} onClose={() => setBlockMenu(false)} />}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </DragHandle>
             )}
             <EditorContent editor={editor} />
+            {editable && <TableControls editor={editor} container={canvas} updated={updated} />}
           </div>
         </div>
       </div>
 
-      {editable && <SelectionToolbar editor={editor as Editor} docId={doc.id} />}
+      {/* Dropping: a page or text file opens; an image goes into the page. */}
+      {dropping && (
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-md bg-background/70 ring-2 ring-primary/40 backdrop-blur-[2px] animate-in fade-in-0 duration-(--ohm-duration-state)">
+          <span className="rounded-full bg-popover px-4 py-2 text-body shade-3">
+            {dropping === "image" ? "Drop to add the image here" : "Drop to open"}
+          </span>
+        </div>
+      )}
+
+      <input ref={imageInput} type="file" accept="image/*" multiple hidden
+        onChange={e => { insertImageFiles(editor, [...(e.target.files ?? [])]); e.target.value = "" }} />
+      <input ref={fileInput} type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden
+        onChange={async e => { const f = e.target.files?.[0]; if (f) openFile(f.name, await f.text()); e.target.value = "" }} />
+
+      {editable && <SelectionToolbar editor={editor} docId={doc.id} />}
       <SlashMenu />
-      <TemplateGallery open={gallery} onOpenChange={setGallery} onPick={useTemplate} />
     </div>
   )
 }

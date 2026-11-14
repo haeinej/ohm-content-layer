@@ -37,10 +37,19 @@ const afterBlock = (e: Editor) => {
   return $from.depth > 0 ? $from.after(1) : e.state.doc.content.size
 }
 /** From "/" the block replaces the typed command; from the toolbar it is added after the current block. */
-const insertBlock = (e: Editor, range: Range | undefined, content: object) =>
-  range ? at(e, range).insertContent(content).run() : e.chain().focus().insertContentAt(afterBlock(e), content).run()
-
-export const insertImage = (e: Editor, range?: Range) => insertBlock(e, range, { type: "imagePlaceholder" })
+/** Images come from a file: the page opens a picker (or takes a dropped or pasted image). */
+export const insertImage = (e: Editor, range?: Range) => {
+  if (range) at(e, range).run()
+  window.dispatchEvent(new CustomEvent("ohm:pick-image"))
+}
+/** Puts image files into the page at a position, or after the current block. */
+export function insertImageFiles(e: Editor, files: File[], pos?: number) {
+  const images = files.filter(f => f.type.startsWith("image/"))
+  if (!images.length) return false
+  const nodes = images.map(f => ({ type: "image", attrs: { src: URL.createObjectURL(f), alt: f.name.replace(/\.[^.]+$/, "") } }))
+  e.chain().focus().insertContentAt(pos ?? afterBlock(e), nodes).run()
+  return true
+}
 export const insertTable = (e: Editor, range?: Range) => {
   if (range) return at(e, range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
   const pos = afterBlock(e)
@@ -67,7 +76,7 @@ export const INSERT_GROUPS: InsertGroup[] = [
   },
   {
     label: "Media", items: [
-      { id: "image", label: "Image", hint: "Upload or generate an image", icon: ImageIcon, keywords: "picture photo", run: insertImage },
+      { id: "image", label: "Image", hint: "Upload, or drop one on the page", icon: ImageIcon, keywords: "picture photo upload", run: insertImage },
       { id: "video", label: "Video", hint: "Upload a video", icon: VideoIcon, keywords: "movie", run: (e, r) => { at(e, r).run(); notify({ message: "Video is not part of this wireframe", tone: "info" }) } },
       { id: "audio", label: "Audio", hint: "Upload audio", icon: AudioLinesIcon, keywords: "sound music", run: (e, r) => { at(e, r).run(); notify({ message: "Audio is not part of this wireframe", tone: "info" }) } },
       { id: "file", label: "File", hint: "Upload a file", icon: FileIcon, keywords: "attachment", run: (e, r) => { at(e, r).run(); notify({ message: "Files are not part of this wireframe", tone: "info" }) } },

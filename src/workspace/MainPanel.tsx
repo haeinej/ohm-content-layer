@@ -7,6 +7,7 @@ import { PageEditor } from "@/editor/PageEditor"
 import { cn } from "@/lib/cn"
 import { SettingsView } from "./Settings"
 import { surface } from "./Surface"
+import { openDropped, opensOnDrop } from "./drop"
 import { closeSettings, createDraft, setAudience, setSearchOpen, showGraph, useWorkspace } from "./store"
 
 /** Where things open: a page in the editor, an inbox item, or settings. A card of its own, apart from the rack. */
@@ -36,10 +37,11 @@ export function MainPanel() {
       ) : view.kind === "inbox" ? (
         <InboxItemView id={view.id} />
       ) : (
-        <Empty className="flex-1">
+        <Empty className="flex-1" onDragOver={e => { if (opensOnDrop(e.dataTransfer)) e.preventDefault() }}
+          onDrop={e => { e.preventDefault(); void openDropped(e.dataTransfer) }}>
           <EmptyHeader>
             <EmptyTitle>Nothing open</EmptyTitle>
-            <EmptyDescription>Open a page from your repo, search, or start one.</EmptyDescription>
+            <EmptyDescription>Open a page from your repository, drop one here, search, or start one.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent className="flex-row justify-center">
             <Button variant="ghost" onClick={() => setSearchOpen(true)}>Search</Button>

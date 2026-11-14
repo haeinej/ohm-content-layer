@@ -33,11 +33,16 @@
 .ohm-prose a { color: var(--ohm-forest); text-decoration: underline; text-underline-offset: 3px; }
 
 /* Tables: quiet lines that group cells, a toned header row. */
-.ohm-prose table { border-collapse: collapse; width: 100%; margin: .8em 0; table-layout: fixed; font-size: var(--ohm-type-body-size); }
+.ohm-prose table { border-collapse: collapse; width: 100%; margin: 1.2em 0; table-layout: fixed; font-size: var(--ohm-type-body-size); }
 .ohm-prose th, .ohm-prose td { border: 1px solid var(--ohm-line); padding: .45em .7em; vertical-align: top; text-align: start; }
 .ohm-prose th { background: var(--ohm-wash); font-weight: 500; color: var(--ohm-muted); }
 .ohm-prose th p, .ohm-prose td p { min-height: 1.5em; }
-.ohm-prose .selectedCell { background: color-mix(in oklab, var(--ohm-forest) 10%, transparent); }
+.ohm-prose td, .ohm-prose th { position: relative; transition: box-shadow var(--ohm-duration-state) var(--ohm-ease-out), background-color var(--ohm-duration-state) var(--ohm-ease-out); }
+.ohm-prose .is-active-cell { box-shadow: inset 0 0 0 1.5px var(--ohm-forest); }
+.ohm-prose .selectedCell { background: color-mix(in oklab, var(--ohm-forest) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ohm-forest) 45%, transparent); }
+.ohm-prose .selectedCell::after { content: none; }
+:root[data-theme="dark"] .ohm-prose .is-active-cell { box-shadow: inset 0 0 0 1.5px var(--ohm-green-light); }
+:root[data-theme="dark"] .ohm-prose .selectedCell { background: color-mix(in oklab, var(--ohm-green-light) 14%, transparent); }
 .ohm-prose .tableWrapper { overflow-x: auto; }
 
 /* Placeholder on the empty line the caret is on. */
@@ -60,3 +65,8 @@
 .ohm-prose .ProseMirror-selectednode:not(img) { border-radius: var(--ohm-radius-item); box-shadow: 0 0 0 2px color-mix(in oklab, var(--ohm-forest) 30%, transparent); }
 
 @media (prefers-reduced-motion: reduce) { .ohm-prose * { transition: none !important; animation: none !important; } }
+
+/* Column resizing: a forest line on the edge being dragged. */
+.ohm-prose .column-resize-handle { position: absolute; top: 0; bottom: -1px; right: -2px; width: 3px; background: var(--ohm-forest); pointer-events: none; border-radius: 2px; }
+:root[data-theme="dark"] .ohm-prose .column-resize-handle { background: var(--ohm-green-light); }
+.ohm-prose.resize-cursor, .resize-cursor .ohm-prose { cursor: col-resize; }

@@ -13,7 +13,8 @@ export type View =
   | { kind: "inbox"; id: string }
   | { kind: "settings"; tab: SettingsTab }
 export type Appearance = "system" | "light" | "dark"
-export type RepoScope = "all" | "cortex" | "vault"
+/** Which of the repository's two prime folders are shown. "All" is both. */
+export type RepoScope = { cortex: boolean; vault: boolean }
 export const SIDE_WIDTH = { min: 220, max: 640, initial: 300 }
 const savedWidth = () => {
   try { const w = Number(localStorage.getItem("ohm-ux:side-width")); return w >= SIDE_WIDTH.min && w <= SIDE_WIDTH.max ? w : SIDE_WIDTH.initial } catch { return SIDE_WIDTH.initial }
@@ -45,7 +46,7 @@ const narrow = () => typeof window !== "undefined" && window.matchMedia("(max-wi
 const sideAfterOpen = (): Partial<State> => (narrow() ? { side: null } : {})
 
 let state: State = {
-  side: narrow() ? null : "repo", repoMode: "tree", scope: "all", sideWidth: savedWidth(), audience: "personal",
+  side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal",
   graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0,
   appearance: "system", agentsAllowed: true,
   offered: { "workspace.search": true, "workspace.open": true, "workspace.graph": true, "workspace.create": true, "workspace.save-draft": true },
@@ -74,7 +75,7 @@ export function setSideWidth(w: number) {
   set({ sideWidth })
 }
 /** The graph filters a scope stands for. */
-export const scopeFolders = (scope: RepoScope) => ({ cortex: scope !== "vault", vault: scope !== "cortex" })
+export const scopeFolders = (scope: RepoScope) => scope
 
 // Visibility
 export const setAudience = (audience: Audience) => set({ audience })
@@ -172,4 +173,21 @@ export function autosave(id: string, patch: { title?: string; body?: string }) {
   if (doc.id.startsWith("draft-") && patch.title) doc.slug = slugify(patch.title) || doc.slug
   doc.updated = new Date().toISOString().slice(0, 10)
   set(bump())
+}
+
+/** Files a post under another label (and sublabel). Moving keeps who it is for. */
+export function moveDoc(id: string, label: string, sublabel?: string) {
+  const doc = byId(id)
+  if (!doc || doc.kind !== "post") throw new DOMException("Only posts can be filed in the vault", "DataError")
+  doc.label = label
+  doc.sublabel = sublabel
+  set(bump())
+}
+
+/** Opens a Markdown or text file as a new private page. */
+export function openFile(name: string, text: string) {
+  const title = name.replace(/\.(md|markdown|txt)$/i, "")
+  const draft = createDraft({ title })
+  autosave(draft.id, { body: text })
+  return draft
 }

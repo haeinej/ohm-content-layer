@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
   AtSignIcon, BrainIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, FolderIcon,
@@ -6,17 +6,18 @@ import {
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { cortex, inbox, posts, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
 import { cn } from "@/lib/cn"
+import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
 import { SETTINGS_TABS } from "./settings-tabs"
 import { panelTitle, SidePanelFrame } from "./Surface"
 import {
-  me, open, openInbox, openSettings, setAudience, setRepoMode, setScope, useWorkspace, type RepoScope,
+  me, moveDoc, open, openInbox, openSettings, setAudience, setRepoMode, setScope, useWorkspace,
 } from "./store"
 
 /** label › sublabel › item, as folders. Folder ids are prefixed so they never collide with docs. */
@@ -52,11 +53,64 @@ const toggle = "text-muted-foreground aria-pressed:bg-muted aria-pressed:text-fo
 
 // ─── Personal repository ──────────────────────────────────────────────────────
 
-const SCOPES: { id: RepoScope; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "cortex", label: "Cortex" },
-  { id: "vault", label: "Vault" },
-]
+
+/**
+ * Tree rows as drag sources (a page) and drop targets (a vault folder). FileTree draws the rows; this
+ * marks them draggable and handles the events by delegation, so the tree itself stays as ohm-ui has it.
+ */
+function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unknown[]) {
+  useEffect(() => {
+    const root = ref.current
+    if (!root) return
+    root.querySelectorAll<HTMLElement>("[data-slot=file-tree-item]").forEach(row => {
+      const id = row.dataset.id ?? ""
+      row.draggable = !id.includes(":")
+    })
+  })
+  useEffect(() => {
+    const root = ref.current
+    if (!root) return
+    const rowOf = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>("[data-slot=file-tree-item]")
+    const folderOf = (row: HTMLElement | null) => (row?.dataset.id?.startsWith("vault:") ? row.dataset.id.slice(6) : null)
+    let over: HTMLElement | null = null
+    const clear = () => { over?.removeAttribute("data-drop"); over = null }
+    const start = (e: DragEvent) => {
+      const id = rowOf(e)?.dataset.id
+      if (!id || id.includes(":") || !e.dataTransfer) return
+      e.dataTransfer.setData(DOC_DRAG, id)
+      e.dataTransfer.effectAllowed = "copyMove"
+    }
+    const dragover = (e: DragEvent) => {
+      const row = rowOf(e)
+      if (!folderOf(row) || !e.dataTransfer?.types.includes(DOC_DRAG)) return clear()
+      e.preventDefault()
+      e.dataTransfer.dropEffect = "move"
+      if (row !== over) { clear(); over = row; row!.setAttribute("data-drop", "") }
+    }
+    const drop = (e: DragEvent) => {
+      const folder = folderOf(rowOf(e))
+      const id = e.dataTransfer?.getData(DOC_DRAG)
+      clear()
+      if (!folder || !id) return
+      e.preventDefault()
+      const [label, sublabel] = folder.split("/")
+      try {
+        moveDoc(id, label, sublabel)
+        notify({ message: `Filed under ${folder.replace("/", " › ")}`, tone: "info" })
+      } catch (err) { notify({ message: (err as Error).message }) }
+    }
+    root.addEventListener("dragstart", start)
+    root.addEventListener("dragover", dragover)
+    root.addEventListener("dragleave", clear)
+    root.addEventListener("drop", drop)
+    return () => {
+      root.removeEventListener("dragstart", start)
+      root.removeEventListener("dragover", dragover)
+      root.removeEventListener("dragleave", clear)
+      root.removeEventListener("drop", drop)
+    }
+  }, deps) // eslint-disable-line react-hooks/exhaustive-deps
+}
 
 /** One of the repo's two prime folders: a forest folder, bold, that opens in place. */
 function PrimeRow({ prime, open: isOpen, onOpen, locked }: { prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean }) {
@@ -76,7 +130,9 @@ function RepoPanel() {
   const cortexTree = useMemo(() => toTree("cortex", cortex, ["memories", "notes", "skills", "tools"]), [rev])
   const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p)), [rev, audience]) // eslint-disable-line react-hooks/exhaustive-deps
   const vaultTree = useMemo(() => toTree("vault", vaultDocs), [vaultDocs])
-  const showCortex = scope !== "vault", showVault = scope !== "cortex"
+  const showCortex = scope.cortex, showVault = scope.vault
+  const treeRef = useRef<HTMLDivElement>(null)
+  useTreeDragDrop(treeRef, [repoMode])
   const cortexLocked = audience !== "personal"
   const allFolders = useMemo(() => [
     ...(showCortex ? ["prime:cortex", ...folderIds(cortexTree)] : []),
@@ -89,21 +145,24 @@ function RepoPanel() {
 
   return (
     <SidePanelFrame
-      label="Personal repository"
+      label={`${me.name}'s repository`}
       scroll={repoMode === "tree"}
       heading={
+        /* Whose repository: you, in a pill. Its menu chooses what shows: All, or Cortex and Vault. */
         <DropdownMenu>
-          <DropdownMenuTrigger render={<button type="button" className="-ms-1 flex max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted" />}>
-            <span className={cn(panelTitle, "truncate")}>Personal repository</span>
+          <DropdownMenuTrigger render={
+            <button type="button" aria-label={`${me.name}'s repository: what it shows`}
+              className="flex max-w-full items-center gap-2 rounded-full bg-muted py-1 ps-1 pe-2.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-foreground/8 aria-expanded:bg-foreground/8" />
+          }>
+            <Avatar className="size-6"><AvatarFallback className="bg-primary text-small text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
+            <span className="truncate text-body font-medium">{me.name}</span>
             <Icon icon={ChevronDownIcon} size="sm" className="flex-none text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-48">
-            {SCOPES.map(s => (
-              <DropdownMenuItem key={s.id} onClick={() => setScope(s.id)} className="flex items-center gap-2">
-                <span className="flex-1">{s.label}</span>
-                <Icon icon={CheckIcon} size="sm" className={cn(scope !== s.id && "invisible")} />
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuCheckboxItem checked={scope.cortex && scope.vault} onCheckedChange={() => setScope({ cortex: true, vault: true })}>All</DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem checked={scope.cortex} onCheckedChange={v => setScope({ ...scope, cortex: v })}>Cortex</DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked={scope.vault} onCheckedChange={v => setScope({ ...scope, vault: v })}>Vault</DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
       }
@@ -125,7 +184,10 @@ function RepoPanel() {
       </>}
     >
       {repoMode === "tree" ? (
-        <div className="flex flex-col gap-0.5">
+        <div ref={treeRef} className="flex flex-col gap-0.5 [&_[data-drop]]:bg-primary/10 [&_[data-drop]]:ring-1 [&_[data-drop]]:ring-primary/40">
+          {!showCortex && !showVault && (
+            <p className="px-2 py-6 text-center text-small text-muted-foreground">Choose Cortex or Vault from the menu above.</p>
+          )}
           {showCortex && <>
             <PrimeRow prime="cortex" locked={cortexLocked} open={!cortexLocked && expanded.has("prime:cortex")} onOpen={() => flip("prime:cortex")} />
             {!cortexLocked && expanded.has("prime:cortex") && (

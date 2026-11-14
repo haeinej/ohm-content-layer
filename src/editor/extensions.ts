@@ -1,10 +1,8 @@
 // The editor's own extensions: the "/" menu, the image placeholder block, and live [[links]] and @mentions.
-import { Extension, Node, mergeAttributes, type Editor, type Range } from "@tiptap/react"
-import { ReactNodeViewRenderer } from "@tiptap/react"
+import { Extension, type Editor, type Range } from "@tiptap/react"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
 import Suggestion, { type SuggestionKeyDownProps } from "@tiptap/suggestion"
-import { ImagePlaceholderView } from "./ImagePlaceholder"
 
 // ─── "/" menu ──────────────────────────────────────────────────────────────────
 // The suggestion plugin finds "/query"; the React menu (SlashMenu) draws it from this small store.
@@ -46,20 +44,6 @@ export const SlashCommand = Extension.create({
   },
 })
 
-// ─── Image placeholder ─────────────────────────────────────────────────────────
-
-export const ImagePlaceholder = Node.create({
-  name: "imagePlaceholder",
-  group: "block",
-  atom: true,
-  draggable: true,
-  parseHTML: () => [{ tag: "div[data-image-placeholder]" }],
-  renderHTML: ({ HTMLAttributes }) => ["div", mergeAttributes(HTMLAttributes, { "data-image-placeholder": "" })],
-  addNodeView: () => ReactNodeViewRenderer(ImagePlaceholderView),
-  // An empty image is not written to Markdown.
-  renderMarkdown: () => "",
-})
-
 // ─── [[links]] and @mentions ───────────────────────────────────────────────────
 // Drawn as links in the text and followed on click; the text itself stays plain Markdown.
 
@@ -99,3 +83,31 @@ export const References = (onFollow: (ref: { slug?: string; handle?: string }) =
       ]
     },
   })
+
+// ─── The cell the caret is in ───────────────────────────────────────────────────
+// Outlined, as the recording shows; a selection of several cells uses the table's own class.
+
+export const ActiveCell = Extension.create({
+  name: "activeCell",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("activeCell"),
+        props: {
+          decorations(state) {
+            if (!state.selection.empty) return null
+            const $pos = state.selection.$head
+            for (let d = $pos.depth; d > 0; d--) {
+              const node = $pos.node(d)
+              if (node.type.name === "tableCell" || node.type.name === "tableHeader") {
+                const from = $pos.before(d)
+                return DecorationSet.create(state.doc, [Decoration.node(from, from + node.nodeSize, { class: "is-active-cell" })])
+              }
+            }
+            return null
+          },
+        },
+      }),
+    ]
+  },
+})

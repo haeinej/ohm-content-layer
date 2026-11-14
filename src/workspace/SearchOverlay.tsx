@@ -95,7 +95,7 @@ export function SearchOverlay() {
         </div>
         <form className="flex flex-none items-center gap-2.5 rounded-md bg-muted py-1.5 ps-3 pe-1.5" onSubmit={e => { e.preventDefault(); submit() }}>
           <span className="flex size-icon flex-none items-center justify-center" aria-hidden>
-            <span className="size-2.5 rounded-full bg-primary dark:bg-foreground" />
+            <span className="size-icon rounded-full bg-primary dark:bg-foreground" />
           </span>
           <input
             ref={input}

@@ -27,7 +27,7 @@ The rack sits on the page itself. The side panel and the main panel are separate
 | ohm dot | Nothing. The brand mark, at icon size |
 | Search (⌘K) | Unchanged. Search opens over everything |
 | New post (⌘N) | Unchanged. A private draft opens in the editor |
-| **Personal repository** | The repository, read-only. Its title is a dropdown, **All / Cortex / Vault**, with a check beside the one shown. The two top-level folders, **cortex** and **vault**, are bold forest folders that open in place. A chevron-all button opens or closes everything, and a Tree/Graph switch shows the same scope as a graph inside the panel. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device |
+| **Personal repository** | The repository, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders are bold forest folders that open in place. A chevron-all button opens or closes everything, and a Tree/Graph switch shows the same scope as a graph inside the panel. Drag a page from the tree onto the main panel to open it, or onto a vault folder to file it there. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device |
 | **Visibility** | *View as* Only you, Friends or Public, with a check beside the current one. The repository, the graph and the page then show only what that audience can see, with a "Viewing as…" bar and Back to you |
 | **Inbox** | Replies, mentions, friend requests and cortex notes, newest first, with new ones marked. One about a post opens that post; the others open in the main panel |
 | You (avatar) | Your name and handle, then the settings sections: Your profile, Identity, Agents, Vault, Cortex, Appearance, and Sign out |
@@ -66,18 +66,40 @@ How it behaves, as Obsidian's graph view does (from the screen recording):
 
 ## The page editor
 
-Every page opens in the main panel in one block editor, built after the reference recording (Tiptap underneath, so the page is Markdown).
+Every page opens in the main panel in one block editor, built after the reference recordings (Tiptap underneath, so the page is Markdown).
 
-- **Toolbar.** On the left, the page's icon (opens the icon picker) and a pill of inserts: Text, Image, Table, and + for everything. On the right, History, Comments (with a dot when there are some), you, and **Share**, which opens Visibility. Toolbar inserts go after the block the caret is in, never inside a table or list.
-- **Icon and title.** An emoji above the title, picked from a searchable, grouped set (with Clear); hover the title to add one. The title reads "Untitled page" until it has one; Enter moves into the page.
-- **Templates.** While a page is empty, chips under the title (To-do list, Project tracker, Weekly update, Feedback tracker) fill it, and ⋯ opens a gallery with previews of all seven. A template also sets the title and icon if they are empty.
-- **Writing.** The empty line says "Type / for commands or @ for mentions". `/` opens the insert menu at the caret, grouped (Generate, Create, Media, Basic) and filtered as you type, with arrows and Enter to choose. Each block has a drag handle on hover.
-- **Selected text** brings up a floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), Bold, Italic, Underline, Strikethrough, Code, a **Text ▾** menu to turn the block into a heading, list, checklist, quote or code (with a check on the current one), and **Comment**, which opens an inline field with dictation and send, then highlights the text and adds the comment to the toolbar's list.
-- **Blocks:** paragraphs, three headings, bulleted, numbered and check lists, quotes, code, dividers, tables with a toned header row, and images. An image starts as a placeholder with **Generate** and **Attach** (Upload image, or Choose from vault).
+- **Path.** The toolbar starts with the page's path in a pill, such as `vault / writing / journal / Monday, rain`.
+  - **Save by dragging:** drag the pill out of the window to save the page as a `.md` file, or onto a vault folder in the side panel to file it there.
+  - **Its menu:** Open file… (a `.md` or `.txt` file becomes a new private page), Save as Markdown, and Move to (a vault folder).
+- **Toolbar.** After the path, a pill of inserts: Text, Image, Table, and + for everything. On the right: History, Comments (with a dot when there are some), you, and **Share**, which opens Visibility. Toolbar inserts go after the block the caret is in, never inside a table or list.
+- **Dropping.**
+  - **Images** dropped or pasted onto the page go in where they land. Image in the toolbar or `/` opens a file picker.
+  - **Pages and files:** dropping a `.md` or `.txt` file, or a page from the tree, opens it. A veil says what the drop will do.
+- **Title.** "Untitled page" until it has one; Enter moves into the page. Hover it to add an emoji icon.
+- **Writing.** The empty line says "Type / for commands or @ for mentions". `/` opens the insert menu at the caret, grouped (Generate, Create, Media, Basic) and filtered as you type, with arrows and Enter.
+- **Block handle.** Each block has a handle on hover. Drag it to move the block. Click it for its menu:
+  - **Any block:** Insert below, Duplicate, Copy as Markdown, Delete.
+  - **A table:** Insert below, Copy as Markdown, Header row, Header column, Delete table.
+  - Each menu ends with "Last edited by … · date".
+- **Tables**, as in the recording:
+  - **Row handle** on the left of the hovered row: Insert row above or below, Move row up or down (dimmed at the ends), Delete row.
+  - **Column handle** on top of the hovered column: Insert column left or right, Move column left or right, Fit column to contents, Distribute columns evenly, Delete column.
+  - **"+" bars** below and to the right add a row or a column.
+  - Columns resize by dragging their edges.
+  - **Cells:** the cell with the caret is outlined in forest, and a selection of cells is tinted. Over a cell selection, the floating bar keeps only Ask for change and the marks.
+- **Selected text** brings up the floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), Bold, Italic, Underline, Strikethrough, Code, **Text ▾** to turn the block into another kind (with a check on the current one), and **Comment** (an inline field with dictation and send; it highlights the text).
 - **Links.** `[[slug]]` and `@handle` read as links. Click to follow them on a read-only page, or ⌘-click while editing. They stay plain text in the Markdown, so search and the graph still find them.
 - **Saving.** A private page saves as you type, and it stays private. A page other people can see opens read-only, with "changing it asks first". The `workspace.save-draft` tool takes Markdown and writes into the open page.
-- **Motion.** Menus and the floating bar fade and scale in on ohm's open duration and easing, and presses settle. Reduced motion turns this off.
-- **Code:** in `src/editor/`. `PageEditor.tsx` is the page; `SelectionToolbar.tsx`, `InsertMenu.tsx` (the + and / menus), `IconPicker.tsx`, `TemplateGallery.tsx` and `ImagePlaceholder.tsx` are its parts; `commands.ts` lists what can be inserted and turned into; `extensions.ts` holds the slash command, image placeholder and links; and `editor.css` styles the text with ohm tokens.
+- **Motion.** Menus, handles and the floating bar fade and scale in on ohm's durations and easing. Reduced motion turns this off.
+- **Not in the editor:** templates, and the image placeholder with Generate and Attach. Both were removed on request.
+- **Code:** in `src/editor/`.
+  - `PageEditor.tsx`: the page, the path pill and the block menu.
+  - `TableControls.tsx`: row and column handles and the add bars.
+  - The rest of the parts: `SelectionToolbar.tsx`, `InsertMenu.tsx` (the + and / menus), and `IconPicker.tsx`.
+  - `commands.ts`: inserts and turn-into.
+  - `extensions.ts`: the slash command, links, and the active cell.
+  - `editor.css`: styles the text with ohm tokens.
+  - `src/workspace/drop.ts`: opening and saving by drag.
 
 ## Steps and tools
 

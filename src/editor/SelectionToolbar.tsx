@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useEditorState, type Editor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
+import { CellSelection } from "@tiptap/pm/tables"
 import type { LucideIcon } from "lucide-react"
 import {
   ArrowUpIcon, BoldIcon, CheckIcon, ChevronDownIcon, CodeIcon, ItalicIcon, MessageSquareIcon, MicIcon,
@@ -58,6 +59,7 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
       bold: e.isActive("bold"), italic: e.isActive("italic"), underline: e.isActive("underline"),
       strike: e.isActive("strike"), code: e.isActive("code"), block: currentBlock(e).id,
       empty: e.state.selection.empty,
+      cells: e.state.selection instanceof CellSelection,
     }),
   })
   useEffect(() => { if (s.empty) setMode("tools") }, [s.empty])
@@ -65,7 +67,7 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
 
   return (
     <BubbleMenu editor={editor} options={{ placement: "top", offset: 10 }}
-      shouldShow={({ editor: e, state }) => e.isEditable && !state.selection.empty && !e.isActive("imagePlaceholder") && !e.isActive("image")}>
+      shouldShow={({ editor: e, state }) => e.isEditable && !state.selection.empty && !e.isActive("image")}>
       <div className={bar} onMouseDown={e => { if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault() }}>
         {mode === "ask" ? (
           <InlineField placeholder="Ask for a change…" onCancel={() => setMode("tools")}
@@ -88,6 +90,7 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
           <Mark label="Underline" shortcut="⌘U" icon={UnderlineIcon} active={s.underline} onClick={() => editor.chain().focus().toggleUnderline().run()} />
           <Mark label="Strikethrough" shortcut="⌘⇧S" icon={StrikethroughIcon} active={s.strike} onClick={() => editor.chain().focus().toggleStrike().run()} />
           <Mark label="Code" shortcut="⌘E" icon={CodeIcon} active={s.code} onClick={() => editor.chain().focus().toggleCode().run()} />
+          {!s.cells && <>
           {sep}
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button size="sm" variant="ghost" className="h-7 gap-1 rounded-full px-2.5 font-normal" />}>
@@ -107,6 +110,7 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
           <Button size="sm" variant="ghost" className="h-7 gap-1.5 rounded-full px-2.5 font-normal" onClick={() => setMode("comment")}>
             <Icon icon={MessageSquareIcon} size="sm" /> Comment
           </Button>
+          </>}
         </>}
       </div>
     </BubbleMenu>
