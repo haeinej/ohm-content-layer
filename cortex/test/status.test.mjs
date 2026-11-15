@@ -159,7 +159,7 @@ test('a folder with no cortex in it is a problem, not "Nothing is waiting."', as
   t.after(() => rm(base, { recursive: true, force: true }));
   const missing = join(base, 'no-such-cortex');
   const items = await cortexStatus(openCortex(missing));
-  assert.deepEqual(items, [{ kind: 'problem', what: `There is no cortex at ${missing}: it has no agents/AGENTS.md and no .cortex/`, clear: 'Check the path, or start one with cortex init <dir>' }]);
+  assert.deepEqual(items, [{ kind: 'problem', what: `There is no cortex at ${missing}: it has no agents/AGENTS.md and no .cortex/`, clear: `Check the path, or start one with cortex init '${missing}'` }]);
   const out = execFileSync(process.execPath, [cli, 'status', missing], { encoding: 'utf8' });
   assert.match(out, /^problem: There is no cortex at /);
   assert.deepEqual(JSON.parse(execFileSync(process.execPath, [cli, 'status', '--json', missing], { encoding: 'utf8' })), items);
@@ -190,7 +190,7 @@ test('a problem says what is wrong once, and its clear says only what to do', as
   const problems = await has(openCortex(dir), 'problem');
   for (const item of problems) assert.ok(!item.clear.includes(item.what), item.clear);
   const clearFor = pattern => problems.find(item => pattern.test(item.what)).clear;
-  assert.equal(clearFor(/^vault: /), 'Reconnect with cortex vault connect <folder>');
+  assert.equal(clearFor(/^vault: /), `Reconnect with cortex vault connect <folder> '${dir}'`);
   assert.equal(clearFor(/^memory\/broken\.md/), "Fix the file's permissions or contents");
   assert.equal(clearFor(/^identity\.md: /), 'Fix what the message names');
 });
@@ -204,4 +204,27 @@ test('a proposed birthdate shows neither its value nor its evidence in status', 
   const [item] = await has(cortex, 'identity-proposal');
   assert.doesNotMatch(JSON.stringify(item), /1990|born/);
   assert.doesNotMatch(execFileSync(process.execPath, [cli, 'status', '--json', dir], { encoding: 'utf8' }), /1990|born/);
+});
+
+test('pasted status remedies clear the selected cortex, including paths with shell characters', async t => {
+  const { base } = await fresh(t);
+  const dir = join(base, "another cortex's $HOME; folder");
+  const defaultDir = join(base, 'default-cortex');
+  await initCortex(dir, template);
+  await initCortex(defaultDir, template);
+  const cortex = openCortex(dir);
+  const execute = command => execFileSync('/bin/sh', ['-c', command.replace(/^cortex /, `'${process.execPath}' '${cli}' `)], { encoding: 'utf8', env: { ...process.env, CORTEX_DIR: defaultDir } });
+  const untouched = await snapshot(defaultDir);
+  for (const [action, value] of [['confirm', 'Alex'], ['reject', 'Robin']]) {
+    await cortex.proposeIdentity({ field: 'preferredName', value, source: { kind: 'person', quote: `Call me ${value}.` } });
+    const [item] = await has(cortex, 'identity-proposal');
+    const [confirm, reject] = item.clear.split(' or ');
+    execute(action === 'confirm' ? confirm : reject);
+    await has(cortex, 'identity-proposal', false);
+  }
+  await cortex.proposeSkill({ text: '---\nname: reading-notes\ndescription: File reading notes\n---\nRead it.' });
+  const [skill] = await has(cortex, 'skill-proposal');
+  execute(skill.clear);
+  await has(cortex, 'skill-proposal', false);
+  assert.deepEqual(await snapshot(defaultDir), untouched);
 });
