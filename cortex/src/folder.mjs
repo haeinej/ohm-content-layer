@@ -743,10 +743,11 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       };
     },
 
-    async identity() {
+    async identity({ strict = false } = {}) {
       let content;
       try { content = await text(at('identity.md')); } catch (problem) {
         if (!problem?.code) throw problem;
+        if (strict) throw new Refused('Unreadable', `identity.md cannot be read: ${problem.code}. Fix its permissions or contents before changing identity.`);
         const empty = await readIdentity(null);
         return { ...empty, problems: [`identity.md cannot be read: ${problem.code}`] };
       }
@@ -925,7 +926,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     async clearIdentity(field) {
       onlyPerson('clears an identity field');
       if (!Object.hasOwn(IDENTITY, field)) throw new Refused('InvalidIdentity', `${field} is not an identity field`);
-      const { properties } = await cortex.identity();
+      const { properties } = await cortex.identity({ strict: true });
       if (properties[field] === undefined) return { field, cleared: true, unchanged: true };
       await setField(field, undefined);
       await recordIdentity({ type: 'cleared', field });

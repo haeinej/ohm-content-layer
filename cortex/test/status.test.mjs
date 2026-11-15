@@ -228,3 +228,29 @@ test('pasted status remedies clear the selected cortex, including paths with she
   await has(cortex, 'skill-proposal', false);
   assert.deepEqual(await snapshot(defaultDir), untouched);
 });
+
+test('clearing an unreadable identity refuses without claiming success or recording a change', { skip: asRoot && 'root reads every file' }, async t => {
+  const { dir, cortex } = await fresh(t);
+  const { chmod } = await import('node:fs/promises');
+  const path = join(dir, 'identity.md');
+  await cortex.proposeIdentity({ field: 'city', value: 'Lisbon', source: { kind: 'person', quote: 'I live in Lisbon.' } });
+  await cortex.confirmIdentity('city');
+  const before = await readFile(path, 'utf8');
+  const log = await cortex.identityLog();
+  await chmod(path, 0o000);
+  t.after(() => chmod(path, 0o644).catch(() => {}));
+  assert.ok((await cortex.inspect()).problems.includes('identity.md cannot be read: EACCES'));
+  await assert.rejects(cortex.clearIdentity('city'), problem => problem.code === 'Unreadable' && /Fix its permissions/.test(problem.message));
+  assert.throws(() => execFileSync(process.execPath, [cli, 'clear', 'city', dir], { encoding: 'utf8', stdio: 'pipe' }), problem => {
+    assert.equal(problem.status, 1);
+    assert.equal(problem.stdout, '');
+    assert.match(problem.stderr, /identity.md cannot be read: EACCES/);
+    return true;
+  });
+  assert.deepEqual(await cortex.identityLog(), log);
+  await chmod(path, 0o644);
+  assert.equal(await readFile(path, 'utf8'), before);
+  assert.equal((await cortex.identity()).fields.city, 'Lisbon');
+  await cortex.clearIdentity('city');
+  assert.equal((await cortex.identity()).fields.city, undefined);
+});
