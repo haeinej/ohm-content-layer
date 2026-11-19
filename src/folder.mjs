@@ -304,8 +304,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
   // What cited evidence points at must be there where cortex can look. A node of the cortex must
   // hold that version now, have it kept, or have had it in the journal. Any other node is a block in
   // the vault, and must still be in the vault when one is connected; the contract has no versions,
-  // so its version is not checked. Traces are not recorded yet, and sessions are named by the
-  // agent, so neither can be looked up.
+  // so its version is not checked. Sessions are named by the agent, so they cannot be looked up.
   async function checkCited(evidence) {
     if (evidence === undefined) return;
     let lines;
@@ -329,7 +328,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     if (missing.length) throw new Refused('NoEvidence', `The vault has no ${missing.join(', ')}`);
   }
 
-  // A point in the journal: a stamp's name, a date or a time, or a seq. A date with no time means
+  // A point in the journal: a save's name, a date or a time, or a seq. A date with no time means
   // the end of that day, in UTC.
   const DAY = /^\d{4}-\d{2}-\d{2}$/;
   function pointOf(when, lines) {
@@ -337,23 +336,23 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const seq = Number(when);
       return { said: { seq }, holds: line => line.seq <= seq };
     }
-    if (typeof when !== 'string' || !when.trim() || when.length > 100) throw new Refused('InvalidRequest', 'Say when: a stamp\'s name, a date such as 2026-11-19, a time, or a seq');
+    if (typeof when !== 'string' || !when.trim() || when.length > 100) throw new Refused('InvalidRequest', 'Say when: a save\'s name, a date such as 2026-11-19, a time, or a seq');
     if (/^\d{4}-\d{2}-\d{2}/.test(when)) {
       const time = DAY.test(when) ? `${when}T23:59:59.999Z` : when;
       if (!Number.isFinite(Date.parse(time))) throw new Refused('InvalidRequest', `${when} is not a date or a time`);
       const until = new Date(time).toISOString();
       return { said: { at: until }, holds: line => line.at <= until };
     }
-    const stamp = lines.filter(line => line.type === 'stamp' && line.name === when).at(-1);
-    if (!stamp) throw new Refused('NotFound', `There is no stamp named ${when}`);
-    return { said: { stamp: stamp.name, seq: stamp.seq, at: stamp.at }, holds: line => order(line, stamp) <= 0 };
+    const saved = lines.filter(line => line.type === 'save' && line.name === when).at(-1);
+    if (!saved) throw new Refused('NotFound', `There is no save named ${when}`);
+    return { said: { save: saved.name, seq: saved.seq, at: saved.at }, holds: line => order(line, saved) <= 0 };
   }
-  const STAMP = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const SAVE_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
   const cortex = {
     dir, reindex,
 
-    // The changes recorded in the journal, oldest first, and the stamps among them. node is a path,
+    // The changes recorded in the journal, oldest first, and the saves among them. node is a path,
     // or a folder ending in / for every node in it. since is a seq (changes after it) or a date or
     // time (changes from then on). actor is a name, or human or agent.
     async history({ node, since, actor: who, limit = 50 } = {}) {
@@ -374,8 +373,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const lines = (await journal.read()).filter(line => after(line) && by(line));
       const on = line => node === undefined || (node.endsWith('/') ? String(line.node).startsWith(node) : line.node === node);
       const changes = lines.filter(line => line.type === 'change' && on(line)).map(({ type, ...line }) => line);
-      const stamps = lines.filter(line => line.type === 'stamp').map(({ type, ...line }) => line);
-      return { changes: changes.slice(-limit), stamps, ...(changes.length > limit ? { more: changes.length - limit } : {}) };
+      const saves = lines.filter(line => line.type === 'save').map(({ type, ...line }) => line);
+      return { changes: changes.slice(-limit), saves, ...(changes.length > limit ? { more: changes.length - limit } : {}) };
     },
 
     // A node as it was at a point, read back from the journal and the kept versions. Nothing changes.
@@ -400,11 +399,11 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     },
 
     // Names this point in the journal, so the cortex can be read as it was here.
-    async stamp({ name, note } = {}) {
-      if (typeof name !== 'string' || name.length > 100 || !STAMP.test(name) || /^\d+$/.test(name) || /^\d{4}-\d{2}-\d{2}/.test(name)) throw new Refused('InvalidRequest', 'A stamp\'s name is lowercase letters and digits joined by hyphens, at most 100 characters, and not a number or a date');
-      if (typeof note !== 'string' || !note.trim() || [...note].length > 500 || /[\r\n]/.test(note)) throw new Refused('InvalidRequest', 'A stamp has a note: one line, at most 500 characters');
-      if ((await journal.read()).some(line => line.type === 'stamp' && line.name === name)) throw new Refused('NameTaken', `There is already a stamp named ${name}`);
-      const line = await journal.append(actor, 'stamp', { name, note: note.trim() });
+    async save({ name, note } = {}) {
+      if (typeof name !== 'string' || name.length > 100 || !SAVE_NAME.test(name) || /^\d+$/.test(name) || /^\d{4}-\d{2}-\d{2}/.test(name)) throw new Refused('InvalidRequest', 'A save\'s name is lowercase letters and digits joined by hyphens, at most 100 characters, and not a number or a date');
+      if (typeof note !== 'string' || !note.trim() || [...note].length > 500 || /[\r\n]/.test(note)) throw new Refused('InvalidRequest', 'A save has a note: one line, at most 500 characters');
+      if ((await journal.read()).some(line => line.type === 'save' && line.name === name)) throw new Refused('NameTaken', `There is already a save named ${name}`);
+      const line = await journal.append(actor, 'save', { name, note: note.trim() });
       return { name, seq: line.seq, at: line.at };
     },
 

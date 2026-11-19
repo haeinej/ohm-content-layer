@@ -13,8 +13,8 @@
 // cortex hook <moment> [dir] --agent <name>   answer a Claude Code or Codex hook: session-start, prompt, stop, session-end
 // cortex install-hooks claude-code|codex      print the hooks to add; writes nothing
 // cortex history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json]   what changed, and who changed it
-// cortex as-of <node> <stamp|date|seq> [dir]   a node of the cortex as it was then
-// cortex stamp <name> <note> [dir]             name this point, to read the cortex as it was here
+// cortex as-of <node> <save|date|seq> [dir]     a node of the cortex as it was then
+// cortex save <name> <note> [dir]              name this point in history, to read the cortex as it was here; changes nothing
 // cortex restore <node> <version> [dir]        bring a node back to an earlier version, as a new change
 // The folder is the one named, or CORTEX_DIR, or ~/cortex.
 import { randomUUID } from 'node:crypto';
@@ -143,7 +143,7 @@ try {
     else {
       const lines = [
         ...found.changes.map(line => ({ seq: line.seq, text: `${line.seq}  ${line.at}  ${line.actor.name}  ${line.op} ${line.node}  ${line.before ?? '(none)'} -> ${line.after ?? '(none)'}${line.reason ? `  ${line.reason}` : ''}` })),
-        ...found.stamps.map(line => ({ seq: line.seq, text: `${line.seq}  ${line.at}  ${line.actor.name}  stamp ${line.name}  ${line.note}` })),
+        ...found.saves.map(line => ({ seq: line.seq, text: `${line.seq}  ${line.at}  ${line.actor.name}  save ${line.name}  ${line.note}` })),
       ].sort((a, b) => a.seq - b.seq);
       console.log(lines.length ? lines.map(line => line.text).join('\n') : 'Nothing has changed.');
     }
@@ -151,14 +151,14 @@ try {
     const found = await openCortex(folder(rest[2]), { actor: 'member' }).asOf({ node: rest[0], at: rest[1] });
     if (found.text !== undefined) process.stdout.write(found.text);
     else console.log(found.exists === false ? `${rest[0]} did not exist then.` : `${rest[0]} was version ${found.version} then, and that version was not kept.`);
-  } else if (command === 'stamp' && rest[0] && rest[1]) {
-    const done = await openCortex(folder(rest[2]), { actor: 'member' }).stamp({ name: rest[0], note: rest[1] });
-    console.log(`Stamped ${done.name} at ${done.seq}`);
+  } else if (command === 'save' && rest[0] && rest[1]) {
+    const done = await openCortex(folder(rest[2]), { actor: 'member' }).save({ name: rest[0], note: rest[1] });
+    console.log(`Saved ${done.name} at ${done.seq}. Nothing was changed.`);
   } else if (command === 'restore' && rest[0] && rest[1]) {
     const done = await openCortex(folder(rest[2]), { actor: 'member' }).restore({ node: rest[0], version: rest[1] });
     console.log(done.unchanged ? `${rest[0]} is already version ${rest[1]}` : `${rest[0]} is back to ${done.restored}. What it replaced is kept.`);
   } else {
-    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex | history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json] | as-of <node> <stamp|date|seq> [dir] | stamp <name> <note> [dir] | restore <node> <version> [dir]');
+    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex | history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json] | as-of <node> <save|date|seq> [dir] | save <name> <note> [dir] | restore <node> <version> [dir]');
     process.exitCode = command ? 1 : 0;
   }
 } catch (problem) {

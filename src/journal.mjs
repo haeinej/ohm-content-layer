@@ -9,15 +9,16 @@
 //   change    a file of the cortex was created, updated, removed or restored, with its versions before and after
 //   note      one observation, waiting to be settled                         (was .cortex/notes.jsonl)
 //   decision  what became of a note when it was settled                      (was the `settled` lines)
-//   stamp     a name and a note for this point, to read the cortex as it was here
+//   save      a name and a note for this point in history, to read the cortex as it was here.
+//             It changes nothing. Lines written as `stamp` before the name changed are read as saves.
 //
-// `proposal` and `trace` are named in docs/journal-and-history.md and reserved: nothing writes them yet.
+// `proposal` is named in docs/journal-and-history.md and reserved: nothing writes it yet.
 import { randomBytes } from 'node:crypto';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-export const TYPES = ['session', 'change', 'note', 'decision', 'stamp'];
-export const RESERVED_TYPES = ['proposal', 'trace'];
+export const TYPES = ['session', 'change', 'note', 'decision', 'save'];
+export const RESERVED_TYPES = ['proposal'];
 export const OPS = ['create', 'update', 'remove', 'restore'];
 // Names that mean the person, or the signed-in account. Everyone else is an agent.
 export const PEOPLE = ['member', 'account'];
@@ -40,7 +41,8 @@ export function openJournal(dir, { now = () => new Date() } = {}) {
       if (!line.trim()) continue;
       try {
         const entry = JSON.parse(line);
-        if (entry && typeof entry === 'object' && Number.isSafeInteger(entry.seq) && typeof entry.type === 'string') lines.push(entry);
+        if (!entry || typeof entry !== 'object' || !Number.isSafeInteger(entry.seq) || typeof entry.type !== 'string') continue;
+        lines.push(entry.type === 'stamp' ? { ...entry, type: 'save' } : entry);
       } catch {}
     }
     return lines.sort(order);

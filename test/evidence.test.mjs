@@ -18,10 +18,10 @@ const fresh = async () => {
 const refused = code => problem => problem.code === code || JSON.parse(problem.message).error === code;
 const memory = { name: 'likes-short-titles', description: 'Titles of four words or fewer', kind: 'preference', stated: false, body: 'Short titles.' };
 
-test('a note cites what it was drawn from: a node at a version, a trace, or a session', async () => {
+test('a note cites what it was drawn from: a node at a version, or a session', async () => {
   const { dir, agent } = await fresh();
   const { version } = await agent.write(memory);
-  const evidence = [{ node: 'memory/likes-short-titles.md', version }, { session: 's1' }, { trace: 't-0001' }];
+  const evidence = [{ node: 'memory/likes-short-titles.md', version }, { session: 's1' }];
   await createTools(agent).call('cortex_note', { id: 'n1', note: 'Shortened a title again', session: 's2', evidence });
   const [note] = (await agent.listNotes()).notes;
   assert.deepEqual(note.evidence, evidence);
@@ -35,7 +35,7 @@ test('a note cites what it was drawn from: a node at a version, a trace, or a se
 test('evidence of the wrong shape is refused, and nothing is written', async () => {
   const { agent } = await fresh();
   const note = evidence => agent.addNote({ id: 'n1', note: 'Seen', session: 's1', evidence });
-  for (const evidence of [[], 'memory/x.md', [{}], [{ node: 'memory/x.md' }], [{ node: 'memory/x.md', version: 'c1', session: 's1' }], [{ session: 's1', why: 'x' }], [{ session: 3 }], [{ session: '' }], [{ session: 's1' }, { session: 's1' }], Array.from({ length: 21 }, (_, n) => ({ session: `s${n}` }))]) {
+  for (const evidence of [[], 'memory/x.md', [{}], [{ node: 'memory/x.md' }], [{ node: 'memory/x.md', version: 'c1', session: 's1' }], [{ session: 's1', why: 'x' }], [{ session: 3 }], [{ trace: 't-0001' }], [{ session: '' }], [{ session: 's1' }, { session: 's1' }], Array.from({ length: 21 }, (_, n) => ({ session: `s${n}` }))]) {
     await assert.rejects(note(evidence), refused('InvalidRequest'), JSON.stringify(evidence));
   }
   await assert.rejects(agent.write({ ...memory, evidence: [{ trace: 't1', session: 's1' }] }), refused('InvalidMemory'));

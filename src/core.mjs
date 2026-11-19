@@ -4,12 +4,12 @@ const FIELDS = ['name', 'description', 'kind', 'always', 'stated', 'from', 'proj
 const bytes = text => new TextEncoder().encode(text).length;
 
 // Evidence is a list of pointers to what something was drawn from: a node at a version (a file of
-// the cortex, or a block in the vault), a trace, or a session. Only the shape is checked here; the
+// the cortex, or a block in the vault), or a session. Only the shape is checked here; the
 // folder checks that what can be looked up exists. How much evidence makes a memory is judgement,
 // written in the playbook, not a count kept in code.
-const POINTERS = [['node', 'version'], ['trace'], ['session']];
+const POINTERS = [['node', 'version'], ['session']];
 export function evidenceProblem(evidence) {
-  const says = 'evidence is a list of 1 to 20 pointers, each {node, version}, {trace} or {session}, with text of at most 300 characters';
+  const says = 'evidence is a list of 1 to 20 pointers, each {node, version} or {session}, with text of at most 300 characters';
   if (!Array.isArray(evidence) || !evidence.length || evidence.length > 20) return says;
   for (const pointer of evidence) {
     if (!pointer || typeof pointer !== 'object' || Array.isArray(pointer)) return says;
