@@ -144,7 +144,7 @@ The post is then at `https://example.com/posts/writings/hello`.
 - **A link to a file is the file.** A post that is nothing but a link to an image, video, audio file, or PDF is taken in as that object, with the link kept as its source. A post that links to a page keeps the page's title, description, and preview image.
 - **Footnotes** are written `[^1]` in the text and `[^1]: the note` on a line of its own.
 
-[Build a block](docs/build-a-block.md) · [Group and connect blocks](docs/group-and-connect.md)
+[Publish a post](docs/publish-a-post.md) · [Group and connect posts](docs/group-and-connect.md)
 
 ## Mirror your platforms
 
