@@ -1,4 +1,5 @@
 import { evidence, nodeFile, readNode, readVault } from "../../../vault/vault/node.mjs"
+import { isPostId, setProperty } from "../../../vault/vault/file.mjs"
 import type { SearchInput, SearchProvider } from "./search"
 
 export type Layer = "public" | "friends" | "private"
@@ -81,7 +82,11 @@ export async function moveVisibility(
   const move = visibilityMove(from, layer)
   const file = await source.readBlock(from)
   if (file.version !== version) throw new DOMException("The block changed. Review it again before moving it.", "InvalidStateError")
-  const block = blockOf(file)
+  let block = blockOf(file)
+  // A Friends file may get its TID from the service envelope. A private storage ID is opaque.
+  if (block && !block.id && from.layer === "friends" && isPostId(from.id)) {
+    block = blockOf({ ...file, text: setProperty(file.text, "id", from.id) })
+  }
   if (!block?.id) throw new DOMException("Only a block with a vault ID can move between layers.", "DataError")
   const next = "post" in block
     ? { ...block, visibility: layer, post: { ...block.post, visibility: layer } }
