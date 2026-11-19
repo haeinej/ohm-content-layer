@@ -1,13 +1,15 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { sampleSource } from "../src/data/sample-source"
+import { createSampleSource } from "../src/data/sample-source"
 import { search } from "../src/data/search"
 import { createServiceSource } from "../src/data/service-source"
 import { blockOf, type BlockRef, type HomeFile } from "../src/data/source"
-import { collect, createDraft, deleteDoc, saveDraft } from "../src/workspace/store"
+import { collect, createDraft, deleteDoc, saveDraft, setSource } from "../src/workspace/store"
 import { newNodeId } from "../../vault/vault/node.mjs"
 
 test("the sample workspace edits and collects blocks through the same data source search reads", async () => {
+  const sampleSource = createSampleSource()
+  await setSource(sampleSource)
   const draft = createDraft({ title: "A synthetic reading list" })
   try {
     saveDraft({ body: "Alder lantern." })
@@ -24,13 +26,15 @@ test("the sample workspace edits and collects blocks through the same data sourc
     const change = { path: file.path, text: file.text.replace("Alder lantern.", "Alder lantern and river.") }
     const { version } = await sampleSource.saveBlock(ref, change, file.version)
     assert.notEqual(version, file.version)
-    await assert.rejects(sampleSource.saveBlock(ref, file, file.version), /changed/)
-    await assert.rejects(sampleSource.deleteBlock(ref, file.version), /changed/)
+    assert.throws(() => sampleSource.saveBlock(ref, file, file.version), /changed/)
+    assert.throws(() => sampleSource.deleteBlock(ref, file.version), /changed/)
     assert.equal((await search({ query: "Alder lantern and river" }))[0].id, draft.id)
   } finally {
+    await setSource(sampleSource)
     deleteDoc(draft.id)
+    assert.deepEqual(await search({ query: "Alder lantern" }), [])
+    await setSource()
   }
-  assert.deepEqual(await search({ query: "Alder lantern" }), [])
 })
 
 test("member service reads use the signed-in DID and shared reads request a scoped service token", async () => {

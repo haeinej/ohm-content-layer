@@ -21,7 +21,7 @@ A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/wor
   - **Dropping:** images go into the page; Markdown files open as new pages.
 
   Inbox items and settings open here too.
-- **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, so a real service can be connected behind it with `setSearchProvider`.
+- **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, and uses the same sample home as the editor and graph.
 
 All data is synthetic. Run the app to explore a sample vault and cortex. Reloading restores the sample.
 
@@ -38,7 +38,8 @@ npm --prefix app run dev   # http://localhost:5190
 
 - [flows/paths.md](flows/paths.md): every interaction path, what it is for, its end state, and the WebMCP tool for it
 - [AGENTS.md](AGENTS.md): the rules every flow follows
-- [Data sources](docs/agents/home-source.md) describes the sample and service contracts.
+- Build the app on its own from the repository root with `npm ci --prefix app` and `npm --prefix app run build`. The app install includes what the shared vault reader needs.
+- The editor, tree, graph, connections and search use the same sample home. Create a private draft and add it to a channel to see it in the tree and find it in search. Sample changes live in memory and reset on reload. [Data sources](docs/agents/home-source.md) describes the sample and service contracts.
 - [docs/design.md](docs/design.md): ohm-ux's design layer: one radius for every surface, density, compact menus
 - [docs/webmcp.md](docs/webmcp.md): the WebMCP API as of the 13 November 2026 draft, and what changed from earlier guides
 - [flows/TEMPLATE.md](flows/TEMPLATE.md): start a new flow by copying this

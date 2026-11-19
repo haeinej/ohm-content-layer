@@ -15,10 +15,10 @@ import { notify } from "@/components/ui/notice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
 import {
-  changeById, currentVersion, diffWords, journal, linesFor, snapshotAt,
+  diffWords,
   type Actor, type ChangeLine, type ChangeOp, type DeadEnd, type Line, type SaveLine, type SessionLine, type Snapshot,
 } from "@/data/journal"
-import { byId, titleOf, type Doc } from "@/data/sample"
+import { byId, demoJournal, titleOf, type Doc } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { finishSession, focusHistory, open, restoreVersion, revertChange, saveNow, useWorkspace } from "@/workspace/store"
@@ -33,8 +33,8 @@ const byName = (a: Actor) => (a.kind === "human" ? "You" : a.name)
 const page = (node: string) => {
   const d = byId(node)
   if (d) return titleOf(d)
-  const last = linesFor(node).at(-1)
-  return (last && (snapshotAt(last.before ?? last.after)?.title || undefined)) ?? "a removed page"
+  const last = demoJournal().linesFor(node).at(-1)
+  return (last && (demoJournal().snapshotAt(last.before ?? last.after)?.title || undefined)) ?? "a removed page"
 }
 
 /** What was done, as a verb. */
@@ -146,10 +146,10 @@ const act = (fn: () => void, message: string, done?: () => void) => {
 function ChangeDetail({ line, inPage, onDone }: { line: ChangeLine; inPage?: boolean; onDone?: () => void }) {
   const doc = byId(line.node)
   const [againstNow, setAgainstNow] = useState(false)
-  const before = line.before ? snapshotAt(line.before) : undefined
-  const after = snapshotAt(line.after)!
-  const now = currentVersion(line.node)
-  const current = now ? snapshotAt(now) : undefined
+  const before = line.before ? demoJournal().snapshotAt(line.before) : undefined
+  const after = demoJournal().snapshotAt(line.after)!
+  const now = demoJournal().currentVersion(line.node)
+  const current = now ? demoJournal().snapshotAt(now) : undefined
   const editable = doc?.visibility === "private"
   return <>
     {meta(line.actor, line.at, line.reason)}
@@ -179,7 +179,7 @@ function ChangeDetail({ line, inPage, onDone }: { line: ChangeLine; inPage?: boo
 
 /** An agent's session, opened: what it did, the changes it made (each opens and reverts), and its dead ends. */
 function SessionDetail({ line }: { line: SessionLine }) {
-  const changes = line.changes.map(changeById).filter((c): c is ChangeLine => !!c)
+  const changes = line.changes.map(demoJournal().changeById).filter((c): c is ChangeLine => !!c)
   const [picked, setPicked] = useState<string | null>(null)
   return <>
     {meta(line.actor, line.at)}
@@ -258,7 +258,7 @@ function Timeline({ lines, inPage, picked, setPicked, onDone }: {
  */
 function dailyAutosaves() {
   const days = new Map<string, ChangeLine[]>()
-  for (const l of journal) if (l.type === "change") { const k = dayKey(l.at); days.set(k, [...(days.get(k) ?? []), l]) }
+  for (const l of demoJournal().journal) if (l.type === "change") { const k = dayKey(l.at); days.set(k, [...(days.get(k) ?? []), l]) }
   return [...days].sort(([a], [b]) => b.localeCompare(a)).map(([day, lines]) => {
     const sorted = [...lines].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     return { day, at: sorted[0].at, lines: sorted, pages: new Set(lines.map(l => l.node)).size }
@@ -301,7 +301,7 @@ function registerChangeTools(revert: boolean, restore: boolean) {
     inputSchema: { type: "object", properties: { change: { type: "string", maxLength: 64 } }, required: ["change"], additionalProperties: false },
     outputSchema: { type: "object", properties: { id: { type: "string" }, reverted: { type: "string" }, fields: { type: "array" }, next: { const: "history.list" } } },
     run: withAgent("Reverting a change", async ({ change }) => {
-      if (!changeById(change)) throw new DOMException("There is no such change", "DataError")
+      if (!demoJournal().changeById(change)) throw new DOMException("There is no such change", "DataError")
       return { ...revertChange(change), next: "history.list" }
     }),
   }, ac.signal).catch(console.error)
@@ -315,9 +315,9 @@ function registerChangeTools(revert: boolean, restore: boolean) {
     },
     outputSchema: { type: "object", properties: { id: { type: "string" }, version: { type: "string" }, next: { const: "history.versions" } } },
     run: withAgent("Restoring a version", async ({ page: id, version, reason }) => {
-      const mine = linesFor(id)
+      const mine = demoJournal().linesFor(id)
       if (!mine.some(c => c.after === version)) throw new DOMException("That version is not one of this page's", "DataError")
-      if (version === currentVersion(id)) throw new DOMException("That is the current version", "DataError")
+      if (version === demoJournal().currentVersion(id)) throw new DOMException("That is the current version", "DataError")
       return { ...restoreVersion(id, version, reason), next: "history.versions" }
     }),
   }, ac.signal).catch(console.error)
@@ -342,9 +342,9 @@ function useChangeTools() {
 
 /** A page's own lines, newest first: its changes, and saves between. */
 function linesForPage(id: string): Line[] {
-  const changes = linesFor(id)
+  const changes = demoJournal().linesFor(id)
   const from = changes[0] ? Date.parse(changes[0].at) : Infinity
-  const saves = journal.filter(l => l.type === "save" && Date.parse(l.at) >= from)
+  const saves = demoJournal().journal.filter(l => l.type === "save" && Date.parse(l.at) >= from)
   return [...changes, ...saves].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
 }
 
@@ -353,7 +353,7 @@ function PageVersions({ doc, focus, onRestored }: { doc: Doc; focus?: string; on
   const editable = doc.visibility === "private"
   const lines = useMemo(() => linesForPage(doc.id), [doc.id, rev])
   const changes = lines.filter((l): l is ChangeLine => l.type === "change")
-  const now = currentVersion(doc.id)
+  const now = demoJournal().currentVersion(doc.id)
   const [picked, setPicked] = useState<string | null>(focus ?? null)
 
   // This step's tool: read the versions. Revert and restore are shared with the repository's history.
@@ -411,8 +411,8 @@ type Tab = "dates" | "you" | "agents"
 
 /** One tab's lines: yours (changes and saves), or agents' (sessions, with the changes they made inside). */
 function topLevel(who: "human" | "agent"): Line[] {
-  const grouped = new Set(journal.flatMap(l => (l.type === "session" ? l.changes : [])))
-  return [...journal].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+  const grouped = new Set(demoJournal().journal.flatMap(l => (l.type === "session" ? l.changes : [])))
+  return [...demoJournal().journal].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     .filter(l => l.actor.kind === who && !(l.type === "change" && grouped.has(l.id)))
 }
 
@@ -457,10 +457,10 @@ export function RepoHistory() {
       },
       outputSchema: { type: "object", properties: { lines: { type: "array" }, deadEnds: { type: "array" }, next: { const: "history.session" } } },
       run: withAgent("Reading history", async ({ who: w = "all", node, since, limit = 30 }) => ({
-        lines: [...journal].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+        lines: [...demoJournal().journal].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
           .filter(l => (w === "all" || l.actor.kind === w) && (!node || ("node" in l && l.node === node)) && (!since || l.at >= since))
           .slice(0, limit).map(asTool),
-        deadEnds: journal.filter((l): l is SessionLine => l.type === "session").flatMap(s => s.deadEnds.map(d => ({ ...d, by: s.actor.name, at: s.at }))),
+        deadEnds: demoJournal().journal.filter((l): l is SessionLine => l.type === "session").flatMap(s => s.deadEnds.map(d => ({ ...d, by: s.actor.name, at: s.at }))),
         next: "history.session",
       })),
     }, ac.signal).catch(console.error)

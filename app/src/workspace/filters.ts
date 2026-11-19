@@ -1,5 +1,5 @@
 // Filters for the personal repository: they narrow the tree and the graph alike.
-import type { Doc, Platform, Visibility } from "@/data/sample"
+import type { Doc, Platform, Visibility } from "@/data/workspace-data"
 
 export type PageType = "text" | "photo" | "table" | "checklist" | "memory" | "observation" | "skill" | "tool"
 export type Edited = "any" | "week" | "month" | "year"

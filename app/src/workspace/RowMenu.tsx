@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { byId, channelRecords, channelsOf, docIdOf, isSection, placedIn, posts, sectionOf, titleOf } from "@/data/sample"
+import { byId, channelRecords, channelsOf, docIdOf, isSection, placedIn, posts, sectionOf, titleOf } from "@/data/workspace-data"
 import {
   collect, createDraft, deleteChannel, marks, moveBlock, open, uncollect, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
 } from "./store"

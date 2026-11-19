@@ -4,10 +4,26 @@
 vault files, ordered channels, evidence, entities, sources, search, history,
 visibility, Friends and the publish plan. [The workspace guide](../../README.md)
 walks through the sample experience. The [workspace store](../../src/workspace/store.ts)
-uses the sample adapter's synchronous projection for the imported editor and
-tree. Search reads the same adapter through the shared UI and WebMCP handler.
-The service adapter is a member-side integration entry point. The workspace
-currently runs on the sample adapter.
+selects the adapter with `setSource()`. The default is the sample adapter.
+The store projects the selected source's account, blocks, channels and evidence
+for synchronous React reads. Sample edits call `saveBlock` or `deleteBlock`
+with the projected version, then refresh the projection. The sample also
+implements `saveChannels` for channel records and `markVisibility` for audience
+previews. History restore reads the source's kept version. Search, the graph,
+and both views of the connections card use the selected source. Cortex, inbox
+and the prototype's journal metadata remain sample features.
+
+There are zero direct fixture imports outside the sample adapter. The file
+[`workspace-model.ts`](../../src/data/workspace-model.ts) holds view types and
+pure helpers, and [`workspace-data.ts`](../../src/data/workspace-data.ts) holds
+the projection. Use `createSampleSource()` for an independent fixture in tests.
+
+Call and await `setSource({ service: { origin, did } })` to construct and select
+a service adapter, or pass a constructed adapter to `setSource(source)`. The
+workspace exposes a read-only public and Friends projection for service adapter
+verification. The app starts on samples and live session integration is a later
+step. `localSource` refuses with `NotSupportedError` until there is a local
+bridge.
 
 Use `listBlocks` and `readBlock` to find a file and its version. Pass that exact
 version as `replaces` to update it, or `null` to create it. Refresh and review the
@@ -40,9 +56,13 @@ the vault service and friends. Publication starts with `publishPlan`, which
 previews the changes. The member-facing confirmation and publishing flows can
 use these operations when connected.
 
-From the repo root, run `npm --prefix app test` after `npm ci --prefix app`.
-Tests cover the sample store, version conflicts, request routing and a synthetic
-keys fixture. Live sign-in, the account app's unlock screens, and publishing
+The app-only production build needs `npm ci --prefix app` followed by
+`npm --prefix app run build`. Vite resolves the shared vault renderer's Markdown
+packages from the app install. For all tests, install the vault and vault
+service dependencies as listed in the [root README](../../../README.md) and
+run `npm test`. The app typecheck includes test files. Adapter tests cover
+the selected workspace, compare-and-set, XRPC routing and a synthetic keys
+fixture. Live sign-in, the account app's unlock screens, and publishing
 await app integration and live verification. Kept versions in the service
 adapter currently cover private files. The local source awaits the decision
 about the local bridge.

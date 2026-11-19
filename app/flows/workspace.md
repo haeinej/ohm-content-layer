@@ -172,7 +172,7 @@ Publishing is not part of this flow. It will be its own flow, with `consequentia
 | Side panel: repo, visibility, inbox, you | `src/workspace/SidePanel.tsx`, `Surface.tsx`; the ⋯ menu: `RowMenu.tsx`; rename in place and delete: `PageActions.tsx` |
 | Main panel and settings | `src/workspace/MainPanel.tsx`, `Settings.tsx`, `settings-tabs.ts` |
 | The page editor | `src/editor/` |
-| Search sheet and the one search path (vault, cortex, people, settings) | `src/workspace/SearchOverlay.tsx`, `src/data/search.ts` (`setSearchProvider`) |
+| Search sheet and the one search path (vault, cortex, people, settings) | `src/workspace/SearchOverlay.tsx`, `src/data/search.ts` (selected `HomeSource`) |
 | Tools | `src/workspace/tools.ts`; `workspace.save-draft` in `src/editor/PageEditor.tsx` |
 | Synthetic data | `src/data/sample.ts` |
 

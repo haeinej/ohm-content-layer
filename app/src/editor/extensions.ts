@@ -3,7 +3,7 @@ import { Extension, type Editor, type Range } from "@tiptap/react"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
 import Suggestion, { type SuggestionKeyDownProps } from "@tiptap/suggestion"
-import { bySlug, titleOf } from "@/data/sample"
+import { bySlug, titleOf } from "@/data/workspace-data"
 
 // ─── "/" menu ──────────────────────────────────────────────────────────────────
 // The suggestion plugin finds "/query"; the React menu (SlashMenu) draws it from this small store.

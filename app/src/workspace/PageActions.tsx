@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { notify } from "@/components/ui/notice"
-import { byId, titleOf } from "@/data/sample"
+import { byId, titleOf } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { createChannel, deleteDoc, renameDoc, renameFolder, revealFolder } from "./store"
 

@@ -5,5 +5,9 @@ import { fileURLToPath } from "node:url"
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  resolve: { dedupe: ["yjs", "react", "react-dom"], alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  resolve: {
+    // Resolve the vault renderer's bare imports from the app, including in an app-only install.
+    dedupe: ["yjs", "react", "react-dom", "markdown-it", "markdown-it-footnote"],
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
 })

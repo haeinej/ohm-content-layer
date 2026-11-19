@@ -4,7 +4,7 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { FileTextIcon } from "lucide-react"
 import { Icon } from "@/components/ui/icon"
-import { byId, posts, sectionOf, titleOf, type Doc } from "@/data/sample"
+import { byId, posts, sectionOf, titleOf, type Doc } from "@/data/workspace-data"
 import { search } from "@/data/search"
 import { cn } from "@/lib/cn"
 
