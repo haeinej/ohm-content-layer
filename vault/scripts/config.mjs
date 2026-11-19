@@ -1,0 +1,34 @@
+// Find the site configuration a command should use: the one named with --config, or the first of
+// the usual places in the folder the command is run from.
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { parseArgs } from 'node:util';
+
+// Keep the original positional filename while accepting the common explicit selector.
+export function commandConfig() {
+  const { values, positionals } = parseArgs({ options: { config: { type: 'string' } }, allowPositionals: true });
+  if (positionals.length > 1 || (values.config && positionals.length)) throw new Error('Use --config PATH or one positional configuration path');
+  return values.config ?? positionals[0];
+}
+
+const PLACES = ['feed/wrangler.site.jsonc', 'wrangler.site.jsonc', 'ohm.jsonc'];
+
+export function configPath(given) {
+  if (given) return given;
+  const found = PLACES.find(place => existsSync(place));
+  if (!found) {
+    throw new Error('No site configuration here. Create one with:\n' +
+      '  npx github:haeinej/ohm-vault configure --site https://example.com --handle example.com > ohm.jsonc\n' +
+      'or name one with --config PATH');
+  }
+  return found;
+}
+
+export async function siteVars(given) {
+  const path = configPath(given);
+  try {
+    return JSON.parse(await readFile(path, 'utf8')).vars;
+  } catch {
+    throw new Error(`The site configuration at ${path} could not be read as JSON`);
+  }
+}

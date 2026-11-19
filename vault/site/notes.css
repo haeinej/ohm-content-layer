@@ -1,0 +1,66 @@
+* { box-sizing: border-box; }
+:root {
+  --ink: #202124;
+  --background: #faf9f6;
+  --muted: #565953;
+  --rule: #d8d7d1;
+}
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--background);
+  font: 400 1rem/1.65 Inter, system-ui, sans-serif;
+}
+a { color: inherit; text-underline-offset: .2em; }
+a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.notes-page { width: 100%; max-width: 700px; margin-inline: auto; padding: 64px 32px 72px; }
+.notes-page h1 {
+  margin: 0 0 24px;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.02;
+  font-weight: 600;
+  letter-spacing: -.035em;
+}
+.note-profile { display: flex; gap: 16px; align-items: flex-start; margin: 0 0 40px; }
+.note-profile img { flex: none; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+.note-profile p { margin: 0 0 4px; white-space: pre-line; }
+.note-profile-name { font-weight: 600; }
+.note-profile-name span { margin-left: 8px; color: var(--muted); font-weight: 400; font-size: .875rem; }
+.note-profile-links { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: .875rem; }
+.note-tree { list-style: none; margin: 0; padding: 0; }
+.note-tree .note-tree { margin-left: 7px; padding-left: 16px; border-left: 1px solid var(--rule); }
+.note-tree summary { list-style: none; cursor: pointer; }
+.note-tree summary::-webkit-details-marker { display: none; }
+.note-row { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; padding: 5px 0 5px 20px; }
+summary > .note-row::before { content: "›"; position: absolute; left: 3px; color: var(--muted); }
+details[open] > summary > .note-row::before { transform: rotate(90deg); }
+.note-name { flex: 1 1 8rem; text-decoration: none; overflow-wrap: anywhere; }
+a.note-name:hover { text-decoration: underline; }
+.note-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; color: var(--muted); font-size: .8125rem; }
+.note-platform { padding: 0 .55em; border: 1px solid var(--rule); border-radius: 999px; text-decoration: none; }
+.note-folder .note-name { font-weight: 600; }
+.note-views { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 16px; color: var(--muted); font-size: .875rem; }
+.note-views a { text-decoration: none; }
+.note-views a[aria-current] { color: var(--ink); text-decoration: underline; }
+.post-page { margin-top: 32px; }
+.post-subtitle { margin: -12px 0 20px; color: var(--muted); font-size: 1.125rem; }
+/* Each form has one look. A writing reads as an article; image, video, audio and media posts are their attachments. */
+.post-page[data-form="writing"] .post-body { max-width: 38rem; font-size: 1.0625rem; line-height: 1.75; }
+.post-page:is([data-form="image"], [data-form="video"], [data-form="audio"], [data-form="media"], [data-form="file"]) .post-body p { margin: 0 0 12px; }
+.post-page[data-form="gallery"] .post-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.post-page[data-form="gallery"] .post-body p { margin: 0; }
+.post-body { overflow-wrap: anywhere; }
+.post-body img, .post-body video { display: block; max-width: 100%; height: auto; }
+.post-body audio { width: 100%; }
+.post-body pre { overflow-x: auto; }
+.post-body .footnotes { margin-top: 24px; color: var(--muted); font-size: .9375rem; }
+.post-body blockquote { margin-inline: 0; padding-inline-start: 1rem; border-inline-start: 2px solid var(--rule); }
+.link-card { display: flex; margin-top: 16px; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; text-decoration: none; }
+.link-card img { flex: 0 0 34%; width: 34%; aspect-ratio: 4 / 3; align-self: flex-start; object-fit: cover; }
+.link-text { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; min-width: 0; font-size: .9375rem; }
+.link-text span { color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.link-text small { color: var(--muted); }
+.attachment-caption { display: block; color: var(--muted); font-size: .875rem; }
+@media (max-width: 720px) {
+  .notes-page { padding: 32px 20px 48px; }
+}
