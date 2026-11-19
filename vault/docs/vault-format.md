@@ -75,7 +75,7 @@ Some of what you know is not in the vault folder: papers on Google Drive, an Obs
 Start a vault's configuration once, from inside the vault folder:
 
 ```sh
-npx github:haeinej/ohm-vault vault init
+npx github:haeinej/ohmmmm vault init
 ```
 
 Then name the folders in `.vault/config.json`:
@@ -105,10 +105,10 @@ Every file a root takes becomes a block whose `origin` is the file's own path. A
 ## The index
 
 ```sh
-npx github:haeinej/ohm-vault vault index           # bring the index up to date
-npx github:haeinej/ohm-vault vault search 서울 rain
-npx github:haeinej/ohm-vault vault inspect churn-query
-npx github:haeinej/ohm-vault vault status
+npx github:haeinej/ohmmmm vault index           # bring the index up to date
+npx github:haeinej/ohmmmm vault search 서울 rain
+npx github:haeinej/ohmmmm vault inspect churn-query
+npx github:haeinej/ohmmmm vault status
 ```
 
 `vault index` reads your vault folder and every root, and keeps what it found in `.vault/index.sqlite`: every block, channel, entity and source, every connection, the words for search, and each file's size, date and content address. The first time, it reads everything. After that it reads only files whose size or dates changed, so an unchanged vault takes as long as listing its folders. It says what was added, changed, moved and removed. A file that was renamed or moved is recognised as the same file.
@@ -126,9 +126,9 @@ Once a file has been copied into a folder, nothing in it says where it was copie
 **Adding through ohm** records everything. An agent, or you, can bring in a file or an address:
 
 ```sh
-npx github:haeinej/ohm-vault vault add ~/Downloads/attention.pdf --channel reading
-npx github:haeinej/ohm-vault vault add ~/work/queries/churn.sql --by agent:claude-code
-npx github:haeinej/ohm-vault vault add https://example.com/essays/on-rain --title "On rain"
+npx github:haeinej/ohmmmm vault add ~/Downloads/attention.pdf --channel reading
+npx github:haeinej/ohmmmm vault add ~/work/queries/churn.sql --by agent:claude-code
+npx github:haeinej/ohmmmm vault add https://example.com/essays/on-rain --title "On rain"
 ```
 
 - A Markdown file is copied into the channel with an `origin` property.
@@ -154,7 +154,7 @@ Otherwise the file is recorded as added by someone unknown. The vault does not g
   "hooks": {
     "PostToolUse": [
       { "matcher": "Write|Edit|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "npx github:haeinej/ohm-vault vault hook --vault ~/Vault --agent claude-code" }] }
+        "hooks": [{ "type": "command", "command": "npx github:haeinej/ohmmmm vault hook --vault ~/Vault --agent claude-code" }] }
     ]
   }
 }
@@ -175,12 +175,12 @@ A block marked `visibility: friends` is meant for the friends you choose. The va
 
 This is the service side only. Nothing in the editor or the folder sync uses it yet, and an existing service database needs the migration `service/migrations/0002_friends_layer.sql` first. The requests are listed in the [service reference](../service/CAPABILITIES.md) under Friends.
 
-## Using the vault from ohm-cortex
+## Using the vault from the cortex
 
-ohm-cortex keeps what agents learn about you, and reads your vault to find what that learning rests on. It asks a vault a few questions: what channels there are, one block, whether blocks still exist, what changed since last time, and a search. Connect cortex to the vault with this vault's own reader:
+The cortex (`cortex/` in ohmmmm) keeps what agents learn about you, and reads your vault to find what that learning rests on. It asks a vault a few questions: what channels there are, one block, whether blocks still exist, what changed since last time, and a search. Connect cortex to the vault with this vault's own reader:
 
 ```sh
-cortex vault connect ~/Vault --module /path/to/ohm-vault/vault/cortex.mjs
+cortex vault connect ~/Vault --module /path/to/ohmmmm/vault/vault/cortex.mjs
 ```
 
 With it, cortex sees blocks only, not channel files, entities or sources, and it sees the blocks of the folders your vault reads too. Without it, cortex's own reader would count `_channel.md` and entity files as blocks.

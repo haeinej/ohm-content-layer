@@ -1,4 +1,4 @@
-# For coding agents working on ohm-cortex
+# For coding agents working on the cortex (`cortex/` in ohmmmm, formerly ohm-cortex)
 
 This file is for agents changing this repository. The rulebook an agent follows when keeping someone's cortex is a different file: [template/agents/AGENTS.md](template/agents/AGENTS.md).
 
@@ -11,7 +11,7 @@ Cortex is how an agent reads and edits a person's vault for them: who they are, 
 1. **Cortex does not run an agent; agents read it over MCP.** ChatGPT, Claude and coding agents never open the folder. The server's instructions are one paragraph under 512 characters that sends an agent to `cortex_start`; that call returns the playbook. Keep the instructions short, and put anything else an agent must know in the playbook.
 2. **Folder first.** The files are the cortex. Do not add a database, a hidden second copy, or anything a person could not read by opening the folder.
 3. **Cortex never writes to a vault.** It reads through the vault contract in the plan. Saving content is the vault's job.
-4. **Standalone.** Do not import from ohm-vault or any host. A host's vault reaches cortex only through the vault contract (`src/vault.mjs`), as a module the person names. No runtime dependencies without a reason written in the commit message; today there are none.
+4. **Standalone.** Do not import from `vault/` or any host. A host's vault reaches cortex only through the vault contract (`src/vault.mjs`), as a module the person names. No runtime dependencies without a reason written in the commit message; today there are none.
 5. **The agent's limits are enforced in code, not only in the rulebook.** No tool writes to `agents/`, `agents/secrets/` or the git policy files. No tool approves a skill, adds or enables a tool, or confirms an identity field.
 6. **Agents edit directly; every change is marked with who made it; the person reverts.** Every write, by the person or an agent, is a `change` line naming its actor. Identity facts, skill approval and tools stay the person's, from the command line.
 7. **Nothing is lost.** Every replaced or removed file goes to `.cortex/history/`, and every change is a line in `.cortex/journal.jsonl`, written only through `src/journal.mjs`.

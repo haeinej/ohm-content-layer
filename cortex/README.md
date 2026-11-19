@@ -1,4 +1,6 @@
-# ohm-cortex
+# The cortex
+
+ohmmmm's `cortex/`, formerly the separate repository ohm-cortex (archived).
 
 What an agent knows about the person it works for, and what it can do for them, kept as a folder that person can read.
 

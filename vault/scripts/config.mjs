@@ -18,7 +18,7 @@ export function configPath(given) {
   const found = PLACES.find(place => existsSync(place));
   if (!found) {
     throw new Error('No site configuration here. Create one with:\n' +
-      '  npx github:haeinej/ohm-vault configure --site https://example.com --handle example.com > ohm.jsonc\n' +
+      '  npx github:haeinej/ohmmmm configure --site https://example.com --handle example.com > ohm.jsonc\n' +
       'or name one with --config PATH');
   }
   return found;

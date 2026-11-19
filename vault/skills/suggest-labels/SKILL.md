@@ -37,7 +37,7 @@ Find out which of these the owner has. Ask if you cannot tell.
 List published posts. From the owner's site folder:
 
 ```sh
-npx github:haeinej/ohm-vault posts
+npx github:haeinej/ohmmmm posts
 ```
 
 Inside a clone of the repository, `npm run --silent posts` does the same.
@@ -125,7 +125,7 @@ Check that no post is without a label, and list separately everything you filed 
 New posts take their label when published:
 
 ```sh
-npx github:haeinej/ohm-vault publish --file ./essay.md --slug trap-of-independency \
+npx github:haeinej/ohmmmm publish --file ./essay.md --slug trap-of-independency \
   --title 'trap of independency' --label Writing --sublabel Collisions
 ```
 

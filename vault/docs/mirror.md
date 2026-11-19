@@ -6,7 +6,7 @@ It runs one way only. It reads from each platform and writes to your PDS. It nev
 
 ## When to use it
 
-There are two ways to put a website on ohm-vault.
+There are two ways to put a website on the vault.
 
 | | Source of truth | What you run |
 | --- | --- | --- |

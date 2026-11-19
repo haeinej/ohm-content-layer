@@ -29,28 +29,28 @@ This repository is a Claude Code plugin. Its bundled skills are:
 [How documentation follows your work](skills/document-work/README.md) explains what to expect from the last skill and how to use it. Its instructions, writing guides and contract live together in [skills/document-work/](skills/document-work/).
 
 ```
-/plugin install ohm --marketplace haeinej/ohm-vault
+/plugin install ohm --marketplace haeinej/ohmmmm
 ```
 
-On Claude Code older than 2.1.275, run `/plugin marketplace add haeinej/ohm-vault`, then `/plugin install ohm@ohm`. Other agents can read [AGENTS.md](AGENTS.md) and the files under [skills/](skills/) directly. [Set up with your coding agent](docs/set-up-with-an-agent.md)
+On Claude Code older than 2.1.275, run `/plugin marketplace add haeinej/ohmmmm`, then `/plugin install ohm@ohm`. Other agents can read [AGENTS.md](AGENTS.md) and the files under [skills/](skills/) directly. [Set up with your coding agent](docs/set-up-with-an-agent.md)
 
 ### From the command line
 
 The commands run from any folder, so you can work inside your own website's folder. Nothing needs cloning.
 
 ```sh
-npx github:haeinej/ohm-vault
+npx github:haeinej/ohmmmm
 ```
 
 That lists the commands. Public publishing commands preview until you pass `--publish`; show the preview to the owner and get approval first. Private imports use `--save`, folder sync uses `--apply`, and renderer commands write local output. Those writes do not publish anything.
 
 ```sh
-npx github:haeinej/ohm-vault identity example.com
-npx github:haeinej/ohm-vault configure --site https://example.com --handle example.com > ohm.jsonc
-npx github:haeinej/ohm-vault publish --file ./hello.md --slug hello --title 'Hello' --label Writing
+npx github:haeinej/ohmmmm identity example.com
+npx github:haeinej/ohmmmm configure --site https://example.com --handle example.com > ohm.jsonc
+npx github:haeinej/ohmmmm publish --file ./hello.md --slug hello --title 'Hello' --label Writing
 ```
 
-Commands read a site configuration named `ohm.jsonc` from the folder you run them in, or take one with `--config`. The examples below shorten `npx github:haeinej/ohm-vault` to `ohm`. Inside a clone of this repository the same commands are `npm run identity`, `npm run publish:post`, and so on.
+Commands read a site configuration named `ohm.jsonc` from the folder you run them in, or take one with `--config`. The examples below shorten `npx github:haeinej/ohmmmm` to `ohm`. Inside a clone of this repository the same commands are `npm run identity`, `npm run publish:post`, and so on.
 
 ## How it is put together
 
@@ -227,7 +227,7 @@ A tool adds no ability of its own. Each is made of requests to the vault service
 The server uses the same site configuration as the commands, found in the folder your agent is working in, and needs `ATPROTO_APP_PASSWORD` to sign in to your PDS. The vault is ohm's unless the configuration names another with `OHM_VAULT_URL` and `OHM_VAULT_DID`. An agent that does not load the plugin can start the server itself:
 
 ```sh
-npx github:haeinej/ohm-vault mcp
+npx github:haeinej/ohmmmm mcp
 ```
 
 ## Keep your vault in a folder of your own

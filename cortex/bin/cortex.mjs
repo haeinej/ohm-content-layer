@@ -106,7 +106,7 @@ try {
     console.log(`${rest[0]} is cleared`);
   } else if (command === 'vault') {
     if (rest[0] === 'connect' && rest[1]) {
-      // --module FILE: the vault is read by that file's openVault, such as ohm-vault's vault/cortex.mjs.
+      // --module FILE: the vault is read by that file's openVault, such as ohmmmm's vault/vault/cortex.mjs.
       const given = take('--module');
       const module = given ? resolve(given) : null;
       const path = resolve(rest[1]);
