@@ -4,10 +4,24 @@
   "private": true,
   "type": "module",
   "description": "A person's home, ohmmmm.<handle>: their vault (blocks and channels) and their cortex (what an agent knows about them), side by side, under one contract.",
-  "bin": { "ohmmmm": "bin/ohmmmm.mjs" },
+  "bin": {
+    "ohm": "vault/bin/ohm.mjs",
+    "cortex": "cortex/bin/cortex.mjs",
+    "ohmmmm": "bin/ohmmmm.mjs"
+  },
   "scripts": {
     "test": "npm run test:home && npm --prefix vault test && npm --prefix cortex test",
     "test:home": "node --experimental-sqlite --no-warnings=ExperimentalWarning --test test/*.test.mjs"
   },
-  "engines": { "node": ">=22.13" }
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "markdown-it": "15.0.3",
+    "markdown-it-footnote": "4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haeinej/ohm-vault.git"
+  }
 }

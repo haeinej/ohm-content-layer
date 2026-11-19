@@ -1,5 +1,12 @@
 # A personal brain: schemas and sync
 
+> **Where this plan and what is built disagree** (noted 19 November 2026, when ohm-vault and ohm-cortex were joined as `vault/` and `cortex/` of one repository). The ideas here stand: blocks in many channels, order kept by the channel, evidence apart from inference, the folder as canonical. These names and places are what is built or decided, and [../../docs/words.md](../../docs/words.md) is the word list:
+> - **Vault, not brain.** The schemas are `com.ohmmmm.vault.block`, `channel`, `entity` and `source` (`lexicons/com/ohmmmm/vault/`), the index is `.vault/index.sqlite`, the commands are `ohm vault …`. Nothing is named `brain`.
+> - **The folder is a home.** A person's folder is `ohmmmm.<handle>/`, holding `vault/` (blocks, channels, entities, sources) and `cortex/` (its own repository part, read-only over the vault reader contract), not `~/Brain/` with `cortex/` inside it.
+> - **`visibility`, not `intent`.** A block's `visibility` (`public`, `friends`, `private`) is access control and chooses the layer it is stored in ([encryption.md](encryption.md)); it replaced `intent`.
+> - **History belongs to the vault** for blocks and channels (versions, the journal, daily autosaves), and to cortex only for its own pages ([encryption.md](encryption.md), "History, versions and autosaves").
+> - **A channel's order** is in the channel; for a channel holding friends and private blocks, the private blocks' places are in a private overlay, so friends never learn they exist.
+
 Written 19 November 2026. A proposal, nothing here is built. It keeps the cortex and the vault as they are and adds a graph layer between them, so that ohm becomes a personal knowledge base that lives in a local folder, syncs when the owner says so, and is used through agents over MCP.
 
 ## Vocabulary
