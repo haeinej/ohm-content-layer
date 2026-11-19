@@ -5,7 +5,7 @@
 // cortex token [dir] [--replace]   make the token an HTTP client signs in with, and print it once
 // cortex approve <skill> [dir] approve a skill an agent proposed
 // cortex event <text> [dir]    report a change from outside, for the agent to settle
-// cortex vault connect <folder> [dir]   read the vault kept in that folder
+// cortex vault connect <folder> [dir] [--module FILE]   read the vault kept in that folder (with FILE's reader)
 // cortex vault [sync] [dir]         bring the cortex in step with the vault, and show how it reads it
 // cortex confirm <field|id> [dir]   accept an identity fact an agent proposed
 // cortex reject <field|id> [dir]    turn one down; that value is not proposed again
@@ -103,8 +103,12 @@ try {
     console.log(`${rest[0]} is cleared`);
   } else if (command === 'vault') {
     if (rest[0] === 'connect' && rest[1]) {
-      const done = await openCortex(folder(rest[2]), { actor: 'member' }).connectVault({ kind: 'folder', path: resolve(rest[1]) });
-      console.log(`Connected the vault in ${resolve(rest[1])}: ${done.channels.length} channel${done.channels.length === 1 ? '' : 's'}`);
+      // --module FILE: the vault is read by that file's openVault, such as ohm-vault's vault/cortex.mjs.
+      const given = take('--module');
+      const module = given ? resolve(given) : null;
+      const path = resolve(rest[1]);
+      const done = await openCortex(folder(rest[2]), { actor: 'member' }).connectVault(module ? { kind: 'module', module, path } : { kind: 'folder', path });
+      console.log(`Connected the vault in ${path}${module ? `, read by ${module}` : ''}: ${done.channels.length} channel${done.channels.length === 1 ? '' : 's'}`);
     } else {
       const dir = folder(rest[0] === 'sync' ? rest[1] : rest[0]);
       const done = await openCortex(dir, { actor: 'member' }).syncVault();
@@ -167,7 +171,7 @@ try {
     const done = await openCortex(folder(rest[1]), { actor: 'member' }).revert({ change: rest[0], reason });
     console.log(`Change ${rest[0]} is undone: ${done.node} is back as it was. What it replaced is kept.`);
   } else {
-    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex | history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json] | as-of <node> <save|date|seq> [dir] | save <name> <note> [dir] | restore <node> <version> [dir] [--reason <why>] | revert <change> [dir] [--reason <why>]');
+    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] [--module <file>] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex | history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json] | as-of <node> <save|date|seq> [dir] | save <name> <note> [dir] | restore <node> <version> [dir] [--reason <why>] | revert <change> [dir] [--reason <why>]');
     process.exitCode = command ? 1 : 0;
   }
 } catch (problem) {

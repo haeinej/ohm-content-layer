@@ -57,7 +57,7 @@ node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
 | --- | --- | --- |
 | `cortex status [dir] [--json]` | The person | Lists everything waiting or broken, with how to clear each item; reads without changing files |
 | `cortex init [dir] [--account <did>]` | The person | Starts a cortex in an empty folder, optionally with the signed-in account |
-| `cortex vault connect <folder> [dir]` | The person | Connects the vault kept in that folder, and writes `vault.md` |
+| `cortex vault connect <folder> [dir] [--module <file>]` | The person | Connects the vault kept in that folder, and writes `vault.md`. With `--module`, the folder is read by that file's `openVault({ path })`, such as ohm-vault's `vault/cortex.mjs` |
 | `cortex vault [sync] [dir]` | The person or a host | Brings the cortex in step with the vault: counts, what moved or left, memories pointing at blocks no longer there |
 | `cortex identity [dir]` | The person | Shows the confirmed identity and the facts an agent proposed |
 | `cortex confirm <field or id> [dir]` | The person | Accepts a proposed identity fact |

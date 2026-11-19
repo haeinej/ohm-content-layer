@@ -22,7 +22,8 @@
 // A cursor is the vault's own: cortex keeps it and hands it back, and never looks inside.
 import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { Refused, splitFront } from './core.mjs';
 
 export const OPERATIONS = ['shape', 'read', 'exists', 'changes', 'profile'];
@@ -189,10 +190,43 @@ export function folderVault(root, { readText = path => readFile(path, 'utf8') } 
   });
 }
 
-// Which vault a cortex reads is set by the person, in .cortex/vault.json. Kinds other than a folder
-// are provided by their host, such as ohm, and passed in; this file knows only the folder kind.
+// A vault whose reader is a module the person named: a file that exports openVault({ path }),
+// returning a vault that answers the contract. Cortex imports nothing from any vault; it loads the
+// file the person chose, the first time it asks the vault anything, so vaultFrom stays synchronous.
+// The module is the person's choice and runs as cortex does; cortex still only reads through it.
+export function moduleVault({ module, path }) {
+  let opened;
+  const open = () => (opened ??= (async () => {
+    let loaded;
+    try {
+      loaded = await import(pathToFileURL(module).href);
+    } catch (problem) {
+      throw new Refused('VaultUnreachable', `The vault reader ${module} cannot be loaded: ${problem.message}`);
+    }
+    if (typeof loaded.openVault !== 'function') throw new Refused('InvalidVault', `${module} does not export openVault({ path })`);
+    return checkVault(await loaded.openVault({ path }));
+  })().catch(problem => { opened = undefined; throw problem; }));
+  const ask = operation => async (...args) => (await open())[operation](...args);
+  return checkVault({
+    kind: 'module',
+    ...Object.fromEntries(OPERATIONS.map(operation => [operation, ask(operation)])),
+    async search(...args) {
+      const vault = await open();
+      return vault.search ? vault.search(...args) : [];
+    },
+  });
+}
+
+// Which vault a cortex reads is set by the person, in .cortex/vault.json: a folder of Markdown
+// files, which this file reads itself, or a folder with the module that reads it, such as ohm-vault's
+// { kind: 'module', module: '/…/ohm-vault/vault/cortex.mjs', path: '/…/Vault' }.
 export function vaultFrom(config) {
   if (!config) return null;
   if (config.kind === 'folder' && typeof config.path === 'string' && config.path) return folderVault(config.path);
+  if (config.kind === 'module') {
+    if (typeof config.module !== 'string' || !isAbsolute(config.module)) throw new Refused('InvalidVault', 'A vault of kind module names its reader by its absolute path, as module');
+    if (typeof config.path !== 'string' || !isAbsolute(config.path)) throw new Refused('InvalidVault', 'A vault of kind module names its folder by its absolute path, as path');
+    return moduleVault(config);
+  }
   throw new Refused('InvalidVault', `This cortex cannot open a vault of kind ${config.kind}`);
 }
