@@ -49,7 +49,8 @@ test('skill and tool proposals each say how to stop waiting, and an agent\'s dir
   const agent = openCortex(dir, { actor: 'codex' });
   await agent.proposeSkill({ text: '---\nname: reading-notes\ndescription: File reading notes\n---\nRead it.' });
   const [item] = await has(person, 'skill-proposal');
-  assert.equal(item.clear, 'cortex approve reading-notes');
+  // The remedy names this cortex's folder, so it never acts on whichever cortex is the default.
+  assert.equal(item.clear, `cortex approve 'reading-notes' '${dir}'`);
   await person.approveSkill('reading-notes');
   await has(person, 'skill-proposal', false);
   await agent.proposeTool({ name: 'read-links', description: 'Read links', inputs: 'URL', outputs: 'Text' });
