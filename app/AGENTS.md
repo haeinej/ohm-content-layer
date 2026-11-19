@@ -1,6 +1,6 @@
 # For coding agents
 
-ohm-ux is where ohm's **user flows** are designed and built. Every flow has two ways in: a person moving through screens built from [ohm-ui](https://design.ohmmmm.com/overview), and an agent calling the same steps as [WebMCP](https://webmachinelearning.github.io/webmcp/) tools that the page registers. Both ways go through the same code and end in the same state.
+The app is where ohm's **user flows** are designed and built. Every flow has two ways in: a person moving through screens built from [ohm-ui](https://design.ohmmmm.com/overview), and an agent calling the same steps as [WebMCP](https://webmachinelearning.github.io/webmcp/) tools that the page registers. Both ways go through the same code and end in the same state.
 
 - How ohm looks: ohm-ui's `DESIGN.md` (github.com/haeinej/ohm-ui). It outranks this file on any visual question.
 - Which component to use: ohm-ui's `skills/use-ohm-ui/SKILL.md`.
@@ -59,11 +59,16 @@ ohm-ux is where ohm's **user flows** are designed and built. Every flow has two 
 
 ## Running it
 
+From the ohmmmm repository root:
+
 ```sh
-npm install
-npm run dev        # http://localhost:5190
-npm run typecheck
+npm ci --prefix app
+npm --prefix app run dev        # http://localhost:5190
+npm --prefix app run typecheck
+npm --prefix app run build
 ```
+
+Root `npm test` also runs the app typecheck and build. The import preserved history from ohm-ux. Verify it from the root with `git log --follow -- app/src/App.tsx`.
 
 - The app is Vite + React 19 + Tailwind 4. ohm-ui's foundations are in `src/ohm/`, copied with `npm run foundations -- ../ohm-ux` from an ohm-ui checkout; never edit them here. Components come from `npx shadcn add @ohm/<name>` into `src/components/`.
 - In development, `src/webmcp-shim.ts` stands in for `document.modelContext` when the browser has none, so the tool path can be walked from the console: `await document.modelContext.getTools()`, then `executeTool(tool, input)`. It is never in a production build.

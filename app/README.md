@@ -1,4 +1,4 @@
-# ohm-ux
+# ohm workspace app
 
 User flows for ohm, built so that a person and an agent can both complete them.
 
@@ -23,10 +23,11 @@ A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/wor
   Inbox items and settings open here too.
 - **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, so a real service can be connected behind it with `setSearchProvider`.
 
-All data is synthetic and nothing is saved.
+All data is synthetic. Run the app to explore a sample vault and cortex. Reloading restores the sample.
 
 ```sh
-npm install && npm run dev   # http://localhost:5190
+npm ci --prefix app
+npm --prefix app run dev   # http://localhost:5190
 ```
 
 ## Where things are
