@@ -45,8 +45,8 @@ test('an agent records a finished task: what was done, the changes it made, and 
   const other = await createTools(openCortex(dir, { actor: 'claude-code' })).call('cortex_remember', { memory: { ...memory('x'), name: 'likes-maps' } });
   await assert.rejects(tools.call('cortex_session', { summary: 'x', made: [other.change] }), refused('InvalidRequest'));
   // A session groups changes, not other lines.
-  const note = await openCortex(dir, { actor: 'codex' }).addNote({ id: 'n1', note: 'Seen', session: 's1' });
-  const noteLine = (await journal(dir)).find(line => line.type === 'note' && line.note === note.id);
+  const note = await openCortex(dir, { actor: 'codex' }).observe({ id: 'n1', text: 'Seen', session: 's1' });
+  const noteLine = (await journal(dir)).find(line => line.type === 'observation' && line.observation === note.id);
   await assert.rejects(tools.call('cortex_session', { summary: 'x', made: [noteLine.id] }), refused('NotFound'));
   for (const bad of [{ summary: '' }, { summary: 'two\nlines' }, { summary: 'x', outcome: 'maybe' }, { summary: 'x', deadEnds: [{ tried: 'x' }] }, { summary: 'x', deadEnds: [{ tried: 'x', why: 'y', when: 'z' }] }]) {
     await assert.rejects(tools.call('cortex_session', bad), refused('InvalidRequest'), JSON.stringify(bad));

@@ -123,7 +123,7 @@ try {
     const { fields, problems } = await cortex.identity();
     console.log(JSON.stringify({ fields, waiting: await cortex.identityProposals(), ...(problems.length ? { problems } : {}) }, null, 2));
   } else if (command === 'event' && rest[0]) {
-    const { id } = await openCortex(folder(rest[1]), { actor: process.env.CORTEX_SOURCE ?? 'host' }).addNote({ id: randomUUID(), note: rest[0], session: 'event' });
+    const { id } = await openCortex(folder(rest[1]), { actor: process.env.CORTEX_SOURCE ?? 'host' }).observe({ id: randomUUID(), text: rest[0], session: 'event' });
     console.log(`Recorded ${id}`);
   } else if (command === 'status') {
     const json = rest.includes('--json');

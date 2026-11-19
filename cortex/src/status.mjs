@@ -18,7 +18,7 @@ export async function cortexStatus(cortex, { now = new Date() } = {}) {
   for (const proposal of state.waiting.identity) add('identity-proposal', `${proposal.field}: ${JSON.stringify(proposal.value)}`, `cortex confirm ${proposal.id} ${dir} or cortex reject ${proposal.id} ${dir}`);
   for (const name of state.waiting.skills) add('skill-proposal', name, `cortex approve ${shellWord(name)} ${dir}`);
   for (const name of state.waiting.tools) add('tool-proposal', name, `Build ${name} and add it to tools/, then delete .cortex/proposed/tools/${name}.md; or delete that proposal file.`);
-  if (state.notes.length) add('notes', `${state.notes.length} observation${state.notes.length === 1 ? '' : 's'} waiting to be settled`, 'The next agent session settles these with cortex_settle.');
+  if (state.observations.length) add('observations', `${state.observations.length} observation${state.observations.length === 1 ? '' : 's'} waiting to be settled`, 'The next agent session settles these with cortex_settle.');
   for (const { memory, block } of state.vault.broken ?? []) add('broken-pointer', `${memory} points at missing block ${block}`, `Ask the agent to rewrite or forget ${memory}, or restore block ${block} in the vault.`);
   for (const channel of state.vault.channels ?? []) if (!channel.meaning) add('undescribed-channel', channel.channel, `Ask the agent to describe ${channel.channel} with cortex_describe_channel, or write its Meaning: in vault.md.`);
   for (const channel of state.vault.gone ?? []) add('gone-channel', channel, `Delete the ${channel} heading and what is under it from vault.md (keep a copy in .cortex/history/).`);

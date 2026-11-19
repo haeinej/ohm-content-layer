@@ -33,13 +33,13 @@ For the person, it is three folders: what my agent has learned, what it knows ho
 
 **Agents edit directly; every change is marked with who made it; the person reverts.** Each write is a change in the journal under the agent's name, with a reason, and `cortex revert` or `cortex restore` undoes what the person does not want. Identity facts, skills and tools still wait for the person.
 
-`.cortex/` holds what the person does not need to think about: the journal (every change, note, settlement, session and save, with who made it), and earlier versions of every file.
+`.cortex/` holds what the person does not need to think about: the journal (every change, observation, settlement, session and save, with who made it), and earlier versions of every file.
 
 A cortex also carries `.gitignore` and `.gitattributes`, so that one kept in git never commits a secret, keeps the same line endings everywhere, and joins two machines' journals without a conflict.
 
 ## Words
 
-Cortex uses ohm's words. A **block** is one unit of thought, and a published one is a **post**. A **channel** is an ordered collection of blocks, and a block can be in many. **Evidence** is what the content shows (a channel contains a block, a block links to or mentions another, a block came from a source), and only the person makes it. **Inference** is what the cortex concludes: memories, notes, skills and tools, each pointing at what it was drawn from. An agent never connects two blocks. [docs/guide.md](docs/guide.md) explains all of this with examples.
+Cortex uses ohm's words. A **block** is one unit of thought, and a published one is a **post**. A **channel** is an ordered collection of blocks, and a block can be in many. **Evidence** is what the content shows (a channel contains a block, a block links to or mentions another, a block came from a source), and only the person makes it. **Inference** is what the cortex concludes: memories, observations, skills and tools, each pointing at what it was drawn from. An agent never connects two blocks. [docs/guide.md](docs/guide.md) explains all of this with examples.
 
 ## Use it
 
@@ -125,7 +125,7 @@ Built:
 - filing advice and `cortex status`;
 - MCP over standard input and output, and over HTTP with a token;
 - the hooks adapter for Claude Code and Codex;
-- the journal: changes marked with who made them, notes, sessions with dead ends, and saves; history, as-of, restore and revert; evidence on notes and memories;
+- the journal: changes marked with who made them, observations, sessions with dead ends, and saves; history, as-of, restore and revert; evidence on observations and memories;
 - blocks and channels as the vault's words;
 - the twenty tools and the commands above.
 
@@ -135,6 +135,6 @@ Not yet tried: the hooks in a real Claude Code or Codex session.
 
 Not built: OAuth for ChatGPT and Claude's web connectors, fitting memories to each prompt, switching tools on from anywhere but the file itself, and staleness of memories whose blocks changed.
 
-Not planned: syncing a cortex with ohm. A cortex stays a folder of its own. The older cortex inside ohm-content-layer is separate and is not connected to this one.
+Not planned: syncing a cortex with ohm. A cortex stays a folder of its own. It reads an ohm vault through the vault contract, with `cortex vault connect <folder> --module <file>`; the first cortex that lived inside ohm's vault (then called ohm-content-layer, now ohm-vault) has been removed.
 
 See [docs/plan.md](docs/plan.md) for the decisions behind this, [docs/journal-and-history.md](docs/journal-and-history.md) for the history design, and [docs/guide.md](docs/guide.md) for a guide.

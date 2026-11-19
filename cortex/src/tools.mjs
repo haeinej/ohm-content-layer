@@ -26,37 +26,36 @@ const evidence = { type: 'array', minItems: 1, maxItems: 20,
 const memory = object({
   name, description: { type: 'string', maxLength: 200 }, kind: { type: 'string', enum: ['person', 'preference', 'project', 'reference'] },
   body: text, stated: { type: 'boolean', description: 'true only for what the person said in so many words' }, always: { type: 'boolean' }, from: text, project: text,
-  notes: { type: 'array', items: text, maxItems: 100, uniqueItems: true },
+  observations: { type: 'array', items: text, maxItems: 100, uniqueItems: true, description: 'IDs of the observations this memory was settled from.' },
   blocks: { type: 'array', items: text, minItems: 1, maxItems: 20, uniqueItems: true, description: 'IDs of the blocks in the vault this memory points at. Point at a block; never copy what it says.' },
-  posts: { type: 'array', items: text, minItems: 1, maxItems: 20, uniqueItems: true, description: 'Deprecated: the old name of blocks.' },
   evidence,
 }, ['name', 'description', 'kind', 'body', 'stated']);
 const change = object({ memory, version }, ['memory']);
 
 export const TOOLS = [
-  { name: 'cortex_start', description: 'Call first in every session. Returns the playbook for keeping this cortex (follow it), the person\'s own added rules included, the identity in full, how to read the vault (each channel, how many blocks it holds, what it means and how blocks there are filed, and memories pointing at blocks no longer there), the memories marked always, a line for every other memory and approved skill, the tools switched on, the notes waiting to be settled, what is waiting for the person (identity facts to confirm, skills to approve, tools asked for), the open dead ends, and working memory: yours from last time and every other agent\'s.',
+  { name: 'cortex_start', description: 'Call first in every session. Returns the playbook for keeping this cortex (follow it), the person\'s own added rules included, the identity in full, how to read the vault (each channel, how many blocks it holds, what it means and how blocks there are filed, and memories pointing at blocks no longer there), the memories marked always, a line for every other memory and approved skill, the tools switched on, the observations waiting to be settled, what is waiting for the person (identity facts to confirm, skills to approve, tools asked for), the open dead ends, and working memory: yours from last time and every other agent\'s.',
     inputSchema: object({}), annotations: { readOnlyHint: true } },
   { name: 'cortex_propose_identity', description: 'Propose one identity fact: kind, name, preferredName, pronouns, emails, websites, city, timezone, languages, birthdate, occupation, organization or position. It changes nothing until the person confirms it. Give its source: the person\'s own words ({kind: "person", quote}), or a block in the vault that states it ({kind: "vault", block, passage}). Something you worked out is not a source, and an empty field is a valid answer. Pronouns only ever come from the person\'s words; never infer them from a name. Propose a birthdate only when the passage states the date outright.',
     inputSchema: object({
       field: { type: 'string', enum: ['kind', 'name', 'preferredName', 'pronouns', 'emails', 'websites', 'city', 'timezone', 'languages', 'birthdate', 'occupation', 'organization', 'position'] },
       value: { description: 'Text for most fields. emails: a list of {label, address}. websites and languages: lists of text. birthdate: YYYY-MM-DD, or --MM-DD with no year.' },
-      source: object({ kind: { type: 'string', enum: ['person', 'vault'] }, quote: text, block: text, post: { type: 'string', description: 'Deprecated: the old name of block' }, passage: text }, ['kind']),
+      source: object({ kind: { type: 'string', enum: ['person', 'vault'] }, quote: text, block: text, passage: text }, ['kind']),
     }, ['field', 'value', 'source']) },
   { name: 'cortex_working', description: 'Rewrite your own working memory, in full: how the person is working today, corrections they made, and threads still open. Write freely, as often as you like. Pass the version cortex_start or your last write returned. You can read other agents\' working memory in cortex_start, and never write theirs.',
     inputSchema: object({ text: { type: 'string', description: 'Markdown, at most 8 KB' }, version }, ['text']) },
-  { name: 'cortex_distill', description: 'End a session. Read every agent\'s working memory together (cortex_start gives them), record as notes what you judge was seen in more than one session or by more than one agent, and leave your own working memory as what is still open for next time. The working memory it replaces is kept.',
+  { name: 'cortex_distill', description: 'End a session. Read every agent\'s working memory together (cortex_start gives them), record as observations what you judge was seen in more than one session or by more than one agent, and leave your own working memory as what is still open for next time. The working memory it replaces is kept.',
     inputSchema: object({
       session: { type: 'string', description: 'The session being distilled' },
-      notes: { type: 'array', maxItems: 50, items: object({ id: { type: 'string', description: 'Made once, reused on retry' }, note: { type: 'string', maxLength: 500 }, project: text, evidence }, ['id', 'note']) },
+      observations: { type: 'array', maxItems: 50, items: object({ id: { type: 'string', description: 'Made once, reused on retry' }, text: { type: 'string', maxLength: 500 }, project: text, evidence }, ['id', 'text']) },
       working: { type: 'string', description: 'Your working memory for next time, in full. Empty to clear it' },
       version,
     }, ['session', 'working']) },
   { name: 'cortex_describe_channel', description: 'Write what a channel of the vault means and how blocks there are filed, one line each, from what you see in the vault and what the person says. No need to ask first: it is recorded as your change, and the person can revert it. If the person has written it themselves, theirs stands and this is refused: suggest a change to them instead.',
     inputSchema: object({ channel: { type: 'string', description: 'A channel as cortex_start lists it, such as essays or notes/reading' }, meaning: text, conventions: text }, ['channel']) },
-  { name: 'cortex_note', description: 'Record in one line something you noticed about the person. It changes no memory. Make the ID once and reuse it if you retry; name the real session. Cite what you saw it in as evidence when you can.',
-    inputSchema: object({ id: { type: 'string', maxLength: 200 }, note: { type: 'string', maxLength: 500 }, session: { type: 'string', maxLength: 200 }, project: text, evidence }, ['id', 'note', 'session']) },
-  { name: 'cortex_settle', description: 'Without arguments, read the notes waiting and the ones kept from earlier sessions. Otherwise give every note an outcome: kept (seen once, not a memory yet), dropped, or the name of the memory it went into; and give the memories you rewrote in changes, each with the version you read. Each memory it touches is rewritten, as your change. Returns the changes and the notes still waiting.',
-    inputSchema: object({ changes: { type: 'array', items: change, maxItems: 100 }, notes: { type: 'array', minItems: 1, maxItems: 100, items: object({ id: text, outcome: { type: 'string', description: 'kept, dropped, or a memory name' } }, ['id', 'outcome']) } }) },
+  { name: 'cortex_observe', description: 'Record in one line something you saw the person do or say: what happened, not what you conclude from it. It changes no memory; settling turns observations into memories. Make the ID once and reuse it if you retry; name the real session. Cite the blocks or sessions you saw it in as evidence when you can.',
+    inputSchema: object({ id: { type: 'string', maxLength: 200 }, text: { type: 'string', maxLength: 500 }, session: { type: 'string', maxLength: 200 }, project: text, evidence }, ['id', 'text', 'session']) },
+  { name: 'cortex_settle', description: 'Without arguments, read the observations waiting and the ones kept from earlier sessions. Otherwise give every observation an outcome: kept (seen once, not a memory yet), dropped, or the name of the memory it went into; and give the memories you rewrote in changes, each with the version you read. Each memory it touches is rewritten, as your change. Returns the changes and the observations still waiting.',
+    inputSchema: object({ changes: { type: 'array', items: change, maxItems: 100 }, observations: { type: 'array', minItems: 1, maxItems: 100, items: object({ id: text, outcome: { type: 'string', description: 'kept, dropped, or a memory name' } }, ['id', 'outcome']) } }) },
   { name: 'cortex_recall', description: 'Read one memory in full by name, or find memories by words. A named read gives its version; ask for history to see earlier versions, or name a version to read one back.',
     inputSchema: object({ name, query: text, limit: { type: 'integer', minimum: 1, maximum: 50 }, history: { type: 'boolean' }, version }), annotations: { readOnlyHint: true } },
   { name: 'cortex_remember', description: 'Save a whole memory at once. It is recorded as your change, with your reason, and the person can revert it. To change an existing memory, read it first and pass its version. Leaving notes, blocks or evidence out keeps the ones it had.',
@@ -112,16 +111,16 @@ export function createTools(cortex) {
     cortex_start: () => cortex.start(),
     cortex_propose_identity: args => cortex.proposeIdentity(args),
     cortex_describe_channel: args => cortex.describeChannel(args),
-    cortex_note: args => cortex.addNote(args),
+    cortex_observe: args => cortex.observe(args),
     cortex_working: ({ text, version }) => cortex.writeWorking(text, { replaces: version ?? null }),
     cortex_distill: args => cortex.distill(args),
-    async cortex_settle({ changes, notes }) {
-      if (notes === undefined) {
-        if (changes?.length) refuse('Every rewrite comes with the notes it was made from');
-        const all = (await cortex.listNotes({ settled: true })).notes;
-        return { notes: all.filter(note => !note.settledAt), kept: all.filter(note => note.outcome === 'kept') };
+    async cortex_settle({ changes, observations }) {
+      if (observations === undefined) {
+        if (changes?.length) refuse('Every rewrite comes with the observations it was made from');
+        const all = (await cortex.listObservations({ settled: true })).observations;
+        return { observations: all.filter(observation => !observation.settledAt), kept: all.filter(observation => observation.outcome === 'kept') };
       }
-      return cortex.settle({ changes, notes });
+      return cortex.settle({ changes, observations });
     },
     async cortex_recall({ name, query, limit, history, version }) {
       if (name !== undefined && query !== undefined) refuse('Give a memory name or words to search for, not both');
@@ -135,9 +134,9 @@ export function createTools(cortex) {
       if (version !== undefined) {
         const held = await cortex.read(given.name);
         // Sources are kept unless the rewrite says otherwise, so a rewrite cannot lose where a memory came from.
-        if (given.notes === undefined && held.memory.notes !== undefined) given.notes = [...held.memory.notes];
+        if (given.observations === undefined && held.memory.observations !== undefined) given.observations = [...held.memory.observations];
         if (given.from === undefined && held.memory.from !== undefined) given.from = held.memory.from;
-        if (given.blocks === undefined && given.posts === undefined && held.memory.blocks !== undefined) given.blocks = [...held.memory.blocks];
+        if (given.blocks === undefined && held.memory.blocks !== undefined) given.blocks = [...held.memory.blocks];
         if (given.evidence === undefined && held.memory.evidence !== undefined) given.evidence = held.memory.evidence.map(pointer => ({ ...pointer }));
       }
       return { done: true, ...await cortex.write(given, { replaces: version ?? null, reason }) };

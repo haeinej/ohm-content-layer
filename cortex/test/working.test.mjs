@@ -54,12 +54,12 @@ test('distilling records what was seen again, leaves what is open, and keeps wha
   const claude = as(dir, 'claude-code');
   const { version } = await claude.call('cortex_working', { text: 'They shortened my title again. Thread: the atlas essay is half filed.' });
   await assert.rejects(claude.call('cortex_distill', { session: 's1', working: 'x' }), refused('Changed'));
-  const done = await claude.call('cortex_distill', { session: 's1', version, notes: [{ id: 'n-titles-s1', note: 'Shortened a title I proposed, again' }], working: 'Open: the atlas essay is half filed.' });
-  assert.deepEqual(done.noted, ['n-titles-s1']);
+  const done = await claude.call('cortex_distill', { session: 's1', version, observations: [{ id: 'n-titles-s1', text: 'Shortened a title I proposed, again' }], working: 'Open: the atlas essay is half filed.' });
+  assert.deepEqual(done.observed, ['n-titles-s1']);
   assert.equal((await claude.call('cortex_start')).working.mine.text, 'Open: the atlas essay is half filed.');
   const [kept] = await readdir(join(dir, '.cortex', 'history', 'working', 'claude-code'));
   assert.match(await readFile(join(dir, '.cortex', 'history', 'working', 'claude-code', kept), 'utf8'), /shortened my title again/);
-  const note = (await claude.call('cortex_start')).notes.find(item => item.id === 'n-titles-s1');
+  const note = (await claude.call('cortex_start')).observations.find(item => item.id === 'n-titles-s1');
   assert.deepEqual([note.session, note.writtenBy], ['s1', 'claude-code']);
 });
 
@@ -68,24 +68,24 @@ test('something noticed in two sessions becomes a memory in the third, with nobo
   // Session one, in Claude Code: noticed, and seen again within the session.
   const claude = as(dir, 'claude-code');
   const w1 = await claude.call('cortex_working', { text: 'They cut my proposed titles to three words, twice.' });
-  await claude.call('cortex_distill', { session: 'claude-1', version: w1.version, notes: [{ id: 'titles-claude-1', note: 'Cut proposed titles down to three words' }], working: '' });
+  await claude.call('cortex_distill', { session: 'claude-1', version: w1.version, observations: [{ id: 'titles-claude-1', text: 'Cut proposed titles down to three words' }], working: '' });
 
   // Session two, in Codex: the same thing, seen by another agent.
   const codex = as(dir, 'codex');
   const start2 = await codex.call('cortex_start');
-  assert.equal(start2.notes.length, 1);
-  await codex.call('cortex_settle', { notes: [{ id: 'titles-claude-1', outcome: 'kept' }] });
+  assert.equal(start2.observations.length, 1);
+  await codex.call('cortex_settle', { observations: [{ id: 'titles-claude-1', outcome: 'kept' }] });
   const w2 = await codex.call('cortex_working', { text: 'Titles again cut to three words.' });
-  await codex.call('cortex_distill', { session: 'codex-2', version: w2.version, notes: [{ id: 'titles-codex-2', note: 'Cut a proposed title to three words' }], working: '' });
+  await codex.call('cortex_distill', { session: 'codex-2', version: w2.version, observations: [{ id: 'titles-codex-2', text: 'Cut a proposed title to three words' }], working: '' });
 
   // Session three: two notes from two sessions agree, so the agent writes the memory and settles them.
   const third = await claude.call('cortex_start');
-  const titles = (await claude.call('cortex_settle')).notes.concat((await claude.call('cortex_settle')).kept).filter((item, index, all) => all.findIndex(other => other.id === item.id) === index);
+  const titles = (await claude.call('cortex_settle')).observations.concat((await claude.call('cortex_settle')).kept).filter((item, index, all) => all.findIndex(other => other.id === item.id) === index);
   assert.deepEqual(new Set(titles.map(item => item.session)), new Set(['claude-1', 'codex-2']));
   assert.equal(third.memories.some(memory => memory.name === 'short-titles'), false);
   const settled = await claude.call('cortex_settle', {
-    changes: [{ memory: { name: 'short-titles', description: 'Wants titles of three words or fewer', kind: 'preference', stated: false, body: 'Cut proposed titles to three words in two sessions, in two agents.', notes: ['titles-claude-1', 'titles-codex-2'] } }],
-    notes: [{ id: 'titles-claude-1', outcome: 'short-titles' }, { id: 'titles-codex-2', outcome: 'short-titles' }],
+    changes: [{ memory: { name: 'short-titles', description: 'Wants titles of three words or fewer', kind: 'preference', stated: false, body: 'Cut proposed titles to three words in two sessions, in two agents.', observations: ['titles-claude-1', 'titles-codex-2'] } }],
+    observations: [{ id: 'titles-claude-1', outcome: 'short-titles' }, { id: 'titles-codex-2', outcome: 'short-titles' }],
   });
   assert.equal(settled.complete, true);
   // The memory is written at once, as one change marked with the agent that settled it.
@@ -116,14 +116,14 @@ test('the person can read or clear any working memory, and a client can read the
 test('a refused distill writes nothing', async () => {
   const dir = await fresh();
   const codex = openCortex(dir, { actor: 'codex' });
-  await codex.addNote({ id: 'taken', note: 'Already here', session: 's0' });
+  await codex.observe({ id: 'taken', text: 'Already here', session: 's0' });
   const { version } = await codex.writeWorking('today');
-  for (const notes of [
-    [{ id: 'a', note: 'one' }, { id: 'b', note: 'two' }, { id: 'c', note: 'three\nlines' }],
-    [{ id: 'a', note: 'one' }, { id: 'a', note: 'one again' }],
-    [{ id: 'a', note: 'one' }, { id: 'taken', note: 'Something else' }],
-  ]) await assert.rejects(codex.distill({ session: 's1', version, working: 'next', notes }), problem => ['InvalidRequest', 'Changed'].includes(problem.code));
-  assert.deepEqual((await codex.listNotes()).notes.map(note => note.id), ['taken']);
+  for (const observations of [
+    [{ id: 'a', text: 'one' }, { id: 'b', text: 'two' }, { id: 'c', text: 'three\nlines' }],
+    [{ id: 'a', text: 'one' }, { id: 'a', text: 'one again' }],
+    [{ id: 'a', text: 'one' }, { id: 'taken', text: 'Something else' }],
+  ]) await assert.rejects(codex.distill({ session: 's1', version, working: 'next', observations }), problem => ['InvalidRequest', 'Changed'].includes(problem.code));
+  assert.deepEqual((await codex.listObservations()).observations.map(note => note.id), ['taken']);
   assert.equal((await codex.working()).mine.text, 'today');
 });
 

@@ -8,7 +8,7 @@ export const PROMPT_TEXT = {
   start: [
     'Start this session from my cortex.',
     'Call cortex_start now, read the playbook it returns, and follow it for the rest of this session.',
-    'If notes are waiting, settle them first.',
+    'If observations are waiting, settle them first.',
     'Then tell me in one or two lines what you know about how I work, and anything waiting for me to confirm or approve.',
   ].join(' '),
 };

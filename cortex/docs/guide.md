@@ -47,16 +47,16 @@ A link can be made two ways:
 
 ### Inference: what the cortex concludes
 
-Inference is what an agent works out. It is never an edge between two blocks. It is a node of the cortex, such as a memory or a note, that points at what it was drawn from.
+Inference is what an agent works out. It is never an edge between two blocks. It is a node of the cortex, such as a memory or an observation, that points at what it was drawn from.
 
 | Cortex node | Edge it draws | Points at | Example |
 | --- | --- | --- | --- |
 | Memory | **grounds** | The blocks, sessions or channels it rests on | "Slowness ties the essays to the walk photos" grounds on "On slowness" and "Bridge at dusk" |
-| Note | **observes** | What it saw it in | "Shortened a title to three words again" observes session `claude-12` |
+| Observation | **observes** | What it saw it in | "Shortened a title to three words again" observes session `claude-12` |
 | Skill | **learned** | The channels and blocks it was used on | "How Mira files walk photos" was learned on `photos/walks` |
 | Tool | **acts** | What it reads and writes | A calendar tool acts on the person's calendar |
 
-So **a model never draws an edge between two blocks.** If an agent sees that two blocks belong together, it writes a note or a memory that cites both. It may also suggest the connection to the person, in words; if the person agrees and connects them, that connection is theirs, an evidence edge like any other. Accepting a suggestion is the person connecting.
+So **a model never draws an edge between two blocks.** If an agent sees that two blocks belong together, it writes an observation or a memory that cites both. It may also suggest the connection to the person, in words; if the person agrees and connects them, that connection is theirs, an evidence edge like any other. Accepting a suggestion is the person connecting.
 
 ## 3. How each part of the cortex joins the graph
 
@@ -78,7 +78,7 @@ How each kind of cortex node joins the graph, and what evidence it needs:
 | --- | --- | --- | --- |
 | Memory about knowledge | Blocks, channels, entities | grounds | Two or more distinct blocks, each at the version read |
 | Memory about the person | Sessions, blocks they wrote | grounds | Two or more sessions, or the session where they said it |
-| Note | What it observed | observes | One session, or a node at a version |
+| Observation | What it saw | observes | One session, or a node at a version |
 | Skill | Channels and blocks it was used on | learned | Three or more sessions |
 | Tool | What it reads and writes | acts | Its declaration, which the person writes |
 | Identity fact | The person | about | Their words, or the block and passage that state it |
@@ -86,7 +86,7 @@ How each kind of cortex node joins the graph, and what evidence it needs:
 
 ### Evidence in practice
 
-A note or memory carries `evidence`: a list of pointers, each a node at a version, or a session.
+An observation or a memory carries `evidence`: a list of pointers, each a node at a version, or a session.
 
 ```json
 {
@@ -120,8 +120,8 @@ Everything that happens in a cortex is a line in one append-only file, `.cortex/
 | Type | Written when | It holds |
 | --- | --- | --- |
 | `change` | A node changes, by the person or an agent | Node, op (create, update, remove, restore), versions before and after, why, evidence |
-| `note` | An agent or a host observes something | One line, with evidence. It changes no file |
-| `settled` | Notes are settled | What became of a note: kept, dropped, or the memory it went into |
+| `observation` | An agent or a host observes something | One line, with evidence. It changes no file. Lines written as `note` before the rename read as observations |
+| `settled` | Observations are settled | What became of an observation: kept, dropped, or the memory it went into |
 | `session` | An agent finishes or gives up a task | What was done, the IDs of the changes it made, and its dead ends |
 | `save` | Someone names a point in history | A name and a note. It changes nothing |
 

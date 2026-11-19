@@ -10,7 +10,7 @@ memory/MEMORY.md linguist-generated merge=union
 # machines' lines are both kept.
 .cortex/journal.jsonl merge=union
 
-# Notes from before the journal. Read, never written again.
+# Observations from before the journal, then called notes. Read, never written again.
 .cortex/notes.jsonl merge=union
 
 # Nothing in secrets is shown in a diff, should a file there ever be added by force.

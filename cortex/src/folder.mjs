@@ -37,11 +37,11 @@ async function put(path, content) {
   await rename(partial, path);
 }
 
-// What makes a note a note. Checked before anything is written, so a batch is refused whole.
-function checkNote({ id, note, session, project, evidence } = {}) {
-  if (typeof id !== 'string' || !id || id.length > 200) throw new Refused('InvalidRequest', 'A note has an ID made where it was seen, at most 200 characters');
-  if (typeof note !== 'string' || !note.trim() || [...note].length > 500 || /[\r\n]/.test(note)) throw new Refused('InvalidRequest', `A note is one line, at most 500 characters${typeof id === 'string' ? ` (${id})` : ''}`);
-  if (typeof session !== 'string' || !session || session.length > 200) throw new Refused('InvalidRequest', 'A note names the session it was seen in');
+// What makes an observation one. Checked before anything is written, so a batch is refused whole.
+function checkObservation({ id, text, session, project, evidence } = {}) {
+  if (typeof id !== 'string' || !id || id.length > 200) throw new Refused('InvalidRequest', 'An observation has an ID made where it was seen, at most 200 characters');
+  if (typeof text !== 'string' || !text.trim() || [...text].length > 500 || /[\r\n]/.test(text)) throw new Refused('InvalidRequest', `An observation is one line, at most 500 characters${typeof id === 'string' ? ` (${id})` : ''}`);
+  if (typeof session !== 'string' || !session || session.length > 200) throw new Refused('InvalidRequest', 'An observation names the session it was seen in');
   if (project !== undefined && (typeof project !== 'string' || project.length > 2000)) throw new Refused('InvalidRequest', 'project is text, at most 2,000 characters');
   if (evidence !== undefined && evidenceProblem(evidence)) throw new Refused('InvalidRequest', evidenceProblem(evidence));
 }
@@ -128,13 +128,13 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     await put(at('memory', 'MEMORY.md'), `<!-- Generated from each memory's description. Do not edit. -->\n${lines.join('\n')}${lines.length ? '\n' : ''}`);
   }
 
-  // Observations and host events are note lines in the journal, and what became of each is a
-  // settled line. A cortex made before the journal kept them in .cortex/notes.jsonl: that file is
-  // still read, first, and never written.
-  const oldNotes = at('.cortex', 'notes.jsonl');
-  async function notes() {
+  // Observations, an agent's or a host's, are observation lines in the journal, and what became of
+  // each is a settled line. A cortex made before the journal kept them in .cortex/notes.jsonl: that
+  // file is still read, first, and never written.
+  const beforeJournal = at('.cortex', 'notes.jsonl');
+  async function observations() {
     const found = new Map();
-    for (const line of ((await text(oldNotes)) ?? '').split('\n')) {
+    for (const line of ((await text(beforeJournal)) ?? '').split('\n')) {
       if (!line.trim()) continue;
       let entry;
       try { entry = JSON.parse(line); } catch { continue; }
@@ -142,17 +142,17 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       else if (entry.type === 'settled' && found.has(entry.id)) Object.assign(found.get(entry.id), { outcome: entry.outcome, settledAt: entry.when });
     }
     for (const entry of await journal.read()) {
-      // Two machines may both hold a note after a merge. The first one stands.
-      if (entry.type === 'note' && typeof entry.note === 'string' && !found.has(entry.note)) {
-        found.set(entry.note, { id: entry.note, text: entry.text, session: entry.session, ...(entry.project ? { project: entry.project } : {}), source: entry.source, writtenBy: entry.actor?.name, when: entry.at, ...(entry.evidence ? { evidence: entry.evidence } : {}) });
-      } else if (entry.type === 'settled' && typeof entry.note === 'string' && found.has(entry.note)) {
-        Object.assign(found.get(entry.note), { outcome: entry.outcome, settledAt: entry.at });
+      // Two machines may both hold an observation after a merge. The first one stands.
+      if (entry.type === 'observation' && typeof entry.observation === 'string' && !found.has(entry.observation)) {
+        found.set(entry.observation, { id: entry.observation, text: entry.text, session: entry.session, ...(entry.project ? { project: entry.project } : {}), source: entry.source, writtenBy: entry.actor?.name, when: entry.at, ...(entry.evidence ? { evidence: entry.evidence } : {}) });
+      } else if (entry.type === 'settled' && typeof entry.observation === 'string' && found.has(entry.observation)) {
+        Object.assign(found.get(entry.observation), { outcome: entry.outcome, settledAt: entry.at });
       }
     }
     return found;
   }
-  const recordNote = ({ id, text: said, session, project, source, evidence }) =>
-    journal.append(actor, 'note', { note: id, text: said, ...(project ? { project } : {}), source, ...(evidence ? { evidence } : {}) }, { session });
+  const recordObservation = ({ id, text: said, session, project, source, evidence }) =>
+    journal.append(actor, 'observation', { observation: id, text: said, ...(project ? { project } : {}), source, ...(evidence ? { evidence } : {}) }, { session });
 
   async function folderOf(root) {
     const files = [];
@@ -479,9 +479,9 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     }
     memory.writtenBy = actor;
     memory.seen = live?.memory.seen ?? { count: 0, last: null };
-    if (memory.notes) {
-      const kept = await notes();
-      if (memory.notes.some(id => !kept.has(id))) throw new Refused('InvalidMemory', 'A source note must be one recorded in this cortex');
+    if (memory.observations) {
+      const kept = await observations();
+      if (memory.observations.some(id => !kept.has(id))) throw new Refused('InvalidMemory', 'An observation a memory came from must be one recorded in this cortex');
     }
     await checkCited(memory.evidence);
     return memory;
@@ -655,37 +655,37 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     writeWorking: (given, { replaces = null } = {}) => putWorking(given, replaces),
 
     // The end of a session: the agent has read every agent's working memory together and records,
-    // as notes for this session, what it judges seen often enough to become memory. Then it leaves
+    // as observations for this session, what it judges seen often enough to become memory. Then it leaves
     // its own working memory as "last time" for the next session; the one it replaces is kept.
-    async distill({ session, notes: seen = [], working, version } = {}) {
+    async distill({ session, observations: seen = [], working, version } = {}) {
       if (typeof session !== 'string' || !session || session.length > 200) throw new Refused('InvalidRequest', 'Name the session being distilled');
-      if (!Array.isArray(seen) || seen.length > 50) throw new Refused('InvalidRequest', 'notes is up to 50 things seen');
+      if (!Array.isArray(seen) || seen.length > 50) throw new Refused('InvalidRequest', 'observations is up to 50 things seen');
       const held = await workingOf(actor);
       if (held && version !== held.version) throw changed('working memory', held.version);
       if (typeof working !== 'string' || bytes(working) > 8192) throw new Refused('InvalidRequest', 'Leave working memory as Markdown, at most 8 KB');
-      // Every note is checked first, against the others and against what is kept, so a refused
-      // distill writes nothing.
-      const kept = await notes();
+      // Every observation is checked first, against the others and against what is kept, so a
+      // refused distill writes nothing.
+      const kept = await observations();
       const ids = new Set();
       for (const item of seen) {
-        checkNote({ ...item, session });
-        if (ids.has(item.id)) throw new Refused('InvalidRequest', `Two notes have the ID ${item.id}`);
+        checkObservation({ ...item, session });
+        if (ids.has(item.id)) throw new Refused('InvalidRequest', `Two observations have the ID ${item.id}`);
         ids.add(item.id);
-        if (kept.has(item.id) && kept.get(item.id).text !== item.note) throw new Refused('Changed', `Another note already has the ID ${item.id}`);
+        if (kept.has(item.id) && kept.get(item.id).text !== item.text) throw new Refused('Changed', `Another observation already has the ID ${item.id}`);
         await checkCited(item.evidence);
       }
       const recorded = [];
-      for (const item of seen) recorded.push(await cortex.addNote({ id: item.id, note: item.note, session, ...(item.project ? { project: item.project } : {}), ...(item.evidence ? { evidence: item.evidence } : {}) }));
+      for (const item of seen) recorded.push(await cortex.observe({ id: item.id, text: item.text, session, ...(item.project ? { project: item.project } : {}), ...(item.evidence ? { evidence: item.evidence } : {}) }));
       const left = await putWorking(working, held?.version ?? null, { keepEarlier: true });
       // The model does not know the client's session ID, so a distill is recorded for the hooks by
       // agent, time and the version of working memory it left. The stop hook asks whether the
       // working memory it sees is one a distill left, since its session started.
-      // The notes and working memory are already saved, so a failed record never fails the distill.
+      // The observations and working memory are already saved, so a failed record never fails the distill.
       try {
         await mkdir(at('.cortex'), { recursive: true });
         await appendFile(hooksLog(dir), `${JSON.stringify({ agent: actor, distilled: now().toISOString(), version: left.version ?? null })}\n`);
       } catch {}
-      return { session, noted: recorded.map(item => item.id), working: left };
+      return { session, observed: recorded.map(item => item.id), working: left };
     },
 
     async start() {
@@ -719,7 +719,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       }
       const { memories, problems } = await all();
       const identity = await cortex.identity();
-      const pending = [...(await notes()).values()].filter(note => !note.settledAt);
+      const pending = [...(await observations()).values()].filter(observation => !observation.settledAt);
       const found = [...identity.problems, ...problems, ...(vault.problem ? [`vault: ${vault.problem}`] : []), ...(vault.problems ?? []).map(problem => `vault: ${problem}`)];
       return {
         rules: await cortex.rules(),
@@ -730,7 +730,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         // Only what the person has approved or switched on is handed over as usable.
         skills: (await skillsIn(at('skills'))).map(({ name, description }) => ({ name, description })),
         tools: (await toolsIn(at('tools'))).filter(tool => tool.on).map(({ name, description }) => ({ name, description })),
-        notes: pending,
+        observations: pending,
         working: await cortex.working(),
         // What only the person can settle: identity facts to confirm, skills to approve, tools asked for.
         waiting: {
@@ -764,7 +764,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return cortex.syncVault();
     },
 
-    // Brings the cortex in step with the vault: the channels and counts in vault.md, notes for the
+    // Brings the cortex in step with the vault: the channels and counts in vault.md, observations for the
     // changes an agent has to act on, and the memories that point at blocks no longer there. The
     // headings and counts follow the vault and are derived, like the memory index, so they are not
     // changes; what a channel means is a channel node, and is not touched here.
@@ -789,20 +789,21 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
 
       const { memories } = await all();
       const pointing = id => memories.filter(({ memory }) => memory.blocks?.includes(id)).map(({ memory }) => memory.name);
-      const noted = [];
-      const note = async (key, line) => {
+      const observed = [];
+      const observe = async (key, line) => {
         const id = `vault-${short(key)}`;
-        if (!(await notes()).has(id)) { await recordNote({ id, text: line.slice(0, 500), session: 'vault', source: 'vault' }); noted.push(id); }
+        if (!(await observations()).has(id)) { await recordObservation({ id, text: line.slice(0, 500), session: 'vault', source: 'vault' }); observed.push(id); }
       };
-      // Only what an agent has to act on becomes a note. A block saved in a known channel needs nothing.
-      // A note's ID is made from what it is about, and kept from before channels, so nothing is noted twice.
+      // Only what an agent has to act on becomes an observation. A block saved in a known channel needs
+      // nothing. Its ID is made from what it is about, and kept from before channels, so nothing is
+      // recorded twice.
       for (const change of changes) {
         const names = pointing(change.id);
-        if (change.type === 'removed' && names.length) await note([change.type, change.id], `Block "${change.title}" (${change.id}) was removed from ${change.channel}. These memories pointed at it: ${names.join(', ')}`);
-        if (change.type === 'moved' && names.length) await note([change.type, change.id, change.channel], `Block "${change.title}" (${change.id}) moved from ${change.from} to ${change.channel}. These memories point at it: ${names.join(', ')}`);
+        if (change.type === 'removed' && names.length) await observe([change.type, change.id], `Block "${change.title}" (${change.id}) was removed from ${change.channel}. These memories pointed at it: ${names.join(', ')}`);
+        if (change.type === 'moved' && names.length) await observe([change.type, change.id, change.channel], `Block "${change.title}" (${change.id}) moved from ${change.from} to ${change.channel}. These memories point at it: ${names.join(', ')}`);
       }
-      for (const { channel } of shape.channels) if (!written.has(channel)) await note(['section', channel], `The vault has a channel, ${channel}, that vault.md does not describe yet`);
-      for (const key of gone(shape, written)) await note(['gone', key], `The channel ${key} is no longer in the vault. What vault.md said about it is kept`);
+      for (const { channel } of shape.channels) if (!written.has(channel)) await observe(['section', channel], `The vault has a channel, ${channel}, that vault.md does not describe yet`);
+      for (const key of gone(shape, written)) await observe(['gone', key], `The channel ${key} is no longer in the vault. What vault.md said about it is kept`);
 
       const pointed = memories.flatMap(({ memory }) => memory.blocks ?? []);
       const where = pointed.length ? await vault.exists(pointed) : {};
@@ -812,7 +813,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return {
         connected: true,
         channels: shape.channels.map(({ channel, blocks }) => ({ channel, blocks, ...(map.get(channel)?.meaning ? { meaning: map.get(channel).meaning } : {}), ...(map.get(channel)?.conventions ? { conventions: map.get(channel).conventions } : {}) })),
-        changes: changes.length, noted, broken, gone: gone(shape, map), ...(shape.problems?.length ? { problems: shape.problems } : {}),
+        changes: changes.length, observed, broken, gone: gone(shape, map), ...(shape.problems?.length ? { problems: shape.problems } : {}),
       };
     },
 
@@ -1004,46 +1005,47 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       }) };
     },
 
-    // `source` says where a note came from: the agent that noticed it, or a host reporting a change.
-    async addNote({ id, note, session, project, source, evidence } = {}) {
-      checkNote({ id, note, session, project, evidence });
-      const before = (await notes()).get(id);
+    // Records something seen. `source` says where it came from: the agent that saw it, or a host
+    // reporting a change.
+    async observe({ id, text: said, session, project, source, evidence } = {}) {
+      checkObservation({ id, text: said, session, project, evidence });
+      const before = (await observations()).get(id);
       if (before) {
-        if (before.text !== note) throw new Refused('Changed', 'Another note already has this ID');
+        if (before.text !== said) throw new Refused('Changed', 'Another observation already has this ID');
         return { id, unchanged: true };
       }
       await checkCited(evidence);
-      await recordNote({ id, text: note, session, project, source: source ?? actor, evidence });
+      await recordObservation({ id, text: said, session, project, source: source ?? actor, evidence });
       return { id };
     },
 
-    async listNotes({ settled = false } = {}) {
-      return { notes: [...(await notes()).values()].filter(note => settled || !note.settledAt) };
+    async listObservations({ settled = false } = {}) {
+      return { observations: [...(await observations()).values()].filter(observation => settled || !observation.settledAt) };
     },
 
-    // Says what became of each note, and rewrites the memories they went into. Each memory it
-    // touches, its rewrite and its seen count together, is one change; what became of each note is a
-    // settled line. Every outcome is checked before anything is written, so a refused batch leaves
+    // Says what became of each observation, and rewrites the memories they went into. Each memory it
+    // touches, its rewrite and its seen count together, is one change; what became of each
+    // observation is a settled line. Every outcome is checked before anything is written, so a refused batch leaves
     // the cortex as it was.
-    async settle({ changes = [], notes: outcomes } = {}) {
-      if (!Array.isArray(outcomes) || !outcomes.length || outcomes.length > 100) throw new Refused('InvalidRequest', 'Give 1 to 100 notes, each with what became of it');
+    async settle({ changes = [], observations: outcomes } = {}) {
+      if (!Array.isArray(outcomes) || !outcomes.length || outcomes.length > 100) throw new Refused('InvalidRequest', 'Give 1 to 100 observations, each with what became of it');
       if (!Array.isArray(changes) || changes.length > 100) throw new Refused('InvalidRequest', 'changes is at most 100 rewritten memories');
-      const kept = await notes();
+      const kept = await observations();
       const seen = new Set();
       const targets = new Map();
       const writing = new Set(changes.map(change => change?.memory?.name));
       for (const item of outcomes) {
-        if (!item || typeof item.id !== 'string' || seen.has(item.id)) throw new Refused('InvalidRequest', 'Every note is named once, by its ID');
+        if (!item || typeof item.id !== 'string' || seen.has(item.id)) throw new Refused('InvalidRequest', 'Every observation is named once, by its ID');
         seen.add(item.id);
-        const note = kept.get(item.id);
-        if (!note) throw new Refused('NotFound', `There is no note ${item.id}`);
-        if (note.settledAt && note.outcome !== 'kept') throw new Refused('Changed', `Note ${item.id} was already settled as ${note.outcome}`);
+        const observation = kept.get(item.id);
+        if (!observation) throw new Refused('NotFound', `There is no observation ${item.id}`);
+        if (observation.settledAt && observation.outcome !== 'kept') throw new Refused('Changed', `Observation ${item.id} was already settled as ${observation.outcome}`);
         if (item.outcome === 'kept' || item.outcome === 'dropped') continue;
-        known(item.outcome, 'memory a note went into');
-        if (!writing.has(item.outcome) && !await held(item.outcome)) throw new Refused('NotFound', `There is no memory ${item.outcome} for note ${item.id} to go into`);
+        known(item.outcome, 'memory an observation went into');
+        if (!writing.has(item.outcome) && !await held(item.outcome)) throw new Refused('NotFound', `There is no memory ${item.outcome} for observation ${item.id} to go into`);
         targets.set(item.outcome, (targets.get(item.outcome) ?? 0) + 1);
       }
-      if (changes.some(change => !targets.has(change?.memory?.name))) throw new Refused('InvalidRequest', 'Each rewritten memory must be where at least one of these notes went');
+      if (changes.some(change => !targets.has(change?.memory?.name))) throw new Refused('InvalidRequest', 'Each rewritten memory must be where at least one of these observations went');
       // Each memory as it will be, checked before anything is written.
       const when = now().toISOString();
       const planned = [];
@@ -1063,11 +1065,11 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       }
       const memories = [];
       for (const { name, live, memory, count, rewritten } of planned) {
-        const done = await edit(nodeOf(`memory/${name}`), live ? 'update' : 'create', memoryFile(memory), { before: live?.version ?? null, reason: `${rewritten ? 'rewritten, and ' : ''}seen again in ${count} settled note${count === 1 ? '' : 's'}`, evidence: memory.evidence });
+        const done = await edit(nodeOf(`memory/${name}`), live ? 'update' : 'create', memoryFile(memory), { before: live?.version ?? null, reason: `${rewritten ? 'rewritten, and ' : ''}seen again in ${count} settled observation${count === 1 ? '' : 's'}`, evidence: memory.evidence });
         memories.push({ name, ...done, seen: memory.seen });
       }
-      for (const item of outcomes) await journal.append(actor, 'settled', { note: item.id, outcome: item.outcome });
-      const remaining = (await cortex.listNotes()).notes;
+      for (const item of outcomes) await journal.append(actor, 'settled', { observation: item.id, outcome: item.outcome });
+      const remaining = (await cortex.listObservations()).observations;
       return { settled: outcomes.length, memories, remaining, complete: remaining.length === 0 };
     },
 

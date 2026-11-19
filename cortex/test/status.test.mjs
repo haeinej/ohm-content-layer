@@ -64,10 +64,10 @@ test('skill and tool proposals each say how to stop waiting, and an agent\'s dir
 
 test('observations clear when the next agent settles them', async t => {
   const { cortex } = await fresh(t);
-  await cortex.addNote({ id: 'n1', note: 'A short title today', session: 's1' });
-  await has(cortex, 'notes');
-  await cortex.settle({ notes: [{ id: 'n1', outcome: 'dropped' }] });
-  await has(cortex, 'notes', false);
+  await cortex.observe({ id: 'n1', text: 'A short title today', session: 's1' });
+  await has(cortex, 'observations');
+  await cortex.settle({ observations: [{ id: 'n1', outcome: 'dropped' }] });
+  await has(cortex, 'observations', false);
 });
 
 test('broken pointers and undescribed or gone channels have working remedies', async t => {

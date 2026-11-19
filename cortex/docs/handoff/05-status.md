@@ -12,7 +12,7 @@ The person needs one place to see what is waiting for them or broken in their co
    - `identity-proposal`: a fact an agent proposed. Clear: `cortex confirm <id>` or `cortex reject <id>`.
    - `skill-proposal`: a skill waiting for approval. Clear: `cortex approve <name>`.
    - `tool-proposal`: a tool an agent asked for. Clear: build it and add it to `tools/`, or delete the proposal file.
-   - `notes`: how many observations are waiting to be settled. Clear: the next agent session settles them.
+   - `observations`: how many observations are waiting to be settled. Clear: the next agent session settles them.
    - `broken-pointer`: a memory pointing at a post no longer in the vault. Clear: the agent rewrites or forgets the memory, or the person restores the post.
    - `undescribed-section`: a vault section with no meaning in `vault.md`. Clear: the agent describes it, or the person writes it.
    - `gone-section`: a section no longer in the vault that `vault.md` still describes. Clear: delete its block from `vault.md`.

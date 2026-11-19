@@ -16,7 +16,7 @@ There were two cortexes. **ohm-cortex (B) is the cortex.** The one in ohm-conten
 | | A · ohm-content-layer cortex | B · ohm-cortex (this repository) |
 | --- | --- | --- |
 | Where it keeps things | D1 tables on the vault service (`cortex_*` in `service/schema.sql`) | A folder of Markdown the person can open |
-| Built | Memories with versions and history, context, notes and settlement (server checks two-session evidence), skills with approval, proposed tools | Identity with proposals, `vault.md`, memories, **working memory per agent**, **distill**, notes and settlement, skill and tool proposals, filing advice, `.cortex/history/`, MCP over stdio and HTTP, **hooks for Claude Code and Codex** |
+| Built | Memories with versions and history, context, notes and settlement (server checks two-session evidence), skills with approval, proposed tools | Identity with proposals, `vault.md`, memories, **working memory per agent**, **distill**, observations and settlement, skill and tool proposals, filing advice, `.cortex/history/`, MCP over stdio and HTTP, **hooks for Claude Code and Codex** |
 | Turns | Tables and requests reserved, not built | Not taken; replaced by working memory and distill |
 | Hooks | Designed in `plans/build-plan.md`, not built here | Built: `session-start`, `prompt` (empty), `stop` (asks to distill once per change), `session-end`. Not yet tried in a real session |
 | Status | B's plan says B replaces A's design, and that B does not sync with ohm | 97 tests, CI on Node 20 and 22 |
@@ -72,15 +72,15 @@ One append-only file replaces `notes.jsonl`, `sessions.jsonl` and turns. Each li
 | `type` | Written by | Holds | Was |
 | --- | --- | --- | --- |
 | `change` | The person or an agent, whoever edited | Node, op, `before` and `after` versions, reason, evidence; for a confirmed identity fact or an approved skill, `proposedBy` | Nothing (only `history/`) |
-| `note` | An agent, or a host | One observation, with `evidence`. It changes no file | `notes.jsonl` |
-| `settled` | Settlement | What became of a note: kept, dropped, or the memory it went into | Settled lines in `notes.jsonl` |
+| `observation` (written as `note` until it was renamed) | An agent, or a host | One observation, with `evidence`. It changes no file | `notes.jsonl` |
+| `settled` | Settlement | What became of an observation: kept, dropped, or the memory it went into | Settled lines in `notes.jsonl` |
 | `session` | An agent, when a task is done or given up | One line of what was done, the IDs of the changes it made, and dead ends | `sessions.jsonl`, now only the hooks' checkpoints |
 | `save` | The person or an agent | A name and a note at this `seq`. It changes nothing | Nothing |
 
 - **History is the journal plus `history/`.** "As of a date" means replaying to that day. A save is a line. Restore and revert write a new change; nothing is rewritten.
 - **It merges cleanly.** Lines are append-only with IDs, so two machines join by union. That makes sync to ohm, or to Git, a copy, not a merge.
 - **Privacy.** The journal stays private, like the rest of the cortex.
-- **Old lines.** `proposal` and `decision` lines, written while agents' edits waited for the person, are still read and kept as history, and change nothing. A `decision` about a note reads as `settled`.
+- **Old lines.** `proposal` and `decision` lines, written while agents' edits waited for the person, are still read and kept as history, and change nothing. A `decision` about an observation (then called a note) reads as `settled`.
 
 ### 4. Agents edit; the person reverts
 
@@ -105,9 +105,9 @@ The hooks keep their checkpoints (start, ask, distill) in `.cortex/hooks.jsonl`,
 | --- | --- | --- | --- |
 | **Evidence** | Content edges (contains, links, mentions, from) and the journal (changes, sessions) | The person, through content; nobody writes it for them | Checkable and rebuildable |
 | **Working** | Each agent's scratch for this session and the threads left open | The agent, at once (`cortex_working`) | Never shown as knowledge |
-| **Inference** | Memories, skills, identity facts, and any claim relating blocks | The agent, through notes and settlement; identity facts and skills wait for the person | Must cite evidence |
+| **Inference** | Memories, skills, identity facts, and any claim relating blocks | The agent, through observations and settlement; identity facts and skills wait for the person | Must cite evidence |
 
-Evidence on every note and memory is a list of pointers: `{ node, version }` or `{ session }`.
+Evidence on every observation and memory is a list of pointers: `{ node, version }` or `{ session }`.
 
 - **Stated** (the person said it): the session where they said it. Becomes a memory at once.
 - **Inferred about the person:** two or more sessions.
@@ -124,7 +124,7 @@ Evidence on every note and memory is a list of pointers: `{ node, version }` or 
 | Keep | Change | New |
 | --- | --- | --- |
 | `cortex_start` (adds dead ends) | `cortex_remember`, `cortex_forget` and `cortex_settle` record each write as the agent's change, with a reason; `cortex_describe_channel` (was `cortex_describe_section`) | `cortex_history`, `cortex_as_of`, `cortex_save` |
-| `cortex_working`, `cortex_distill` | `cortex_note` and memories take `evidence` | `cortex_restore`, `cortex_revert` |
+| `cortex_working`, `cortex_distill` | `cortex_observe` and memories take `evidence` | `cortex_restore`, `cortex_revert` |
 | `cortex_recall`, `cortex_skill`, `cortex_file_advice`, `cortex_propose_identity`, `cortex_propose_skill`, `cortex_propose_tool` | | `cortex_session` |
 
 Confirming an identity fact and approving a skill are the person's, from the command line (`cortex confirm`, `cortex reject`, `cortex approve`), and so are their restores and reverts of what an agent did (`cortex restore`, `cortex revert`). No MCP tool confirms or approves, because no MCP client is known to be the person.
@@ -135,7 +135,7 @@ Confirming an identity fact and approving a skill are the person's, from the com
 | --- | --- | --- | --- |
 | Memory about knowledge | Blocks, channels, entities | `grounds` | Two or more pinned nodes |
 | Memory about the person | Sessions, blocks they wrote | `grounds` | Two or more sessions, or a stated quote |
-| Note | What it observed | `observes` | One session, or a node at a version |
+| Observation | What it saw | `observes` | One session, or a node at a version |
 | Skill | Channels and blocks it was used on | `learned` | Three or more sessions |
 | Tool | What it reads and writes | `acts` | Its declaration (the person's) |
 | Identity fact | You | `about` | A quote |
@@ -145,10 +145,10 @@ This is what the ohm-ux graph draws: grey evidence edges, green cortex edges.
 
 ## Order
 
-1. **Remove the MVP cortex** from ohm-content-layer, once the vault editor no longer reads it.
-2. **Journal in B:** `note` and `settled` lines; read the old `notes.jsonl` and `sessions.jsonl` for compatibility. *Built.*
+1. **Remove the MVP cortex** from ohm-content-layer, once the vault editor no longer reads it. *Done: removed when the repository became ohm-vault.*
+2. **Journal in B:** `observation` (first written as `note`) and `settled` lines; read the old `notes.jsonl` and `sessions.jsonl` for compatibility. *Built.*
 3. **`change` lines** from every write, with actor; history views (`cortex_history`, `cortex_as_of`, `cortex_save`). *Built, with `cortex_restore` and `cortex_revert`, and cortex files as nodes.*
-4. **Evidence on notes and memories**, settlement rules per kind, staleness. *Evidence built; settlement rules per kind and staleness not.*
+4. **Evidence on observations and memories**, settlement rules per kind, staleness. *Evidence built; settlement rules per kind and staleness not.*
 5. **Sessions and dead ends** from agents, shown at session start. *Built.*
 6. **One `cortex_propose`**; remove the separate proposal tools. *Dropped: agents edit directly, and only identity facts, skills and tools are proposed, each in its own way.*
 7. **Brain folder layout**: the cortex inside `~/Brain`; the vault contract reads blocks and channels.
@@ -163,11 +163,11 @@ This is what the ohm-ux graph draws: grey evidence edges, green cortex edges.
 
 On 19 November 2026, in ohm-cortex, on the branch `journal-and-vocabulary`. [plan.md](plan.md) has the details and the decisions made while building.
 
-- **The journal** is `.cortex/journal.jsonl` with `change`, `note`, `settled`, `session` and `save` lines. Lines written as `stamp` before the rename read as saves; `proposal` and `decision` lines from the day agents' edits waited for the person are read and change nothing.
+- **The journal** is `.cortex/journal.jsonl` with `change`, `observation`, `settled`, `session` and `save` lines; `note` lines from before the rename read as observations. Lines written as `stamp` before the rename read as saves; `proposal` and `decision` lines from the day agents' edits waited for the person are read and change nothing.
 - **Changes:** every write, by the person or an agent, is a change marked with who made it. The person reverts or restores what they do not want. Identity proposals live in `.cortex/identity.jsonl`, skill and tool proposals in `.cortex/proposed/`, as before.
 - **History views:** `cortex_history`, `cortex_as_of`, `cortex_save`, `cortex_restore` and `cortex_revert`, and the commands `history`, `as-of`, `save`, `restore` and `revert`.
 - **Sessions:** `cortex_session`; dead ends in `cortex_start` and at session start near the folder.
-- **Evidence** on notes, distilled notes and memories, checked for shape and existence; the counts in §6 are playbook guidance.
+- **Evidence** on observations, distilled observations and memories, checked for shape and existence; the counts in §6 are playbook guidance.
 - **Words:** blocks and channels, and `cortex_describe_channel`.
 
 Not built, for later: staleness and settlement rules per kind from step 4; the `~/Brain` layout (step 7); the ohm-ux timeline reading the journal (step 8); sync (step 9).

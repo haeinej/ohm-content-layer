@@ -1,6 +1,6 @@
 export const KINDS = ['person', 'preference', 'project', 'reference'];
 export const NAME = /^[a-z]+(?:-[a-z]+)*$/;
-const FIELDS = ['name', 'description', 'kind', 'always', 'stated', 'from', 'project', 'blocks', 'evidence', 'body', 'notes', 'writtenBy', 'seen'];
+const FIELDS = ['name', 'description', 'kind', 'always', 'stated', 'from', 'project', 'blocks', 'evidence', 'body', 'observations', 'writtenBy', 'seen'];
 const bytes = text => new TextEncoder().encode(text).length;
 
 // Evidence is a list of pointers to what something was drawn from: a node at a version (a file of
@@ -23,9 +23,17 @@ export function evidenceProblem(evidence) {
 
 export class InvalidMemory extends Error {}
 
-// A memory written before channels pointed at its blocks in `posts`. It is read as `blocks`.
-const renamed = memory => memory && typeof memory === 'object' && !Array.isArray(memory) && memory.posts !== undefined && memory.blocks === undefined
-  ? (({ posts, ...rest }) => ({ ...rest, blocks: posts }))(memory) : memory;
+// Fields a memory was written with before they were renamed, read under today's names: `posts`
+// (before channels) as `blocks`, and `notes` (before observations) as `observations`.
+const OLD_NAMES = { posts: 'blocks', notes: 'observations' };
+const renamed = memory => {
+  if (!memory || typeof memory !== 'object' || Array.isArray(memory)) return memory;
+  let out = memory;
+  for (const [old, name] of Object.entries(OLD_NAMES)) {
+    if (out[old] !== undefined && out[name] === undefined) out = (({ [old]: value, ...rest }) => ({ ...rest, [name]: value }))(out);
+  }
+  return out;
+};
 
 export function memoryProblems(given) {
   const memory = renamed(given);
@@ -40,7 +48,7 @@ export function memoryProblems(given) {
   for (const field of ['from', 'project']) {
     if (memory[field] !== undefined && (typeof memory[field] !== 'string' || memory[field].length > 2000 || /[\r\n\u0000]/u.test(memory[field]))) problems.push(`${field} is text, at most 2,000 characters`);
   }
-  if (memory.notes !== undefined && (!Array.isArray(memory.notes) || memory.notes.length > 100 || new Set(memory.notes).size !== memory.notes.length || memory.notes.some(id => typeof id !== 'string' || !id || id.length > 200))) problems.push('notes is up to 100 distinct note IDs');
+  if (memory.observations !== undefined && (!Array.isArray(memory.observations) || memory.observations.length > 100 || new Set(memory.observations).size !== memory.observations.length || memory.observations.some(id => typeof id !== 'string' || !id || id.length > 200))) problems.push('observations is up to 100 distinct observation IDs');
   if (memory.blocks !== undefined && (!Array.isArray(memory.blocks) || !memory.blocks.length || memory.blocks.length > 20 || new Set(memory.blocks).size !== memory.blocks.length || memory.blocks.some(id => typeof id !== 'string' || !id.trim() || id.length > 200))) problems.push('blocks is up to 20 distinct IDs of blocks in the vault');
   if (memory.evidence !== undefined && evidenceProblem(memory.evidence)) problems.push(evidenceProblem(memory.evidence));
   if (memory.writtenBy !== undefined && (typeof memory.writtenBy !== 'string' || !memory.writtenBy)) problems.push('writtenBy is text');

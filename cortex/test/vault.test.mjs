@@ -62,13 +62,13 @@ test('connecting a vault writes vault.md, and asks the agent to describe each ch
   assert.match(text, /### notes\/reading\n1 block\./);
   const start = await agent.start();
   assert.deepEqual(start.vault.channels.map(channel => [channel.channel, channel.blocks]), [['essays', 2], ['notes', 1], ['notes/reading', 1]]);
-  assert.deepEqual(start.notes.filter(note => note.source === 'vault').map(note => note.text).sort(), [
+  assert.deepEqual(start.observations.filter(note => note.source === 'vault').map(note => note.text).sort(), [
     'The vault has a channel, essays, that vault.md does not describe yet',
     'The vault has a channel, notes, that vault.md does not describe yet',
     'The vault has a channel, notes/reading, that vault.md does not describe yet',
   ]);
   // Asked again, nothing is noted twice.
-  assert.equal((await agent.start()).notes.length, 3);
+  assert.equal((await agent.start()).observations.length, 3);
 });
 
 test('the agent describes a channel without asking, and what the person writes stands', async () => {
@@ -112,7 +112,7 @@ test('removing a block flags the memory that pointed at it', async () => {
   await rename(join(vault, 'essays/on-rivers.md'), join(vault, 'notes/on-rivers.md'));
   const start = await agent.start();
   assert.deepEqual(start.vault.broken, [{ memory: 'map-essays', block: 'p1' }]);
-  const reported = start.notes.filter(note => note.source === 'vault').map(note => note.text);
+  const reported = start.observations.filter(note => note.source === 'vault').map(note => note.text);
   assert.ok(reported.includes('Block "On maps" (p1) was removed from essays. These memories pointed at it: map-essays'));
   assert.ok(reported.includes('Block "On rivers" (p2) moved from essays to notes. These memories point at it: river-essay'));
   assert.equal((await person.syncVault()).changes, 0, 'a change is reported once');
@@ -124,7 +124,7 @@ test('a channel that leaves the vault keeps what was written about it', async ()
   await rm(join(vault, 'notes'), { recursive: true });
   const start = await agent.start();
   assert.match(await map(dir), /### notes\/reading\nNot in the vault any more\.\nMeaning: Notes on books/);
-  assert.ok(start.notes.some(note => note.text === 'The channel notes/reading is no longer in the vault. What vault.md said about it is kept'));
+  assert.ok(start.observations.some(note => note.text === 'The channel notes/reading is no longer in the vault. What vault.md said about it is kept'));
 });
 
 test('with a vault connected, identity evidence must be in the block it names', async () => {
@@ -161,7 +161,7 @@ test('a heading the person writes in vault.md is kept as theirs', async () => {
   await writeFile(join(dir, 'vault.md'), (await map(dir)).replace('## essays\n2 blocks.', '## essays\n2 blocks.\n### Examples\nThe best one is On maps.'));
   const start = await agent.start();
   assert.match(await map(dir), /## essays\n2 blocks\.\n### Examples\nThe best one is On maps\.\n\n## notes/);
-  assert.equal(start.notes.some(note => /Examples/.test(note.text)), false);
+  assert.equal(start.observations.some(note => /Examples/.test(note.text)), false);
   assert.deepEqual(start.vault.channels.map(channel => channel.channel), ['essays', 'notes', 'notes/reading']);
 });
 
@@ -261,7 +261,7 @@ test('a cortex made before channels keeps its vault.md, memories, identity sourc
   await person.write({ name: 'atlas', description: 'Where the atlas note is', kind: 'reference', stated: false, body: 'x', blocks: ['p3'] });
   await writeFile(join(dir, '.cortex', 'vault-cursor.json'), JSON.stringify(cursor));
   const synced = await person.syncVault();
-  assert.ok((await agent.listNotes()).notes.some(note => note.text.startsWith('Block "Reading: an atlas" (p3) moved from notes/reading to essays')), JSON.stringify(synced));
+  assert.ok((await agent.listObservations()).observations.some(note => note.text.startsWith('Block "Reading: an atlas" (p3) moved from notes/reading to essays')), JSON.stringify(synced));
   // An identity source naming a post is taken, and kept as a block.
   const proposed = await agent.proposeIdentity({ field: 'organization', value: 'Tide Atlas', source: { kind: 'vault', post: 'p2', passage: 'Tide Atlas' } }).catch(problem => problem);
   assert.equal(proposed.code, 'NoEvidence', 'the passage is checked against the block, as before');

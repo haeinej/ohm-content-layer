@@ -31,7 +31,7 @@ test('a new cortex has the rulebook, an identity, one starting memory and an ind
   assert.deepEqual(start.identity, { about: '' });
   assert.deepEqual(start.waiting.identity, []);
   assert.deepEqual(start.always.map(item => item.memory.name), ['working-style']);
-  assert.deepEqual([start.memories, start.skills.map(skill => skill.name), start.tools, start.notes], [[], ['file-a-source'], [], []]);
+  assert.deepEqual([start.memories, start.skills.map(skill => skill.name), start.tools, start.observations], [[], ['file-a-source'], [], []]);
   assert.match(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /\[working-style\]\(working-style\.md\)/);
   await assert.rejects(initCortex(dir, template), refused('NameTaken'));
 });
@@ -91,27 +91,27 @@ test('a removed memory is kept in history and gone from the index', async () => 
   await assert.rejects(cortex.read(likes.name), refused('NotFound'));
 });
 
-test('a note changes no memory, is kept once, and is settled one way or another', async () => {
+test('an observation changes no memory, is kept once, and is settled one way or another', async () => {
   const { cortex } = await fresh();
-  const note = { id: 'n1', note: 'Asked for the reasoning behind a rejection', session: 's1' };
-  assert.deepEqual(await cortex.addNote(note), { id: 'n1' });
-  assert.equal((await cortex.addNote(note)).unchanged, true);
-  await assert.rejects(cortex.addNote({ ...note, note: 'Something else' }), refused('Changed'));
-  await cortex.addNote({ id: 'n2', note: 'Asked why again', session: 's2' });
-  await cortex.addNote({ id: 'n3', note: 'Was in a hurry today', session: 's2' });
-  assert.equal((await cortex.start()).notes.length, 3);
+  const note = { id: 'n1', text: 'Asked for the reasoning behind a rejection', session: 's1' };
+  assert.deepEqual(await cortex.observe(note), { id: 'n1' });
+  assert.equal((await cortex.observe(note)).unchanged, true);
+  await assert.rejects(cortex.observe({ ...note, text: 'Something else' }), refused('Changed'));
+  await cortex.observe({ id: 'n2', text: 'Asked why again', session: 's2' });
+  await cortex.observe({ id: 'n3', text: 'Was in a hurry today', session: 's2' });
+  assert.equal((await cortex.start()).observations.length, 3);
 
-  await assert.rejects(cortex.settle({ notes: [{ id: 'n1', outcome: 'no-such-memory' }] }), refused('NotFound'));
-  assert.equal((await cortex.listNotes()).notes.length, 3);
+  await assert.rejects(cortex.settle({ observations: [{ id: 'n1', outcome: 'no-such-memory' }] }), refused('NotFound'));
+  assert.equal((await cortex.listObservations()).observations.length, 3);
 
   // Seen once: kept, and still there for a later session to count.
-  await cortex.settle({ notes: [{ id: 'n1', outcome: 'kept' }] });
-  const wants = { name: 'wants-the-reasoning', description: 'Show why, not only the answer', kind: 'preference', stated: false, body: 'Asked why in two sessions.', notes: ['n1', 'n2'] };
-  const done = await cortex.settle({ changes: [{ memory: wants }], notes: [{ id: 'n1', outcome: wants.name }, { id: 'n2', outcome: wants.name }, { id: 'n3', outcome: 'dropped' }] });
+  await cortex.settle({ observations: [{ id: 'n1', outcome: 'kept' }] });
+  const wants = { name: 'wants-the-reasoning', description: 'Show why, not only the answer', kind: 'preference', stated: false, body: 'Asked why in two sessions.', observations: ['n1', 'n2'] };
+  const done = await cortex.settle({ changes: [{ memory: wants }], observations: [{ id: 'n1', outcome: wants.name }, { id: 'n2', outcome: wants.name }, { id: 'n3', outcome: 'dropped' }] });
   assert.equal(done.complete, true);
   assert.deepEqual([done.memories[0].seen.count, typeof done.memories[0].change], [2, 'string']);
-  await assert.rejects(cortex.settle({ notes: [{ id: 'n3', outcome: 'kept' }] }), refused('Changed'));
-  await assert.rejects(cortex.write({ ...likes, notes: ['never-recorded'] }), refused('InvalidMemory'));
+  await assert.rejects(cortex.settle({ observations: [{ id: 'n3', outcome: 'kept' }] }), refused('Changed'));
+  await assert.rejects(cortex.write({ ...likes, observations: ['never-recorded'] }), refused('InvalidMemory'));
 });
 
 test('a skill an agent wrote is not used until the person approves it', async () => {
@@ -163,7 +163,7 @@ test('an agent keeps a cortex through the tools alone', async () => {
   assert.equal(seen, 'claude-code');
   // Other tools are added over time; these are the ones this test relies on.
   const offered = (await handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).result.tools.map(tool => tool.name);
-  for (const name of ['cortex_start', 'cortex_remember', 'cortex_recall', 'cortex_note', 'cortex_settle', 'cortex_forget']) assert.ok(offered.includes(name), name);
+  for (const name of ['cortex_start', 'cortex_remember', 'cortex_recall', 'cortex_observe', 'cortex_settle', 'cortex_forget']) assert.ok(offered.includes(name), name);
 
   assert.match((await ask('cortex_start')).value.rules, /What you may not do/);
   const saved = (await ask('cortex_remember', { memory: likes })).value;
@@ -174,9 +174,9 @@ test('an agent keeps a cortex through the tools alone', async () => {
   assert.equal(clash.isError, true);
   assert.equal(JSON.parse(clash.value).current, saved.version);
 
-  await ask('cortex_note', { id: 'a', note: 'Rewrote my title to be shorter', session: 's1' });
-  assert.equal((await ask('cortex_settle')).value.notes.length, 1);
-  assert.equal((await ask('cortex_settle', { notes: [{ id: 'a', outcome: likes.name }] })).value.complete, true);
+  await ask('cortex_observe', { id: 'a', text: 'Rewrote my title to be shorter', session: 's1' });
+  assert.equal((await ask('cortex_settle')).value.observations.length, 1);
+  assert.equal((await ask('cortex_settle', { observations: [{ id: 'a', outcome: likes.name }] })).value.complete, true);
 
   const first = (await ask('cortex_forget', { name: likes.name })).value;
   assert.equal(first.done, false);
@@ -185,4 +185,13 @@ test('an agent keeps a cortex through the tools alone', async () => {
   assert.equal((await ask('cortex_forget', { name: likes.name, confirm: first.confirm })).value.done, true);
   assert.equal((await ask('cortex_forget', { name: likes.name, confirm: first.confirm })).isError, true);
   assert.equal((await ask('cortex_recall', { name: likes.name })).isError, true);
+});
+
+test('a memory written with notes, before observations were named, is read with observations', () => {
+  const text = memoryFile({ name: 'short-titles', description: 'Wants short titles', kind: 'preference', stated: false, body: 'Short.', observations: ['n-1'] })
+    .replace('observations:', 'notes:');
+  assert.match(text, /^notes:/m);
+  const memory = readMemoryFile(text);
+  assert.deepEqual(memory.observations, ['n-1']);
+  assert.equal(memory.notes, undefined);
 });
