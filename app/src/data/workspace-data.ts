@@ -25,15 +25,17 @@ let byKey = new Map<string, Doc>()
 let keys = new Map<string, string>()
 
 const publish = (next: Selection, account: Account, files: [BlockHead, BlockFile][], contents: VaultContents, evidence: VaultEvidence) => {
+  const demo = "demo" in next ? next.demo : undefined
   const parsed = files.map(([ref, file]) => ({ ...docOf(ref, file), ref, version: file.version }))
   const ids = new Map(parsed.map(({ doc }) => [doc.slug, doc.id]))
   const channels = contents.channels.map(channel => ({
-    path: channel.path, id: channel.id ?? channel.path, description: channel.description,
+    path: channel.path,
+    id: demo && typeof channel.properties.sampleId === "string" ? channel.properties.sampleId : channel.id ?? channel.path,
+    description: channel.description,
     created: String(channel.properties.created ?? ""),
     order: channel.order.map((slug: string) => ids.get(slug)).filter((id: string | undefined): id is string => id !== undefined),
   }))
 
-  const demo = "demo" in next ? next.demo : undefined
   source = next
   vault = contents
   edges = evidence

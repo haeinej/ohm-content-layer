@@ -11,7 +11,9 @@ with the projected version, then refresh the projection. The sample also
 implements `saveChannels` for channel records and `markVisibility` for audience
 previews. History restore reads the source's kept version. Search, the graph,
 and both views of the connections card use the selected source. Cortex, inbox
-and the prototype's journal metadata remain sample features.
+and the prototype's journal metadata remain sample features. Sample channel
+renames preserve the UI record ID through the synthetic `sampleId` property.
+Evidence keys still use the channel path.
 
 There are zero direct fixture imports outside the sample adapter. The file
 [`workspace-model.ts`](../../src/data/workspace-model.ts) holds view types and

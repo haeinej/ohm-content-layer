@@ -3,8 +3,23 @@ import test from "node:test"
 import { createServiceSource } from "../src/data/service-source"
 import { createSampleSource } from "../src/data/sample-source"
 import { blockOf, moveVisibility, type BlockRef } from "../src/data/source"
+import { channelByPath, workspaceEvidence } from "../src/data/workspace-data"
+import { renameFolder, setSource } from "../src/workspace/store"
 import { isPostId, setProperty } from "../../vault/vault/file.mjs"
 import { newNodeId } from "../../vault/vault/node.mjs"
+
+test("renaming a sample channel keeps its UI identity and updates its evidence key", async () => {
+  await setSource(createSampleSource())
+  try {
+    const original = channelByPath("writing")!
+    renameFolder("writing", "essays")
+    assert.equal(channelByPath("writing"), undefined)
+    assert.equal(channelByPath("essays")?.id, original.id)
+    assert.ok(workspaceEvidence().some(edge => edge.kind === "contains" && edge.from === "channel:essays/journal"))
+  } finally {
+    await setSource()
+  }
+})
 
 test("a Friends block with an envelope-only TID keeps it inside the private copy", async () => {
   const from: BlockRef = { id: newNodeId(), layer: "friends", store: "block" }

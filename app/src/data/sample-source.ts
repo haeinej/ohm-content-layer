@@ -104,7 +104,7 @@ export function createSampleSource() {
       const channelFiles = channels.map(channel => ({
         path: `${channel.path}/_channel.md`,
         text: writeNoteFile({
-          properties: { created: channel.created, order: channel.order.map(id => posts.find(doc => doc.id === id)?.slug).filter(Boolean) },
+          properties: { sampleId: channel.id, created: channel.created, order: channel.order.map(id => posts.find(doc => doc.id === id)?.slug).filter(Boolean) },
           body: channel.description,
         }),
       }))

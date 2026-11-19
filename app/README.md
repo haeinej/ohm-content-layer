@@ -23,6 +23,8 @@ A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/wor
   Inbox items and settings open here too.
 - **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, and uses the same sample home as the editor and graph.
 
+Renaming a sample channel keeps its record and updates its path throughout the tree and graph.
+
 All data is synthetic. Run the app to explore a sample vault and cortex. Reloading restores the sample.
 
 To try saving and searching, create a block titled “Alder lantern”, add a line of text, and open Search. Search for “Alder lantern” to find the same block you just edited. This workspace uses the sample adapter, so those edits last for the current session. The service adapter is available for integrating signed-in vault access in the app. Private service files require an unlocked device and reach the service as ciphertext.
