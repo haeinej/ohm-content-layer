@@ -28,7 +28,7 @@ import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { isBlock, locationOf, byId, bySlug, channelRecords, channelsOf, blocks, titleOf, type Doc } from "@/data/sample"
+import { isBlock, locationOf, bySlug, channelRecords, channelsOf, blocks, titleOf, type Doc } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
@@ -87,7 +87,7 @@ const pathOf = (d: Doc) => [isBlock(d) ? "vault" : "cortex", ...locationOf(d).sp
  * the page as a .md file, or onto a vault folder in the side panel to file it there. The ⌄ beside it
  * opens the page's menu, as a session list has it: Open in, Rename, the file, Move, Archive, Delete.
  */
-function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown: () => string; onPickFile: () => void; onRenamed: (title: string) => void }) {
+function PathPill({ doc, markdown, onPickFile }: { doc: Doc; markdown: () => string; onPickFile: () => void }) {
   const path = pathOf(doc)
   const post = isBlock(doc)
   const [renaming, setRenaming] = useState(false)
@@ -129,7 +129,7 @@ function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown
         })}
         {renaming ? (
           <InlineRename id={doc.id} className="h-7 w-48 text-small font-medium"
-            onDone={() => { setRenaming(false); onRenamed(byId(doc.id)?.title ?? doc.title) }} />
+            onDone={() => setRenaming(false)} />
         ) : (
           <button type="button" disabled={!post} onClick={rename} title={post ? "Rename" : undefined}
             className="max-w-48 flex-shrink-0 cursor-text truncate rounded-md px-1 py-0.5 font-medium text-foreground transition-colors hover:bg-background disabled:cursor-default disabled:hover:bg-transparent">
@@ -223,7 +223,7 @@ function BlockMenu({ editor, block, updated, onClose }: { editor: Editor; block:
 export function PageEditor({ doc }: { doc: Doc }) {
   const { agentsAllowed, offered } = useWorkspace()
   const editable = isBlock(doc) && doc.visibility === "private"
-  const [title, setTitle] = useState(doc.title)
+  const title = doc.title
   const [plusOpen, setPlusOpen] = useState(false)
   const [iconOpen, setIconOpen] = useState(false)
   const [block, setBlock] = useState<{ node: PMNode; pos: number } | null>(null)
@@ -327,7 +327,6 @@ export function PageEditor({ doc }: { doc: Doc }) {
       },
       outputSchema: { type: "object", properties: { id: { type: "string" }, slug: { type: "string" }, visibility: { const: "private" } } },
       run: withAgent("Saving draft", async input => {
-        if (input.title !== undefined) setTitle(input.title)
         // Not as you typing: the agent's text is saved once, as its change, not again as your autosave.
         if (input.body !== undefined) editor.commands.setContent(input.body, { contentType: "markdown", emitUpdate: false })
         const out = saveDraft({ title: input.title ?? titleRef.current?.value ?? doc.title, body: toMarkdown(editor) })
@@ -363,7 +362,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
             <ToolButton label="Back (⌘[)" icon={ArrowLeftIcon} disabled={!canGo(-1)} onClick={() => go(-1)} />
             <ToolButton label="Forward (⌘])" icon={ArrowRightIcon} disabled={!canGo(1)} onClick={() => go(1)} />
           </div>
-          <PathPill doc={doc} markdown={() => toMarkdown(editor)} onPickFile={() => fileInput.current?.click()} onRenamed={setTitle} />
+          <PathPill doc={doc} markdown={() => toMarkdown(editor)} onPickFile={() => fileInput.current?.click()} />
           {editable && (
             <div className={pill}>
               <ToolButton label="Text" icon={TypeIcon} onClick={() => insertText(editor)} />
@@ -431,8 +430,8 @@ export function PageEditor({ doc }: { doc: Doc }) {
                 </PopoverContent>
               </Popover>
             )}
-            <textarea ref={titleRef} rows={1} value={title} readOnly={!editable} placeholder="Untitled page" aria-label="Title"
-              onChange={e => { setTitle(e.target.value); autosave(doc.id, { title: e.target.value }) }}
+            <textarea ref={titleRef} rows={1} value={title} readOnly={!editable} placeholder="Untitled block" aria-label="Title"
+              onChange={e => autosave(doc.id, { title: e.target.value })}
               onKeyDown={e => {
                 if (e.key === "Enter" || (e.key === "ArrowDown" && e.currentTarget.selectionStart === title.length)) {
                   e.preventDefault()
