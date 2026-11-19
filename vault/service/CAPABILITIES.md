@@ -365,8 +365,8 @@ The posts that mention every word of `q`, best first, each with a passage that s
 | --- | --- |
 | Reads or changes | Reads only (`GET`) |
 | Who may ask | The member |
-| Takes | `q`: the words to look for<br>`visibility`: optional: only posts at this visibility<br>`limit`: optional: how many, 10 unless said, 50 at most |
-| Gives | `found`, and `posts` (id, slug, title, label, sublabel, visibility, date, passage) |
+| Takes | `q`: the words to look for<br>`visibility`: optional: only posts at this visibility<br>`excludePrivate`: optional: pass 1 to search public and friends posts only<br>`limit`: optional: how many, 10 unless said, 50 at most |
+| Gives | `found`, `posts` (id, slug, title, label, sublabel, visibility, date, passage), and `visibilityScope: shared` when private posts were excluded |
 
 ## Mirror
 
@@ -532,19 +532,27 @@ The tools are in [../mcp/tools.mjs](../mcp/tools.mjs), and reach the service as 
 | `vault_tree` | Reads only | `getTree` | The structure of the person's vault: its labels, the sublabels inside them, and each post with who can see it. Start here to learn what the vault holds. |
 | `vault_list` | Reads only | `getTree` | List posts, newest first, optionally only those under a label or sublabel, at one visibility, or from one platform. |
 | `vault_read` | Reads only | `getTree`, `getPost` | Read one post in full, with its version. The version is needed to save changes to it. |
-| `vault_search` | Reads only | `searchPosts` | Search the person's own posts at every visibility, private ones included. Returns the best matches with a passage from each. |
-| `vault_save` | Changes | `getTree`, `getPost`, `putPost` | Create a post, or change one that was read. A new post is always private; use vault_set_visibility to mark it for anyone else. To change a post, pass the version vault_read gave; fields left out stay as they are. Changing a post that is not private needs the two calls described in the answer. |
-| `vault_set_visibility` | Changes | `getTree`, `getPost`, `putPost` | Change who a post is for: public (everyone), friends, or private (only the person). The post itself does not change. Always takes two calls. |
+| `vault_search` | Reads only | `searchPosts` | Search the person's public and friends-only posts. Returns the best matches with a passage from each. |
+| `vault_save` | Changes | `getTree`, `getPost`, `putPost` | Change an existing public or friends-only post. Pass the version vault_read gave. Fields left out stay as they are. Takes two calls. Use vault_capture to add a private block on the device. |
+| `vault_set_visibility` | Changes | `getTree`, `getPost`, `putPost` | Mark a post for everyone or for friends. Always takes two calls. Moves into the private layer require the person on their device. |
 | `vault_status` | Reads only | `getPublishPlan` | What publishing would change, without changing anything: the posts that would be published for the first time, replaced or taken down, the ones that cannot be published and why, and published records the vault knows nothing about. Use it to answer "what is not published yet?". |
 | `vault_publish` | Changes | `getPublishPlan`, `getAttachment` | Publish: make what is published in the person's own repository match their vault. Posts marked public are published or replaced, and published posts that are no longer public are taken down. Always takes two calls: the first says exactly what would change; the second, with the confirm value, changes it. Publishing is public the moment it is done, and taking a post down does not recall copies others already made. |
 | `vault_mirror` | Changes | `importPublished` | Bring what the person has already published on their PDS into the vault. Always takes two calls: the first only looks, and says what is there, what would differ from what is published, and what could not be kept; the second, with the confirm value, brings the posts in. It only reads the PDS, never publishes, and never changes a post the person has since changed in the vault. Posts that come with no label land under "other" and want filing. |
 | `vault_delete` | Changes | `getTree`, `getPost`, `deletePost` | Remove a post for good. Always takes two calls. |
+| `vault_friends_list` | Reads only | `listBlocks` | List your friends-only blocks. Pass the previous cursor as since to continue or read changes and removals. |
+| `vault_friends_read` | Reads only | `getBlock` | Read your friends-only block as a Markdown file with its version. |
+| `vault_friends_save` | Changes | `putBlock` | Save a friends-only block as a Markdown file with visibility: friends. Friends can read it as soon as it is saved. Preview, then confirm the exact file and version. |
+| `vault_friends_delete` | Changes | `deleteBlock` | Remove a friends-only block for good. Preview, then confirm with the version being removed. |
+| `vault_friends_who` | Reads only | `listFriends` | List the DIDs that can read your friends layer. |
+| `vault_friends_remove` | Changes | `listFriends`, `removeFriend` | Take away a DID’s access to your friends layer. Preview and confirm. Copies they already made remain with them. |
+| `vault_shared_list` | Reads only | `listShared` | List the friends-only blocks and posts an owner shares with your signed-in DID. |
+| `vault_shared_read` | Reads only | `getShared` | Read a friends-only block or post an owner shares with your signed-in DID. |
 
 Three rules hold for every tool that changes something:
 
-1. A new post is always private.
-2. Changing a post that is not private, changing who a post is for, publishing, bringing posts in from the PDS, and removing a post each take two calls. The first answers with what would happen and a `confirm` value; only a second call carrying that value does it.
-3. A post is changed from the version that was read. If it has changed since, the tool says so and nothing is saved.
+1. Create private blocks on the person's device. Service-backed tools expose only the public and friends layers.
+2. Changing a post, publishing, bringing posts in from the PDS, saving or removing a friends block, and removing a friend each take two calls. The first gives a preview and a `confirm` value for the second call.
+3. A post or friends block is changed from the version that was read. If it has changed since, the tool refuses the write.
 
 ### Requests with no tool
 
@@ -553,28 +561,20 @@ These requests have no MCP tool. They serve the editor, command line, adapters o
 | Request | Capability | Why it has no tool |
 | --- | --- | --- |
 | `listPosts` | Posts | It is for keeping a copy in step: every post's version, and what changed since. The tools read the structure instead |
-| `listBlocks` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `getBlock` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `putBlock` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `deleteBlock` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `listFriends` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `addFriend` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `removeFriend` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `listShared` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `getShared` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
-| `listPrivateBlocks` | Private | undefined |
-| `getPrivateBlock` | Private | undefined |
-| `putPrivateBlock` | Private | undefined |
-| `putPrivateBlocks` | Private | undefined |
-| `listPrivateVersions` | Private | undefined |
-| `getPrivateVersion` | Private | undefined |
-| `listPrivateJournal` | Private | undefined |
-| `beginPrivateRotation` | Private | undefined |
-| `getPrivateRotation` | Private | undefined |
-| `listPrivateBelow` | Private | undefined |
-| `rewrapPrivate` | Private | undefined |
-| `finishPrivateRotation` | Private | undefined |
-| `deletePrivateBlock` | Private | undefined |
+| `addFriend` | Friends | Only the member can widen who can read the friends layer, through their ohm session |
+| `listPrivateBlocks` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `getPrivateBlock` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `putPrivateBlock` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `putPrivateBlocks` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `listPrivateVersions` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `getPrivateVersion` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `listPrivateJournal` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `beginPrivateRotation` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `getPrivateRotation` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `listPrivateBelow` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `rewrapPrivate` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `finishPrivateRotation` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
+| `deletePrivateBlock` | Private | Private contents never reach the service readable. Agents read them only on the person's device, after unlock |
 | `exportFiles` | Export | The command line and the editor write the vault out. An agent reads posts one at a time |
 | `get` | Account | It rides on an ohm session, which an agent does not have |
 | `connect` | Account | It rides on an ohm session, which an agent does not have |
@@ -584,4 +584,4 @@ These requests have no MCP tool. They serve the editor, command line, adapters o
 
 ## Not here yet
 
-Attachments held by the vault, serving friends-only posts to friends, earlier versions of a post and bringing a removed one back, and a key a person can give an agent and take away again. Until there is such a key, an agent signs in with an app password from the person's PDS.
+Attachments held by the vault, earlier versions of a post and bringing a removed one back, and a key a person can give an agent and take away again. Until there is such a key, an agent signs in with an app password from the person's PDS.

@@ -12,6 +12,7 @@
 //   vault search WORDS... [--vault DIR] [--limit N]
 //   vault hook   [--vault DIR] [--agent NAME] an agent's PostToolUse hook: reads the hook's JSON on
 //                                            standard input and journals a write inside the vault
+//   vault mcp    [--vault DIR] [--agent NAME] serve the selected vault to a local stdio client
 //
 // --vault defaults to OHM_VAULT_FOLDER, then the vault of the home this runs in
 // (ohmmmm.<handle>/vault, ../../home/home.mjs), then the current folder. REF is a slug, a path in the vault,
@@ -20,10 +21,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { defaultVault } from '../../home/home.mjs';
 
-const ACTIONS = ['init', 'add', 'index', 'status', 'inspect', 'search', 'hook'];
+const ACTIONS = ['init', 'add', 'index', 'status', 'inspect', 'search', 'hook', 'mcp'];
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   strict: false,
@@ -35,7 +37,8 @@ const { values, positionals } = parseArgs({
 // The command line arrives with "vault" first when ohm runs this file.
 const [action, ...rest] = positionals[0] === 'vault' ? positionals.slice(1) : positionals;
 const expand = path => (path === '~' ? homedir() : path.startsWith('~/') ? `${homedir()}${path.slice(1)}` : path);
-const vault = resolve(expand(values.vault || process.env.OHM_VAULT_FOLDER || defaultVault() || '.'));
+const selected = values.vault || process.env.OHM_VAULT_FOLDER || defaultVault();
+const vault = resolve(expand(selected || '.'));
 const print = value => console.log(JSON.stringify(value, null, 2));
 
 // A hook runs after every file an agent writes, so it is quick, needs no database, and never fails
@@ -59,7 +62,7 @@ if (!sqlite) {
     console.error('This Node has no SQLite. Use Node 22.13 or newer.');
     process.exit(1);
   }
-  const again = spawnSync(process.execPath, ['--experimental-sqlite', '--no-warnings=ExperimentalWarning', process.argv[1], 'vault', ...process.argv.slice(2)], { stdio: 'inherit' });
+  const again = spawnSync(process.execPath, ['--experimental-sqlite', '--no-warnings=ExperimentalWarning', fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit' });
   process.exit(again.status ?? 1);
 }
 const { CONFIG, emptyConfig } = await import('../vault/roots.mjs');
@@ -73,7 +76,13 @@ try {
     // Long lists are counted; the full lists are in the index and the journal.
     ...Object.fromEntries(['added', 'changed', 'removed'].map(key => [key, report[key].length > 50 ? report[key].length : report[key]])),
   });
-  if (action === 'init') {
+  if (action === 'mcp') {
+    const { serveLocalVault } = await import('../mcp/local.mjs');
+    await serveLocalVault({
+      vault: selected && vault, agent: values.agent ?? 'mcp', DatabaseSync: sqlite.DatabaseSync,
+      input: process.stdin, output: process.stdout,
+    });
+  } else if (action === 'init') {
     await mkdir(resolve(vault, '.vault'), { recursive: true });
     const file = resolve(vault, CONFIG);
     const held = await readFile(file, 'utf8').catch(() => null);
