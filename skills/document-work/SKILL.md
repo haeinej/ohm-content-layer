@@ -54,7 +54,8 @@ navigation or entry point so their readers can find them.
 
 Read the documentation build before editing. Change the authored source, then
 regenerate its outputs. In ohm, public documentation is authored in
-`public/docs/build.py`; the adjacent HTML, Markdown and LLM files are generated.
+`docs/build.py` in the separate haeinej/ohm-site repository; the adjacent HTML,
+Markdown and LLM files are generated.
 An agent contract may instead belong in `docs/agents/`, a service reference or an
 existing capability document. Do not create a competing copy of a contract that
 already has an authoritative source.
