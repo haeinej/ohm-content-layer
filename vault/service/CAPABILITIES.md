@@ -12,7 +12,7 @@ This page is the whole list. It is written from the same tables the service and 
 | --- | --- | --- | --- |
 | **Posts** | Read and change the posts in a vault, one at a time. Every change names the version it replaces, so two edits never overwrite each other unseen. | `listPosts`, `getPost`, `putPost`, `deletePost` | [posts.mjs](src/capabilities/posts.mjs) |
 | **Friends** | The friends layer: friends-only blocks, kept readable so the friends a member chose can read them, and the friend list that says who they are. A friend reads friends-only posts and blocks alike. Private blocks are never kept here. | `listBlocks`, `getBlock`, `putBlock`, `deleteBlock`, `listFriends`, `addFriend`, `removeFriend`, `listShared`, `getShared` | [friends.mjs](src/capabilities/friends.mjs) |
-| **Private** | The private layer: private blocks, kept only as ciphertext sealed on the member's devices. The service stores and syncs them and cannot read them; no friend or agent can be given their contents by the service. Each is `{ id, ciphertext, version }`, with an opaque ID and compare-and-swap on the version. | `listPrivateBlocks`, `getPrivateBlock`, `putPrivateBlock`, `beginPrivateRotation`, `getPrivateRotation`, `finishPrivateRotation`, `deletePrivateBlock` | [private.mjs](src/capabilities/private.mjs) |
+| **Private** | The private layer: private blocks, kept only as ciphertext sealed on the member's devices. The service stores and syncs them and cannot read them; no friend or agent can be given their contents by the service. Each is `{ id, ciphertext, version }`, with an opaque ID and compare-and-swap on the version. Several change together or not at all; every version is kept for restoring; the journal is sealed too; and a key rotation re-wraps every kept version and journal entry. | `listPrivateBlocks`, `getPrivateBlock`, `putPrivateBlock`, `putPrivateBlocks`, `listPrivateVersions`, `getPrivateVersion`, `listPrivateJournal`, `beginPrivateRotation`, `getPrivateRotation`, `listPrivateBelow`, `rewrapPrivate`, `finishPrivateRotation`, `deletePrivateBlock` | [private.mjs](src/capabilities/private.mjs) |
 | **Structure** | The shape of a vault: its labels, the sublabels inside them, and a line for each post. Enough to draw it or decide where something belongs, without reading any post in full. | `getTree` | [structure.mjs](src/capabilities/structure.mjs) |
 | **Search** | Find posts by the words in them, at every visibility. A title counts for more than a label, and a label for more than the body. | `searchPosts` | [search.mjs](src/capabilities/search.mjs) |
 | **Mirror** | Bring what the member has already published on their PDS into the vault. It only reads the PDS, and it never changes a post the member has since changed in the vault. | `importPublished` | [mirror.mjs](src/capabilities/mirror.mjs) |
@@ -193,7 +193,7 @@ One friends-only block or post another member shares with the asker, as its file
 
 ## Private
 
-The private layer: private blocks, kept only as ciphertext sealed on the member's devices. The service stores and syncs them and cannot read them; no friend or agent can be given their contents by the service. Each is `{ id, ciphertext, version }`, with an opaque ID and compare-and-swap on the version.
+The private layer: private blocks, kept only as ciphertext sealed on the member's devices. The service stores and syncs them and cannot read them; no friend or agent can be given their contents by the service. Each is `{ id, ciphertext, version }`, with an opaque ID and compare-and-swap on the version. Several change together or not at all; every version is kept for restoring; the journal is sealed too; and a key rotation re-wraps every kept version and journal entry.
 
 ### `com.ohmmmm.vault.listPrivateBlocks`
 
@@ -225,8 +225,52 @@ Saves one private block's ciphertext. Anything that is not a sealed file is refu
 | --- | --- |
 | Reads or changes | Changes (`POST`) |
 | Who may ask | The member |
-| Takes | `block`: `id` and `ciphertext` (the sealed file)<br>`replaces`: optional: the version it replaces |
-| Gives | `id`, `version`, and `unchanged` when nothing differed |
+| Takes | `block`: `id` and `ciphertext` (the sealed file)<br>`replaces`: optional: the version it replaces<br>`journal`: optional: a sealed journal entry describing the change |
+| Gives | `id`, `version`, `rev` (the kept version it made), and `unchanged` when nothing differed |
+
+### `com.ohmmmm.vault.putPrivateBlocks`
+
+Changes several private blocks together, all or none, as moving a block between channels changes the block and two channel files. Each change is a write (`id`, `ciphertext`, `replaces`) or a removal (`id`, `remove: true`, `replaces`); one stale version, or one block sealed under a key older than a rotation started, refuses them all. `batchId` makes it safe to send again: a repeat answers what the first did and changes nothing.
+
+| | |
+| --- | --- |
+| Reads or changes | Changes (`POST`) |
+| Who may ask | The member |
+| Takes | `changes`: the changes, 1 to 100<br>`batchId`: a key the device makes for this batch<br>`journal`: optional: a sealed journal entry describing them |
+| Gives | `blocks` (id, version and rev, or removed), and `replayed` for a repeat |
+
+### `com.ohmmmm.vault.listPrivateVersions`
+
+A private block's kept versions, newest first, each by a `rev` that never changes. The device opens one to show or restore it; restoring is a new change.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | `id`: the block's opaque ID |
+| Gives | `id`, `versions` (rev, version, generation, size, created) |
+
+### `com.ohmmmm.vault.getPrivateVersion`
+
+One kept version of a private block, as ciphertext.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | `id`: the block's opaque ID<br>`rev`: the version's rev |
+| Gives | `id`, `rev`, `version`, `ciphertext` |
+
+### `com.ohmmmm.vault.listPrivateJournal`
+
+The private layer's journal: sealed entries, oldest first, after `since`. Only the member's devices can read what each says.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | `since`: optional: the `cursor` of an earlier list |
+| Gives | `entries` (seq, entry, created), `cursor`, and `more` when there is another page |
 
 ### `com.ohmmmm.vault.beginPrivateRotation`
 
@@ -250,9 +294,31 @@ The member's latest key rotation, and how many private blocks are still below it
 | Takes | Nothing |
 | Gives | `rotation` (target, state, remaining, started, finished) or null |
 
+### `com.ohmmmm.vault.listPrivateBelow`
+
+What a rotation to `target` still has to re-wrap: every kept version (by block and rev) and journal entry (by seq) sealed under an older key.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | `target`: the generation being rotated to |
+| Gives | `target`, `versions` (id, rev, generation), `journal` (seq, generation), and `more` when there is more |
+
+### `com.ohmmmm.vault.rewrapPrivate`
+
+Re-wrapped copies of kept versions and journal entries, for a rotation under way to `target`. Each must keep exactly the contents it replaces, with only its file key re-wrapped; a version that is its block's latest moves the block with it. All are kept or none. Safe to send again.
+
+| | |
+| --- | --- |
+| Reads or changes | Changes (`POST`) |
+| Who may ask | The member |
+| Takes | `target`: the generation being rotated to<br>`versions`: `id`, `rev`, `ciphertext` for each<br>`journal`: `seq`, `entry` for each |
+| Gives | `target`, `remaining` |
+
 ### `com.ohmmmm.vault.finishPrivateRotation`
 
-Finishes the rotation to `target`, only if no private block is still below it, checked in the same statement. The account deletes the old key's copies only after this.
+Finishes the rotation to `target`, only if no kept version or journal entry is still below it, checked in the same statement. The account deletes the old key's copies only after this.
 
 | | |
 | --- | --- |
@@ -263,13 +329,13 @@ Finishes the rotation to `target`, only if no private block is still below it, c
 
 ### `com.ohmmmm.vault.deletePrivateBlock`
 
-Removes one private block for good.
+Removes one private block. Its kept versions stay, so it can be restored.
 
 | | |
 | --- | --- |
 | Reads or changes | Changes (`POST`) |
 | Who may ask | The member |
-| Takes | `id`: the block's opaque ID<br>`replaces`: the version being removed |
+| Takes | `id`: the block's opaque ID<br>`replaces`: the version being removed<br>`journal`: optional: a sealed journal entry |
 | Gives | `id`, `removed` |
 
 ## Structure
@@ -447,8 +513,9 @@ A refusal is JSON with an `error`, which is one of the names below, and a `messa
 | `SlugTaken` | 409 | Another post in the vault already has that slug |
 | `PathTaken` | 409 | Another block in the friends layer is already at that path |
 | `OlderKey` | 409 | The private block is sealed under an older master key than the member is rotating, or rotated, to |
+| `NoRotation` | 409 | No rotation to that generation is under way |
 | `RotationAhead` | 409 | The member already rotated to a later master key than the one asked for |
-| `RotationRemaining` | 409 | A rotation cannot finish while some private blocks are still sealed under the older key. The answer says how many |
+| `RotationRemaining` | 409 | A rotation cannot finish while some kept versions or journal entries are still sealed under the older key. The answer says how many |
 | `TooLarge` | 413 | The post or block is more than 600 KB of text, a sealed private block is more than 1 MB, or a file it places is empty or larger than 25 MB |
 | `FileUnreachable` | 502 | A file a post places could not be fetched from where the post says it is |
 | `AccountNotFound` | 404 | No AT Protocol account answers to that handle or DID |
@@ -498,8 +565,14 @@ These requests have no MCP tool. They serve the editor, command line, adapters o
 | `listPrivateBlocks` | Private | undefined |
 | `getPrivateBlock` | Private | undefined |
 | `putPrivateBlock` | Private | undefined |
+| `putPrivateBlocks` | Private | undefined |
+| `listPrivateVersions` | Private | undefined |
+| `getPrivateVersion` | Private | undefined |
+| `listPrivateJournal` | Private | undefined |
 | `beginPrivateRotation` | Private | undefined |
 | `getPrivateRotation` | Private | undefined |
+| `listPrivateBelow` | Private | undefined |
+| `rewrapPrivate` | Private | undefined |
 | `finishPrivateRotation` | Private | undefined |
 | `deletePrivateBlock` | Private | undefined |
 | `exportFiles` | Export | The command line and the editor write the vault out. An agent reads posts one at a time |

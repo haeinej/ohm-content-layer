@@ -13,23 +13,33 @@ const refusal = code => problem => problem.code === code;
 const b64 = bytes => Buffer.from(bytes).toString('base64url');
 const opaque = () => b64(crypto.getRandomValues(new Uint8Array(16)));
 
-// A sealed file as packages/keys makes one, for a master key held only by this test.
+// A sealed file as packages/keys makes one, with a master key per generation held only by this test.
 async function sealer() {
-  const master = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const masters = new Map();
+  const masterOf = async generation => {
+    if (!masters.has(generation)) masters.set(generation, await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']));
+    return masters.get(generation);
+  };
   const context = (did, id, part) => new TextEncoder().encode(`ohm-vault/file/v1|${did}|${id}|${part}`);
   const seal = async (key, plain, aad) => {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     return { iv: b64(iv), ciphertext: b64(new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad }, key, plain))) };
   };
+  const open = async (key, part, aad) => new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: Buffer.from(part.iv, 'base64url'), additionalData: aad }, key, Buffer.from(part.ciphertext, 'base64url')));
+  const tagged = (generation, body) => ({ v: 1, alg: 'A256GCM', ...(generation === 1 ? {} : { generation }), ...body });
   return {
     async seal(did, id, text, generation = 1) {
       const raw = crypto.getRandomValues(new Uint8Array(32));
       const fileKey = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt']);
-      return { v: 1, alg: 'A256GCM', ...(generation === 1 ? {} : { generation }), key: await seal(master, raw, context(did, id, 'key')), data: await seal(fileKey, new TextEncoder().encode(text), context(did, id, 'data')) };
+      return tagged(generation, { key: await seal(await masterOf(generation), raw, context(did, id, 'key')), data: await seal(fileKey, new TextEncoder().encode(text), context(did, id, 'data')) });
+    },
+    // The same contents with the file key re-wrapped under another generation, as rotation does.
+    async rewrap(did, id, sealed, generation) {
+      const raw = await open(await masterOf(sealed.generation ?? 1), sealed.key, context(did, id, 'key'));
+      return tagged(generation, { key: await seal(await masterOf(generation), raw, context(did, id, 'key')), data: sealed.data });
     },
     async open(did, id, sealed) {
-      const open = async (key, part, aad) => new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: Buffer.from(part.iv, 'base64url'), additionalData: aad }, key, Buffer.from(part.ciphertext, 'base64url')));
-      const raw = await open(master, sealed.key, context(did, id, 'key'));
+      const raw = await open(await masterOf(sealed.generation ?? 1), sealed.key, context(did, id, 'key'));
       return new TextDecoder().decode(await open(await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']), sealed.data, context(did, id, 'data')));
     },
   };
@@ -46,7 +56,7 @@ test('the private store keeps sealed files only, with compare-and-swap on a vers
 
   const saved = await store.write(me, { id, ciphertext });
   assert.match(saved.version, /^pv_[0-9a-f]{32}$/);
-  assert.deepEqual(await store.read(me, id), { id, ciphertext, version: saved.version });
+  assert.deepEqual(await store.read(me, id), { id, ciphertext, version: saved.version, rev: saved.rev });
   assert.equal(await keys.open(me, id, (await store.read(me, id)).ciphertext), words);
   // Nothing readable is in the database: not the text, the title, the path or the TID.
   const held = JSON.stringify(db.sqlite.prepare('SELECT * FROM private_blocks').all());
@@ -68,7 +78,7 @@ test('the private store keeps sealed files only, with compare-and-swap on a vers
 
   // Listing says only what the service can know: IDs, versions, sizes, generations.
   const listed = await store.list(me);
-  assert.deepEqual(Object.keys(listed.blocks[0]).sort(), ['generation', 'id', 'size', 'version']);
+  assert.deepEqual(Object.keys(listed.blocks[0]).sort(), ['generation', 'id', 'rev', 'size', 'version']);
   // Removing names the version; afterwards the list since then says it went.
   await assert.rejects(store.remove(me, id, { replaces: saved.version }), refusal('Changed'));
   await store.remove(me, id, { replaces: first.version });
@@ -164,12 +174,20 @@ test('during a rotation, old-key writes are refused, and it finishes only when n
   // A device still on the old key cannot add or change a file the rotation would miss.
   await assert.rejects(store.write(did, { id: opaque(), ciphertext: await keys.seal(did, 'x', 'late') }), refusal('OlderKey'));
   await assert.rejects(store.write(did, { id: a, ciphertext: await keys.seal(did, a, 'a edited') }, { replaces: va }), refusal('OlderKey'));
-  // Not finished while a block is left below; the answer says how many.
+  // Not finished while anything kept is left below; the answer says how many. Writing a new version
+  // under the new key leaves the old version still to re-wrap.
   await store.write(did, { id: a, ciphertext: await keys.seal(did, a, 'a', 2) }, { replaces: va });
   const early = await store.finishRotation(did, 2).catch(problem => problem);
-  assert.deepEqual([early.code, early.extra.remaining], ['RotationRemaining', 1]);
-  assert.equal((await store.rotation(did)).rotation.remaining, 1);
-  await store.write(did, { id: b, ciphertext: await keys.seal(did, b, 'b', 2) }, { replaces: vb });
+  assert.deepEqual([early.code, early.extra.remaining], ['RotationRemaining', 2]);
+  // Re-wrap everything listed below the target, old versions included.
+  const left = await store.belowTarget(did, 2);
+  assert.deepEqual(left.versions.map(each => each.id).sort(), [a, b].sort());
+  const rewrapped = await Promise.all(left.versions.map(async each => ({ id: each.id, rev: each.rev, ciphertext: await keys.rewrap(did, each.id, (await store.readVersion(did, each.id, each.rev)).ciphertext, 2) })));
+  assert.equal((await store.rewrap(did, 2, { versions: rewrapped })).remaining, 0);
+  // b's latest moved with its version: it opens under key 2, its contents unchanged, its version renamed.
+  const bNow = await store.read(did, b);
+  assert.deepEqual([bNow.ciphertext.generation, await keys.open(did, b, bNow.ciphertext)], [2, 'b']);
+  assert.notEqual(bNow.version, vb);
   assert.deepEqual(await store.finishRotation(did, 2), { target: 2, state: 'finished' });
   assert.equal((await store.finishRotation(did, 2)).unchanged, true);
   await assert.rejects(store.finishRotation(did, 3), refusal('NotFound'));
@@ -179,4 +197,87 @@ test('during a rotation, old-key writes are refused, and it finishes only when n
   // A later rotation moves the floor; an earlier one is refused.
   assert.equal((await store.beginRotation(did, 3)).target, 3);
   await assert.rejects(store.beginRotation(did, 2), refusal('RotationAhead'));
+});
+
+test('a move changes several files together, or none of them', async () => {
+  const db = await testDatabase();
+  const store = privateStore(db);
+  const keys = await sealer();
+  const did = 'did:web:pds.haein.test';
+  // A block and two channel files (each a private file like any other, its order inside).
+  const [block, from, to] = [opaque(), opaque(), opaque()];
+  const saved = {};
+  for (const [id, text] of [[block, 'block in walks'], [from, 'walks: block'], [to, 'cities: -']]) saved[id] = (await store.write(did, { id, ciphertext: await keys.seal(did, id, text) })).version;
+
+  // One stale version in the batch refuses all of it: the block is not left in neither channel or both.
+  const move = async (replacesTo, batchId) => store.apply(did, [
+    { id: block, ciphertext: await keys.seal(did, block, 'block in cities'), replaces: saved[block] },
+    { id: from, ciphertext: await keys.seal(did, from, 'walks: -'), replaces: saved[from] },
+    { id: to, ciphertext: await keys.seal(did, to, 'cities: block'), replaces: replacesTo },
+  ], { batchId, journal: await keys.seal(did, 'journal', 'Moved block: walks → cities') });
+  const refused = await move('pv_stale', 'move-0001').catch(problem => problem);
+  assert.deepEqual([refused.code, refused.extra.id], ['Changed', to]);
+  for (const id of [block, from, to]) assert.equal((await store.read(did, id)).version, saved[id]);
+  assert.equal((await store.journal(did)).entries.length, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM private_guard').get().n, 0);
+
+  const moved = await move(saved[to], 'move-0002');
+  assert.equal(moved.blocks.length, 3);
+  assert.equal(await keys.open(did, to, (await store.read(did, to)).ciphertext), 'cities: block');
+  // The same batch again (its answer was lost) answers the same and changes nothing.
+  const again = await move(saved[to], 'move-0002');
+  assert.deepEqual(again, { ...moved, blocks: moved.blocks.map(({ rev, ...each }) => each), replayed: true });
+  const { entries } = await store.journal(did);
+  assert.equal(entries.length, 1);
+  assert.equal(await keys.open(did, 'journal', entries[0].entry), 'Moved block: walks → cities');
+  // A batch changes each block once, at most 100, and a removal is part of it like any change.
+  await assert.rejects(store.apply(did, [{ id: block, remove: true, replaces: 'x' }, { id: block, remove: true, replaces: 'x' }]), refusal('InvalidRequest'));
+  await assert.rejects(store.apply(did, []), refusal('InvalidRequest'));
+  const gone = await store.apply(did, [{ id: from, remove: true, replaces: moved.blocks[1].version }], { batchId: 'remove-0001' });
+  assert.deepEqual(gone.blocks, [{ id: from, removed: true }]);
+});
+
+test('every version is kept for restoring, and a removed block can come back', async () => {
+  const store = privateStore(await testDatabase());
+  const keys = await sealer();
+  const did = 'did:web:pds.haein.test';
+  const id = opaque();
+  const one = await store.write(did, { id, ciphertext: await keys.seal(did, id, 'first') });
+  const two = await store.write(did, { id, ciphertext: await keys.seal(did, id, 'second') }, { replaces: one.version });
+  const { versions } = await store.versions(did, id);
+  assert.deepEqual(versions.map(each => each.rev), [two.rev, one.rev]);
+  assert.equal(await keys.open(did, id, (await store.readVersion(did, id, one.rev)).ciphertext), 'first');
+  // Restoring is a new change made on the device from an old version's contents.
+  await store.remove(did, id, { replaces: two.version });
+  await assert.rejects(store.read(did, id), refusal('NotFound'));
+  assert.equal((await store.versions(did, id)).versions.length, 2);
+  const restored = await store.write(did, { id, ciphertext: await keys.seal(did, id, await keys.open(did, id, (await store.readVersion(did, id, one.rev)).ciphertext)) });
+  assert.equal(await keys.open(did, id, (await store.read(did, id)).ciphertext), 'first');
+  assert.equal((await store.versions(did, id)).versions[0].rev, restored.rev);
+  await assert.rejects(store.readVersion(did, id, 999), refusal('NotFound'));
+});
+
+test('a rotation re-wraps journal entries too, and a re-wrap may change only the file key', async () => {
+  const store = privateStore(await testDatabase());
+  const keys = await sealer();
+  const did = 'did:web:pds.haein.test';
+  const id = opaque();
+  const saved = await store.write(did, { id, ciphertext: await keys.seal(did, id, 'kept') }, { journal: await keys.seal(did, 'journal', 'Created kept') });
+  await assert.rejects(store.rewrap(did, 2, { versions: [{ id, rev: saved.rev, ciphertext: await keys.seal(did, id, 'kept', 2) }] }), refusal('NoRotation'));
+  await store.beginRotation(did, 2);
+  const left = await store.belowTarget(did, 2);
+  assert.deepEqual([left.versions.length, left.journal.length], [1, 1]);
+  // Different contents under the new key are refused, as is a re-wrap under the wrong generation.
+  await assert.rejects(store.rewrap(did, 2, { versions: [{ id, rev: saved.rev, ciphertext: await keys.seal(did, id, 'other', 2) }] }), problem => problem.code === 'InvalidBlock' && /contents/.test(problem.message));
+  const old = (await store.readVersion(did, id, saved.rev)).ciphertext;
+  await assert.rejects(store.rewrap(did, 2, { versions: [{ id, rev: saved.rev, ciphertext: await keys.rewrap(did, id, old, 3) }] }), problem => problem.code === 'InvalidBlock' && /under 2/.test(problem.message));
+  // The journal entry alone left: not finished.
+  assert.equal((await store.rewrap(did, 2, { versions: [{ id, rev: saved.rev, ciphertext: await keys.rewrap(did, id, old, 2) }] })).remaining, 1);
+  await assert.rejects(store.finishRotation(did, 2), refusal('RotationRemaining'));
+  const entry = (await store.journal(did)).entries[0];
+  assert.equal((await store.rewrap(did, 2, { journal: [{ seq: entry.seq, entry: await keys.rewrap(did, 'journal', entry.entry, 2) }] })).remaining, 0);
+  assert.equal((await store.finishRotation(did, 2)).state, 'finished');
+  assert.equal(await keys.open(did, 'journal', (await store.journal(did)).entries[0].entry), 'Created kept');
+  // A journal entry under the old key is refused once the floor is up.
+  await assert.rejects(store.write(did, { id, ciphertext: await keys.seal(did, id, 'new', 2) }, { replaces: (await store.read(did, id)).version, journal: await keys.seal(did, 'journal', 'old key') }), refusal('OlderKey'));
 });

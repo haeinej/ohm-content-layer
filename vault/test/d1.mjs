@@ -20,7 +20,20 @@ export async function testDatabase() {
       first: async () => run('get') ?? null,
       all: async () => ({ results: run('all') }),
       run: async () => ({ meta: { changes: Number(run('run').changes) } }),
+      runNow: () => ({ meta: { changes: Number(run('run').changes) } }),
     };
   };
-  return { prepare: sql => prepared(sql), sqlite };
+  // D1's batch: the statements run in order in one transaction, and a failure undoes them all.
+  const batch = async statements => {
+    sqlite.exec('BEGIN');
+    try {
+      const results = statements.map(statement => statement.runNow());
+      sqlite.exec('COMMIT');
+      return results;
+    } catch (problem) {
+      sqlite.exec('ROLLBACK');
+      throw problem;
+    }
+  };
+  return { prepare: sql => prepared(sql), batch, sqlite };
 }

@@ -124,6 +124,27 @@ Built in ohm-onboarding: a P-256 key pair whose private half never leaves the ne
 
 A channel can hold blocks from both layers. Its own file lives in the layer it was given. A private block's place in a friends channel is private, so a friend sees only the friends-layer items.
 
+A channel keeps its own order. For a channel with blocks from both layers the order is split, so nothing private shows through:
+- the channel's own file (friends layer) lists only its friends blocks, in their order;
+- a **private overlay** for that channel, a private file like any other in the private store, says where each private block goes among them (after which friends block, or first). Only the member's devices read it and draw the whole order.
+A private channel lists everything in its own file, which is private already. Moving a block into or out of a mixed channel changes the overlay, and the moves below apply to it like any file.
+
+### Moves, versions and the journal (private store)
+
+- **Several files at once.** Moving a block between channels changes the block's file and two channel files (or overlays); adding it to a channel with ⌥ changes one. `putPrivateBlocks` sends them together, each naming the version it replaces, in one D1 batch: one stale version, or one file sealed under a key older than a rotation started, refuses them all, so an interruption never leaves a block in neither channel or in both. A batch carries a `batchId`, so sending it again after a lost answer changes nothing. Inside a batch a failed check stops it by inserting into a guard table whose CHECK refuses the row, since a conditional statement that changes nothing would not.
+- **Every version is kept**, as ciphertext, under a `rev` that never changes (`private_block_versions`). The device lists a block's versions, opens one, and restores it as a new change. Removing a block keeps its versions.
+- **The journal is sealed.** A change may carry a journal entry, sealed on the device like a file (with the file ID `journal`), and kept in the same batch. Which page, what words, which agent and why are inside it; the service sees only when, and how large.
+- **Rotation covers all of it.** A rotation lists everything kept under an older key (`listPrivateBelow`: versions and journal entries), and the device re-wraps each one's file key (`rewrapPrivate`); the service accepts a re-wrap only if its contents (`data`) are exactly what it replaces. The rotation finishes only when nothing kept is below the new key, so a key that was exposed opens nothing still stored. A re-wrap changes an old version's stored bytes but never its contents or its `rev`, so history still points at the same versions.
+
+## History, versions and autosaves
+
+Version history (ohm-ux `flows/history.md`) is kept by the part that owns what changed:
+- **Blocks and channels: the vault.** Their versions, the journal of changes to them, and each day's autosave. For private pages these are the private store's kept versions and sealed journal; for the folder, `.vault/journal.jsonl`. Cortex does not keep copies of what a block says (its plan, principle 1, and the vault reader contract).
+- **Cortex's own pages** (memories, notes, skills, tools): cortex, in `.cortex/journal.jsonl` and `.cortex/history/`, as now.
+- The history screen reads both and shows them as one timeline.
+
+For private pages, daily autosaves and agents' edits run on the member's device or a local cortex and vault: no Worker or cron job can read them.
+
 ## Moving between layers
 
 Each move is an act the member confirms, because it changes who can read something.

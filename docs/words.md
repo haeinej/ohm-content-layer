@@ -17,6 +17,9 @@ One list for the vault, the cortex and the account app. When a part needs a word
 - **Visibility:** `public`, `friends` or `private`, on each block; it chooses the **layer**, and so the store.
 - **Friends layer**, **private layer:** blocks readable by the vault service and shared with chosen DIDs; blocks the service stores only as ciphertext.
 - **Journal** (`.vault/journal.jsonl`), **index** (`.vault/index.sqlite`), **roots** (`.vault/config.json`).
+- **Version** and **rev:** a kept state of a block. `version` names its exact ciphertext (for compare-and-swap); `rev` names the kept version and never changes, so history points at it.
+- **Private overlay:** a private file holding where a mixed channel's private blocks go in its order; the channel's own file lists only what its layer may show.
+- **Autosave:** each day's state of every page, kept by the vault for blocks and channels, by cortex for its own pages.
 
 ## In the cortex
 
