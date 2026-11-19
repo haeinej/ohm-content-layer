@@ -28,23 +28,81 @@ The private layer works like a password manager such as 1Password, or a messenge
 | Friends-layer blocks, as `{ id, path, text, version }`, and the member's friend list (DIDs) | Yes | So ohm can show them to those friends, search them, and render them on any device without keys. Encrypted at rest with a key ohm manages, which protects against a stolen disk or backup, not against ohm itself |
 | The member's public encryption key, and each linked device's public key | Yes | Device links can be checked. Public keys reveal nothing |
 | Private-layer blocks, as `{ id, ciphertext, version }` | **No** | Storage and sync only |
+| The master key, wrapped by each passkey's PRF output and by the recovery phrase, with each passkey's credential ID | **No** | So a signed-in device with a passkey, or the phrase, can unlock. The server cannot unwrap any copy |
 
 Never held by the server in readable form: the master key, the recovery phrase, and the text, title, path, channels, links, origin or journal of any private block.
 
 The server can still see that private files exist, how big they are and when they change. Padding sizes can blunt this but not remove it.
 
-## Keys (private layer)
+## Signing in and unlocking (private layer)
 
-- **Master key.** Made on the member's first device, and never sent anywhere unencrypted.
-- **Recovery phrase.** Shown once at setup. It is the only way back if every device is lost. ohm cannot recover a private vault, and the app says so plainly before one is created.
-- **Unlock.** A passkey on each device (WebAuthn, with the PRF extension where available, and a passphrase where not) unlocks the master key, which is stored wrapped on that device.
+Signing in and unlocking are two different steps, and neither is enough alone.
+
+| Step | With | Proves or gives | Who checks it |
+| --- | --- | --- | --- |
+| **Sign in** | OAuth: AT Protocol OAuth through the member's PDS, as the editor signs in today ([signin.js](../service/public/vault/signin.js)) | Who you are. Access to the public and friends layers, and to the private layer's ciphertext and wrapped keys | The server |
+| **Unlock** | A passkey on the device, using WebAuthn's PRF extension | A secret only the passkey can produce, which opens the master key | Only the device. The server never sees the secret |
+| **Recover** | The recovery phrase | Opens the master key when no passkey can | Only the device |
+
+### The keys
+
+- **Master key.** Made on the member's first device, and never sent anywhere unencrypted. It opens the file keys.
 - **File keys.** Each private file is encrypted with its own key, wrapped by the master key, so keys can be rotated without re-encrypting every file.
+- **The master key, wrapped twice.** The server stores two copies, each unreadable without its secret:
+  - one wrapped with a key derived (HKDF) from the passkey's PRF output, alongside that passkey's credential ID; there is one such copy for each passkey;
+  - one wrapped with a key derived from the recovery phrase.
 
-## Devices
+### Setting up, on the first device
 
-A new device shows a QR code. A device already signed in scans it, checks the new device's public key, and sends it the master key encrypted to that key. The server carries the handoff but cannot read it. Removing a device rotates the master key and re-wraps the file keys.
+1. Sign in with OAuth.
+2. The device makes the master key.
+3. The device shows the recovery phrase once: 24 words of 256-bit randomness. The member writes it down, and the app checks a few of the words before going on. ohm cannot recover a private vault without it, and the app says so plainly before the vault is created.
+4. The member creates a passkey. The device asks it for its PRF output, wraps the master key with it, and uploads that wrapped copy and the one wrapped by the phrase.
 
-A device that is not linked can still sign in and use the public and friends layers, because those need no key. It sees that private blocks exist, and nothing else about them.
+### Unlocking on a device
+
+1. Sign in with OAuth.
+2. Fetch the wrapped copies of the master key.
+3. Ask the passkey for its PRF output, and unwrap the master key in the browser as a non-extractable WebCrypto key.
+
+The key is held in memory for the session only, and is gone when the tab closes or after a set idle time. Nothing readable is written to the device's storage.
+
+A passkey that the platform syncs (iCloud Keychain, Google Password Manager, a password manager) arrives on the member's other devices by itself, so a new phone or laptop unlocks with OAuth and the passkey, and nothing else.
+
+### Recovering
+
+If no passkey can unlock (all devices lost, or a passkey that does not support PRF):
+
+1. Sign in with OAuth.
+2. Enter the recovery phrase.
+3. The device unwraps the master key with the phrase.
+4. The device asks for a new passkey to be made, and wraps the master key with it for next time.
+
+A device whose passkey provider lacks PRF can still use the vault, by entering the phrase each session, or by being linked by QR (below).
+
+### Why both steps
+
+- **Someone who takes over the OAuth sign-in** gets ciphertext and wrapped keys, and cannot open either.
+- **Someone with the passkey** but not the account cannot fetch anything.
+- **The server**, holding everything it stores, can open nothing.
+- **The phrase's copy is safe to store**, because the phrase has 256 bits of randomness and cannot be guessed. That is also why there is no separate passphrase: a phrase a person makes up could be guessed against the stored copy.
+
+### Changing things
+
+These are possible while the vault is unlocked:
+- adding a passkey: wrap the master key with its PRF output;
+- removing a passkey: delete its wrapped copy;
+- replacing the recovery phrase: wrap the master key with the new one, and delete the old copy.
+
+If a passkey or the phrase may have been exposed, rotate the master key: make a new one, re-wrap every file key, and re-wrap the master key for each remaining passkey and the phrase. File contents do not need re-encrypting.
+
+## Linking a device without a synced passkey
+
+A device that cannot use any of the member's passkeys, and should not need the phrase, can be linked from one that is unlocked:
+
+1. The new device shows a QR code holding a one-time public key.
+2. The unlocked device scans it and sends the master key encrypted to that key, through the server, which cannot read it.
+3. The new device then makes its own passkey, so it can unlock itself from then on.
 
 ## The two stores
 
@@ -97,7 +155,7 @@ As understood when this was written, AT Protocol's proposals for private data ("
 
 1. `visibility` on blocks in place of `intent`, read and written by `vault/node.mjs`, with private as the default.
 2. Generalise the friends store from posts to vault files, with the friend list by DID and access checks.
-3. Keys: master key, recovery phrase, passkey unlock, file keys.
+3. Keys: setup (master key, recovery phrase, first passkey), unlock with OAuth and the passkey's PRF, recovery with the phrase, the wrapped copies on the server, file keys.
 4. The private store: the ciphertext format, opaque IDs, and compare-and-swap on ciphertext versions.
 5. `ohm vault sync` between both stores and the local folder, with confirmation before anything leaves the private layer.
 6. Device linking by QR.
@@ -106,7 +164,7 @@ As understood when this was written, AT Protocol's proposals for private data ("
 
 ## Open questions
 
-- Which passkey providers support the PRF extension well enough to rely on.
+- Which passkey providers support the PRF extension today, on which browsers and systems, so the app can say ahead of time whether a passkey will unlock or the phrase will be needed.
 - How much metadata to hide in the private store (padding sizes, batching writes), against the cost.
 - Whether a phone with a large private vault needs a local index, kept encrypted on the device.
 - Friend lists: one list per member to start, or channel-level groups (closer to spaces) from the beginning.
