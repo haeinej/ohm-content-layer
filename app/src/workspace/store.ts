@@ -219,12 +219,19 @@ export function showGraph(center?: string) {
 }
 
 let draftCount = 0
+const usedSlugs = new Set(all.map(doc => doc.slug))
 export function createDraft(input: { label?: string; sublabel?: string; channels?: string[]; title?: string } = {}) {
   draftCount += 1
-  const slug = `untitled-${Date.now().toString(36)}`
+  const title = input.title?.trim() ?? ""
+  const stem = slugify(title) || "untitled"
+  let slug = stem
+  for (let suffix = 2; usedSlugs.has(slug); suffix++) {
+    slug = `${stem.slice(0, 59 - String(suffix).length)}-${suffix}`
+  }
+  usedSlugs.add(slug)
   // Everything about the new page is set here, before the one change that records it.
   const doc: Doc = {
-    id: `draft-${draftCount}`, kind: "post", slug, title: input.title?.trim() ?? "",
+    id: `draft-${draftCount}`, kind: "post", slug, title,
     label: input.label?.trim() || "other", ...(input.label && input.sublabel ? { sublabel: input.sublabel } : {}),
     ...(input.channels?.length ? { channels: [...input.channels] } : {}), visibility: "private",
     updated: new Date().toISOString().slice(0, 10), body: "",
@@ -246,7 +253,6 @@ export function saveDraft(input: { title?: string; body?: string }) {
   if (doc.visibility !== "private") throw new DOMException("This post is not private; changing it needs approval", "NotAllowedError")
   if (input.title !== undefined) doc.title = input.title.trim()
   if (input.body !== undefined) doc.body = input.body
-  if (doc.id.startsWith("draft-")) doc.slug = slugify(doc.title) || doc.slug
   // The editor keeps the post open; saving changes nothing about what is on screen.
   doc.updated = new Date().toISOString().slice(0, 10)
   set(bump())
@@ -269,7 +275,6 @@ export function autosave(id: string, patch: { title?: string; body?: string }) {
   if (!doc || doc.kind !== "post" || doc.visibility !== "private") return
   if (patch.title !== undefined) doc.title = patch.title
   if (patch.body !== undefined) doc.body = patch.body
-  if (doc.id.startsWith("draft-") && patch.title) doc.slug = slugify(patch.title) || doc.slug
   doc.updated = new Date().toISOString().slice(0, 10)
   set(bump())
 }
@@ -445,12 +450,11 @@ export const toggleArchive = (id: string) => {
   if (marks.archived.has(id)) marks.pinned.delete(id)
 }
 
-/** Renames a page. Its address follows for a draft; a published page keeps its slug. */
+/** Renames a page and keeps its slug so links and connections still resolve. */
 export function renameDoc(id: string, title: string) {
   const doc = byId(id)
   if (!doc) return
   doc.title = title.trim()
-  if (doc.id.startsWith("draft-")) doc.slug = slugify(doc.title) || doc.slug
   doc.updated = new Date().toISOString().slice(0, 10)
   set(bump())
 }
@@ -467,7 +471,7 @@ export function deleteDoc(id: string) {
   const idx = state.history.indexOf(id)
   const history = state.history.filter(h => h !== id)
   const at = idx >= 0 && idx <= state.at ? state.at - 1 : state.at
-  set({ ...bump(), history, at })
+  set({ ...bump(), history, at, ...(state.reveal?.target === id ? { reveal: null } : {}) })
   if (!wasOpen) return
   // Deleting the open page lands on the page before it (or after it), never a blank editor.
   const landing = history[at] ?? history[at + 1]
@@ -504,6 +508,14 @@ export function renameFolder(path: string, name: string) {
 
 // ─── History: restore, revert, save, sessions (flows/history.md) ─────────────────────────────
 
+const bodyReplacements = new WeakMap<Doc, number>()
+export const bodyRevision = (doc: Doc) => bodyReplacements.get(doc) ?? 0
+
+function markRestored(doc: Doc) {
+  bodyReplacements.set(doc, bodyRevision(doc) + 1)
+  set({ ...bump(), restored: { id: doc.id, n: bodyRevision(doc) } })
+}
+
 /**
  * Brings a private block back to an earlier version. History is never rewritten: the restore is a
  * new change, by whoever restored it, so it can itself be undone the same way. A block other people
@@ -518,7 +530,7 @@ export function restoreVersion(id: string, version: string, reason?: string) {
   for (const c of channelsOf(doc)) ensureChannel(c)
   doc.updated = new Date().toISOString().slice(0, 10)
   pendingChange = { op: "restore", reason: reason?.trim() || `Restored version ${version}` }
-  set({ ...bump(), restored: { id: doc.id, n: (state.restored?.n ?? 0) + 1 } })
+  markRestored(doc)
   return { id: doc.id, version, by: actor().name }
 }
 
@@ -544,7 +556,7 @@ export function revertChange(lineId: string) {
   for (const c of channelsOf(doc)) ensureChannel(c)
   doc.updated = new Date().toISOString().slice(0, 10)
   pendingChange = { op: "revert", reason: `Reverted “${line.summary}” (${new Date(line.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })})` }
-  set({ ...bump(), restored: { id: doc.id, n: (state.restored?.n ?? 0) + 1 } })
+  markRestored(doc)
   return { id: doc.id, reverted: line.id, fields }
 }
 
@@ -568,4 +580,3 @@ export function finishSession(done: string, deadEnds: DeadEnd[] = []) {
   set(bump())
   return { session: line.id, changes: line.changes.length, deadEnds: line.deadEnds.length }
 }
-

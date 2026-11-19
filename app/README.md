@@ -25,6 +25,8 @@ A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/wor
 
 All data is synthetic. Run the app to explore a sample vault and cortex. Reloading restores the sample.
 
+The editor saves pending typing when you switch blocks. Restoring a version or reverting a change loads the resulting text. Links to a draft keep working after you rename it.
+
 ```sh
 npm ci --prefix app
 npm --prefix app run dev   # http://localhost:5190

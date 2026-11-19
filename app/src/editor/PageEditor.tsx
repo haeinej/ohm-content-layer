@@ -32,7 +32,7 @@ import { byId, bySlug, channelRecords, channelsOf, posts, titleOf, type Doc } fr
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
-import { autosave, canGo, go, marks, me, moveBlock, open, openFile, revealFolder, saveDraft, setIcon, showGraph, toggleArchive, useWorkspace } from "@/workspace/store"
+import { autosave, bodyRevision, canGo, go, marks, me, moveBlock, open, openFile, revealFolder, saveDraft, setIcon, showGraph, toggleArchive, useWorkspace } from "@/workspace/store"
 import { InlineRename, requestDelete } from "@/workspace/PageActions"
 import { withAgent } from "@/workspace/tools"
 import { insertImage, insertImageFiles, insertTable, insertText } from "./commands"
@@ -42,7 +42,6 @@ import { PlusMenu, SlashMenu } from "./InsertMenu"
 import { SelectionToolbar } from "./SelectionToolbar"
 import { LastEdited, TableControls } from "./TableControls"
 import { LinkPreview } from "./LinkPreview"
-import { currentVersion } from "@/data/journal"
 import { ConnectionsButton } from "./ConnectionsCard"
 import { HistoryButton } from "@/history/History"
 import "./editor.css"
@@ -237,8 +236,14 @@ export function PageEditor({ doc }: { doc: Doc }) {
   useAutoHeight(titleRef, title)
   const save = useRef<ReturnType<typeof setTimeout> | null>(null)
   const unsaved = useRef<string | null>(null)
-  /** The version this editor last saw: what it opened with, or its own last save. */
-  const base = useRef(currentVersion(doc.id))
+  const base = useRef(bodyRevision(doc))
+  function flushBody() {
+    if (save.current) clearTimeout(save.current)
+    save.current = null
+    const body = unsaved.current
+    unsaved.current = null
+    if (body !== null && bodyRevision(doc) === base.current) autosave(doc.id, { body })
+  }
 
   const editor = useEditor({
     editable,
@@ -290,21 +295,14 @@ export function PageEditor({ doc }: { doc: Doc }) {
       if (save.current) clearTimeout(save.current)
       // Kept as text at once, so leaving the page can still save it after the editor is gone.
       unsaved.current = toMarkdown(e)
-      save.current = setTimeout(() => {
-        if (unsaved.current !== null) autosave(doc.id, { body: unsaved.current })
-        unsaved.current = null; save.current = null; base.current = currentVersion(doc.id)
-      }, 400)
+      save.current = setTimeout(flushBody, 400)
     },
   }, [doc.id])
   const editorRef = useRef<Editor | null>(null)
   editorRef.current = editor
 
-  // Leaving the page (or re-reading it after a restore) saves what was typed in the last moment.
-  useEffect(() => () => {
-    if (save.current) clearTimeout(save.current)
-    // Not over a restore or revert made meanwhile: then the page has a newer version than this editor's.
-    if (unsaved.current !== null && currentVersion(doc.id) === base.current) autosave(doc.id, { body: unsaved.current })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Leaving flushes pending typing. A restore or revert invalidates the old editor's buffer.
+  useEffect(() => flushBody, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (editable && !doc.title) titleRef.current?.focus() }, [doc.id]) // eslint-disable-line react-hooks/exhaustive-deps
   // The toolbar's Image and the "/" menu's Image both ask for a file.
   useEffect(() => {
