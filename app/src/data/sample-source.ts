@@ -124,9 +124,13 @@ export const sampleSource: HomeSource & { workspace: typeof workspace } = {
     const text = setProperty(file.text, "visibility", ref.layer)
     const next = blockOf({ path: file.path, text })
     if (!next || (next.id && next.id !== ref.id)) throw new DOMException("Give a sample block file.", "DataError")
+    const rawConnections = "post" in next ? next.post.connect : next.properties.connect
+    const connections = [rawConnections ?? []].flat().map(String)
+    const connect = connections.map(to => held?.connect?.find(link => link.to === to) ?? { to })
     const doc: Doc = {
       ...held, id: ref.id, kind: sample.isBlockKind(next.kind) ? next.kind : "text", slug: next.slug, title: next.title ?? "",
       homeChannel: next.home || "other", body: next.body, channels: next.channels, visibility: ref.layer,
+      connect: connect.length ? connect : undefined,
       updated: "updated" in next && next.updated ? next.updated : new Date().toISOString().slice(0, 10),
     }
     if (held) Object.assign(held, doc)

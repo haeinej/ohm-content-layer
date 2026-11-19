@@ -216,7 +216,7 @@ export function createServiceSource<Master, Sealed>(options: ServiceOptions<Mast
       const matches = ({ id, file }: { id: string; file: HomeFile }): SearchHit[] => {
         const node = blockOf(file)
         if (!node) return []
-        const tokens = new Set(words(`${node.title ?? ""} ${node.body}`))
+        const tokens = new Set(words([node.title, node.home, ...node.channels, node.body].join(" ")))
         if (!queryWords.length || !queryWords.every(word => tokens.has(word))) return []
         return [{ id, title: node.title ?? node.slug, kind: isBlockKind(node.kind) ? node.kind : "text", location: node.home, excerpt: node.body.slice(0, 120) }]
       }
