@@ -12,6 +12,11 @@
 // cortex clear <field> [dir]        remove an identity field
 // cortex hook <moment> [dir] --agent <name>   answer a Claude Code or Codex hook: session-start, prompt, stop, session-end
 // cortex install-hooks claude-code|codex      print the hooks to add; writes nothing
+// cortex history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json]   what changed, and who changed it
+// cortex as-of <node> <save|date|seq> [dir]     a node of the cortex as it was then
+// cortex save <name> <note> [dir]              name this point in history, to read the cortex as it was here; changes nothing
+// cortex restore <node> <version> [dir] [--reason <why>]   bring a node back to an earlier version, as a new change
+// cortex revert <change> [dir] [--reason <why>]            undo one change, an agent's or your own, as a new change
 // The folder is the one named, or CORTEX_DIR, or ~/cortex.
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -31,6 +36,14 @@ import { cortexStatus } from '../src/status.mjs';
 const template = fileURLToPath(new URL('../template', import.meta.url));
 const [command, ...rest] = process.argv.slice(2);
 const folder = given => resolve(given ?? process.env.CORTEX_DIR ?? join(homedir(), 'cortex'));
+// Takes `--flag value` out of the arguments, and returns the value.
+const take = flag => {
+  const at = rest.indexOf(flag);
+  if (at < 0) return undefined;
+  const [, value] = rest.splice(at, 2);
+  if (!value) throw new Refused('InvalidRequest', `Give ${flag} a value`);
+  return value;
+};
 
 try {
   if (command === 'init') {
@@ -91,7 +104,7 @@ try {
   } else if (command === 'vault') {
     if (rest[0] === 'connect' && rest[1]) {
       const done = await openCortex(folder(rest[2]), { actor: 'member' }).connectVault({ kind: 'folder', path: resolve(rest[1]) });
-      console.log(`Connected the vault in ${resolve(rest[1])}: ${done.sections.length} sections`);
+      console.log(`Connected the vault in ${resolve(rest[1])}: ${done.channels.length} channel${done.channels.length === 1 ? '' : 's'}`);
     } else {
       const dir = folder(rest[0] === 'sync' ? rest[1] : rest[0]);
       const done = await openCortex(dir, { actor: 'member' }).syncVault();
@@ -123,8 +136,38 @@ try {
     const { file, where } = SNIPPETS[rest[0]];
     console.error(`${where} The commands run \`cortex\` (npm link this folder) on the cortex in CORTEX_DIR, or ~/cortex. Set CORTEX_AGENT=${rest[0]} for the MCP server too, so its distill counts. Nothing was written.`);
     process.stdout.write(readFileSync(fileURLToPath(new URL(`../hooks/${file}`, import.meta.url)), 'utf8'));
+  } else if (command === 'history') {
+    const json = rest.includes('--json');
+    if (json) rest.splice(rest.indexOf('--json'), 1);
+    const [node, since, actor] = [take('--node'), take('--since'), take('--actor')];
+    const found = await openCortex(folder(rest[0]), { actor: 'member' }).history({ node, since, actor, limit: 500 });
+    if (json) console.log(JSON.stringify(found, null, 2));
+    else {
+      const lines = [
+        ...found.changes.map(line => ({ seq: line.seq, text: `${line.seq}  ${line.at}  ${line.actor.name}${line.proposedBy ? ` (proposed by ${line.proposedBy})` : ''}  ${line.op} ${line.node}  ${line.before ?? '(none)'} -> ${line.after ?? '(none)'}${line.reason ? `  ${line.reason}` : ''}` })),
+        ...found.saves.map(line => ({ seq: line.seq, text: `${line.seq}  ${line.at}  ${line.actor.name}  save ${line.name}  ${line.note}` })),
+      ].sort((a, b) => a.seq - b.seq);
+      console.log(lines.length ? lines.map(line => line.text).join('\n') : 'Nothing has changed.');
+    }
+  } else if (command === 'as-of' && rest[0] && rest[1]) {
+    const found = await openCortex(folder(rest[2]), { actor: 'member' }).asOf({ node: rest[0], at: rest[1] });
+    if (found.text !== undefined) process.stdout.write(found.text);
+    // A skill or a channel's words are kept whole, as an object, and are shown as JSON.
+    else if (found.content !== undefined) console.log(JSON.stringify(found.content, null, 2));
+    else console.log(found.exists === false ? `${rest[0]} did not exist then.` : `${rest[0]} was version ${found.version} then, and that version was not kept.`);
+  } else if (command === 'save' && rest[0] && rest[1]) {
+    const done = await openCortex(folder(rest[2]), { actor: 'member' }).save({ name: rest[0], note: rest[1] });
+    console.log(`Saved ${done.name} at ${done.seq}. Nothing was changed.`);
+  } else if (command === 'restore' && rest[0] && rest[1]) {
+    const reason = take('--reason');
+    const done = await openCortex(folder(rest[2]), { actor: 'member' }).restore({ node: rest[0], version: rest[1], reason });
+    console.log(done.unchanged ? `${rest[0]} is already version ${rest[1]}` : `${rest[0]} is back to ${done.restored}. What it replaced is kept.`);
+  } else if (command === 'revert' && rest[0]) {
+    const reason = take('--reason');
+    const done = await openCortex(folder(rest[1]), { actor: 'member' }).revert({ change: rest[0], reason });
+    console.log(`Change ${rest[0]} is undone: ${done.node} is back as it was. What it replaced is kept.`);
   } else {
-    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex');
+    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex | history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json] | as-of <node> <save|date|seq> [dir] | save <name> <note> [dir] | restore <node> <version> [dir] [--reason <why>] | revert <change> [dir] [--reason <why>]');
     process.exitCode = command ? 1 : 0;
   }
 } catch (problem) {

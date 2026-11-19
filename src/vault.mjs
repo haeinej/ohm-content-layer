@@ -2,17 +2,22 @@
 // only reads through it. Saving content is the vault's own job, done by the agent through the
 // vault's own API on the person's say-so.
 //
-//   shape()          the sections and subsections, with counts, and any problems reading the vault
-//   read(id)         one post: { id, title, label, sublabel, body }, or null
-//   exists(ids)      for each of a list of IDs, whether the post is still there, and where:
-//                    { [id]: { exists, label, sublabel, title } }. One call, so a vault is read once
-//                    however many posts the memories point at
+// A vault holds blocks: one unit of thought each, and a published one is a post. Blocks are
+// gathered in channels, ordered collections; a block can be in more than one. Here a block is
+// named by the channel it was filed in, its path, such as `essays` or `notes/reading`.
+//
+//   shape()          the channels, with how many blocks each holds, and any problems reading the vault:
+//                    { blocks, channels: [{ channel, blocks }], problems? }
+//   read(id)         one block: { id, title, channel, body }, or null
+//   exists(ids)      for each of a list of IDs, whether the block is still there, and where:
+//                    { [id]: { exists, channel, title } }. One call, so a vault is read once
+//                    however many blocks the memories point at
 //   changes(cursor)  what was saved, moved or removed since a cursor an earlier call returned:
-//                    { changes: [{ type, id, title, label, sublabel, from? }], cursor }. With no
+//                    { changes: [{ type, id, title, channel, from? }], cursor }. With no
 //                    cursor, it returns none and a cursor to start from
 //   profile()        identity facts the vault itself holds: [{ field, value, source }]
-//   search(words, limit)  optional: posts whose title or body holds any of the words, best first:
-//                    [{ id, title, label, sublabel }]. A vault without it gives no related posts
+//   search(words, limit)  optional: blocks whose title or body holds any of the words, best first:
+//                    [{ id, title, channel }]. A vault without it gives no related blocks
 //
 // A cursor is the vault's own: cortex keeps it and hands it back, and never looks inside.
 import { createHash } from 'node:crypto';
@@ -69,22 +74,21 @@ export function matcherOf(text) {
   return term => EAST_ASIAN_TERM.test(term) ? lower.includes(term) : words.has(term);
 }
 
-// A section is a label, or a label and a sublabel, written as `label/sublabel`.
-export const sectionOf = ({ label, sublabel }) => sublabel ? `${label}/${sublabel}` : label;
-
-// A vault kept as a folder of Markdown files: <label>/<post>.md or <label>/<sublabel>/<post>.md.
-// A post's ID is its `id` property; a file without one is known by its path, so moving it reads as
-// removing one post and saving another. A file at the top of the folder is filed under `other`.
+// A vault kept as a folder of Markdown files: <channel>/<block>.md or <channel>/<sub>/<block>.md,
+// whose channel is `channel/sub`, and which counts in `channel` too. Deeper folders join into one
+// sub-channel name with hyphens. A block's ID is its `id` property; a file without one is known by
+// its path, so moving it reads as removing one block and saving another. A file at the top of the
+// folder is in the channel `other`. In a folder a block is in one channel, the one it is filed in.
 //
 // Each operation looks at every file, and reads again only those whose size or times changed since
-// it last read them, so two operations in a row, such as shape and then search, read the posts once
-// and still see any post that changed in between. `readText` is for tests.
+// it last read them, so two operations in a row, such as shape and then search, read the blocks once
+// and still see any block that changed in between. `readText` is for tests.
 export function folderVault(root, { readText = path => readFile(path, 'utf8') } = {}) {
   const hash = text => createHash('sha256').update(text).digest('hex').slice(0, 16);
 
   let problems = [];
   let held = new Map();
-  async function posts() {
+  async function blocks() {
     const found = new Map();
     const seen = new Map();
     problems = [];
@@ -105,11 +109,11 @@ export function folderVault(root, { readText = path => readFile(path, 'utf8') } 
           seen.set(path, { stamp, text });
           const { properties, body } = splitFront(text);
           const parts = path.split(sep);
-          const [label, sublabel] = parts.length === 1 ? ['other'] : parts.length === 2 ? [parts[0]] : [parts[0], parts.slice(1, -1).join('-')];
+          const channel = parts.length === 1 ? 'other' : parts.length === 2 ? parts[0] : `${parts[0]}/${parts.slice(1, -1).join('-')}`;
           const id = typeof properties.id === 'string' && properties.id.trim() ? properties.id.trim() : `path:${parts.join('/')}`;
           // Two files with one ID: the first stands, and the clash is reported so the person can fix it.
           if (found.has(id)) { problems.push(`${found.get(id).path} and ${parts.join('/')} have the same id, ${id}. Only the first is read`); continue; }
-          found.set(id, { id, title: typeof properties.title === 'string' && properties.title.trim() ? properties.title.trim() : entry.name.slice(0, -3), label, ...(sublabel ? { sublabel } : {}), body, path: relative(root, join(root, path)), hash: hash(text) });
+          found.set(id, { id, title: typeof properties.title === 'string' && properties.title.trim() ? properties.title.trim() : entry.name.slice(0, -3), channel, body, path: relative(root, join(root, path)), hash: hash(text) });
         }
       }
     }
@@ -118,46 +122,49 @@ export function folderVault(root, { readText = path => readFile(path, 'utf8') } 
     return found;
   }
 
-  const place = post => ({ title: post.title, label: post.label, ...(post.sublabel ? { sublabel: post.sublabel } : {}) });
+  const place = block => ({ title: block.title, channel: block.channel });
+  // A block in a sub-channel counts in the channel above it too.
+  const within = channel => channel.includes('/') ? [channel.slice(0, channel.indexOf('/')), channel] : [channel];
 
   return checkVault({
     kind: 'folder',
 
     async shape() {
-      const all = [...(await posts()).values()];
-      const sections = new Map();
-      for (const post of all) {
-        for (const key of post.sublabel ? [post.label, sectionOf(post)] : [post.label]) {
-          if (!sections.has(key)) sections.set(key, { section: key, posts: 0 });
-          sections.get(key).posts += 1;
+      const all = [...(await blocks()).values()];
+      const channels = new Map();
+      for (const block of all) {
+        for (const key of within(block.channel)) {
+          if (!channels.has(key)) channels.set(key, { channel: key, blocks: 0 });
+          channels.get(key).blocks += 1;
         }
       }
-      return { posts: all.length, sections: [...sections.values()].sort((a, b) => a.section.localeCompare(b.section)), ...(problems.length ? { problems: [...problems] } : {}) };
+      return { blocks: all.length, channels: [...channels.values()].sort((a, b) => a.channel.localeCompare(b.channel)), ...(problems.length ? { problems: [...problems] } : {}) };
     },
 
     async read(id) {
-      const post = (await posts()).get(id);
-      return post ? { id: post.id, ...place(post), body: post.body } : null;
+      const block = (await blocks()).get(id);
+      return block ? { id: block.id, ...place(block), body: block.body } : null;
     },
 
     async exists(ids) {
-      const all = await posts();
+      const all = await blocks();
       return Object.fromEntries([...new Set(ids)].map(id => [id, all.has(id) ? { exists: true, ...place(all.get(id)) } : { exists: false }]));
     },
 
     async changes(cursor) {
-      const now = await posts();
-      const next = Object.fromEntries([...now.values()].map(post => [post.id, { ...place(post), hash: post.hash }]));
+      const now = await blocks();
+      const next = Object.fromEntries([...now.values()].map(block => [block.id, { ...place(block), hash: block.hash }]));
       if (!cursor || typeof cursor !== 'object') return { changes: [], cursor: next };
+      // A cursor from before channels named a block's place by label and sublabel.
+      const channelOf = was => was.channel ?? (was.sublabel ? `${was.label}/${was.sublabel}` : was.label);
       const changes = [];
       for (const [id, was] of Object.entries(cursor)) {
-        const post = next[id];
-        const { hash: _, ...where } = was;
-        if (!post) changes.push({ type: 'removed', id, ...where });
-        else if (sectionOf(post) !== sectionOf(was)) changes.push({ type: 'moved', id, ...place(post), from: sectionOf(was) });
-        else if (post.hash !== was.hash) changes.push({ type: 'saved', id, ...place(post) });
+        const block = next[id];
+        if (!block) changes.push({ type: 'removed', id, title: was.title, channel: channelOf(was) });
+        else if (block.channel !== channelOf(was)) changes.push({ type: 'moved', id, ...place(block), from: channelOf(was) });
+        else if (block.hash !== was.hash) changes.push({ type: 'saved', id, ...place(block) });
       }
-      for (const [id, post] of Object.entries(next)) if (!cursor[id]) changes.push({ type: 'saved', id, ...place(post), new: true });
+      for (const [id, block] of Object.entries(next)) if (!cursor[id]) changes.push({ type: 'saved', id, ...place(block), new: true });
       return { changes, cursor: next };
     },
 
@@ -169,15 +176,15 @@ export function folderVault(root, { readText = path => readFile(path, 'utf8') } 
       const most = Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 50) : 10;
       if (!wanted.size) return [];
       const scored = [];
-      for (const post of (await posts()).values()) {
-        const title = matcherOf(post.title);
-        const body = matcherOf(post.body);
+      for (const block of (await blocks()).values()) {
+        const title = matcherOf(block.title);
+        const body = matcherOf(block.body);
         let score = 0;
         for (const word of wanted) score += (title(word) ? 2 : 0) + (body(word) ? 1 : 0);
-        if (score) scored.push({ score, post });
+        if (score) scored.push({ score, block });
       }
-      scored.sort((a, b) => b.score - a.score || a.post.title.localeCompare(b.post.title));
-      return scored.slice(0, most).map(({ post }) => ({ id: post.id, ...place(post) }));
+      scored.sort((a, b) => b.score - a.score || a.block.title.localeCompare(b.block.title));
+      return scored.slice(0, most).map(({ block }) => ({ id: block.id, ...place(block) }));
     },
   });
 }

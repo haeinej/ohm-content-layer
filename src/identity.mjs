@@ -76,7 +76,8 @@ export const shownValue = (field, value) => HIDDEN.includes(field) ? '(hidden)' 
 // or passage that states a birthdate is the birthdate. Only where it came from is kept.
 export function proposalForAgent({ id, field, value, source }) {
   if (!HIDDEN.includes(field)) return { id, field, value, source };
-  return { id, field, value: '(hidden)', source: { kind: source?.kind, ...(source?.post ? { post: source.post } : {}), hidden: true } };
+  const block = source?.block ?? source?.post;
+  return { id, field, value: '(hidden)', source: { kind: source?.kind, ...(block ? { block } : {}), hidden: true } };
 }
 
 export function checkField(field, value) {
@@ -133,10 +134,11 @@ export function statesValue(field, value, said) {
 }
 
 // Evidence is what makes a proposal more than a guess: the person's own words, or a passage of
-// one of their posts that states the fact. Cortex cannot yet check that the post says it.
+// one of their blocks that states the fact. With a vault connected, the folder checks the block says it.
+// A source from before channels named the block `post`; it is still taken, and kept as `block`.
 export function checkSource(field, source) {
   if (IDENTITY[field]?.fromAccountOnly) throw new Refused('InvalidIdentity', `${field} comes from the signed-in account, and is never proposed`);
-  if (!source || typeof source !== 'object' || Array.isArray(source)) throw new Refused('NoEvidence', 'A proposal names its source: the person\'s own words, or a vault post and the passage that states it');
+  if (!source || typeof source !== 'object' || Array.isArray(source)) throw new Refused('NoEvidence', 'A proposal names its source: the person\'s own words, or a block in the vault and the passage that states it');
   const quote = value => typeof value === 'string' && value.trim() && value.length <= 2000;
   if (source.kind === 'person') {
     if (!quote(source.quote) || Object.keys(source).some(key => !['kind', 'quote'].includes(key))) throw new Refused('NoEvidence', 'A person source quotes what they said, at most 2,000 characters');
@@ -144,10 +146,12 @@ export function checkSource(field, source) {
   }
   if (source.kind === 'vault') {
     if (IDENTITY[field].personOnly) throw new Refused('NoEvidence', `${field} is only ever taken from what the person says. It is never read from the vault or inferred`);
-    if (typeof source.post !== 'string' || !source.post.trim() || source.post.length > 200 || !quote(source.passage) || Object.keys(source).some(key => !['kind', 'post', 'passage'].includes(key))) {
-      throw new Refused('NoEvidence', 'A vault source names the post\'s ID and quotes the passage that states the fact, at most 2,000 characters');
+    const { post, ...rest } = source;
+    const given = post !== undefined && rest.block === undefined ? { ...rest, block: post } : source;
+    if (typeof given.block !== 'string' || !given.block.trim() || given.block.length > 200 || !quote(given.passage) || Object.keys(given).some(key => !['kind', 'block', 'passage'].includes(key))) {
+      throw new Refused('NoEvidence', 'A vault source names the block\'s ID and quotes the passage that states the fact, at most 2,000 characters');
     }
-    return { kind: 'vault', post: source.post.trim(), passage: source.passage.trim() };
+    return { kind: 'vault', block: given.block.trim(), passage: given.passage.trim() };
   }
-  throw new Refused('NoEvidence', 'A source is the person\'s own words (kind person) or a vault post (kind vault). Something worked out is not evidence');
+  throw new Refused('NoEvidence', 'A source is the person\'s own words (kind person) or a block in the vault (kind vault). Something worked out is not evidence');
 }

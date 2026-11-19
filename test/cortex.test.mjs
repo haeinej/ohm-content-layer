@@ -54,6 +54,8 @@ test('secrets have one place, and git is told never to take them', async () => {
 test('a memory is one file, indexed, and a save names the version it replaces', async () => {
   const { dir, cortex } = await fresh();
   const saved = await cortex.write(likes);
+  // An agent's memory is written at once, as a change marked with the agent.
+  assert.deepEqual([saved.node, saved.op, typeof saved.change], ['memory/prefers-short-titles', 'create', 'string']);
   assert.equal(readMemoryFile(await readFile(join(dir, 'memory', 'prefers-short-titles.md'), 'utf8')).writtenBy, 'test-agent');
   assert.match(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /prefers-short-titles.*four words/);
   assert.equal((await cortex.write(likes)).unchanged, true);
@@ -107,7 +109,7 @@ test('a note changes no memory, is kept once, and is settled one way or another'
   const wants = { name: 'wants-the-reasoning', description: 'Show why, not only the answer', kind: 'preference', stated: false, body: 'Asked why in two sessions.', notes: ['n1', 'n2'] };
   const done = await cortex.settle({ changes: [{ memory: wants }], notes: [{ id: 'n1', outcome: wants.name }, { id: 'n2', outcome: wants.name }, { id: 'n3', outcome: 'dropped' }] });
   assert.equal(done.complete, true);
-  assert.equal(done.memories[0].seen.count, 2);
+  assert.deepEqual([done.memories[0].seen.count, typeof done.memories[0].change], [2, 'string']);
   await assert.rejects(cortex.settle({ notes: [{ id: 'n3', outcome: 'kept' }] }), refused('Changed'));
   await assert.rejects(cortex.write({ ...likes, notes: ['never-recorded'] }), refused('InvalidMemory'));
 });
@@ -123,7 +125,9 @@ test('a skill an agent wrote is not used until the person approves it', async ()
   assert.deepEqual([start.skills.map(skill => skill.name), start.waiting.skills], [['file-a-source'], ['publish-an-essay']]);
   await assert.rejects(cortex.proposeSkill({ text, files: [{ path: '../outside.md', text: 'x' }] }), refused('InvalidSkill'));
 
-  await cortex.approveSkill('publish-an-essay');
+  // Only the person approves.
+  await assert.rejects(cortex.approveSkill('publish-an-essay'), refused('PersonOnly'));
+  await openCortex(dir, { actor: 'member' }).approveSkill('publish-an-essay');
   const read = await cortex.getSkill('publish-an-essay');
   assert.equal(read.skill.text, text);
   assert.deepEqual(read.skill.files, [{ path: 'checklist.md', text: 'Title, date.' }]);
@@ -137,6 +141,7 @@ test('an agent can ask for a tool, and cannot add one or switch one on', async (
   await cortex.proposeTool({ name: 'calendar', description: 'Read the calendar', inputs: 'A date', outputs: 'Events' });
   assert.deepEqual((await cortex.start()).tools, []);
   assert.deepEqual(await readdir(join(dir, 'tools')), []);
+  assert.deepEqual((await cortex.start()).waiting.tools, ['calendar']);
   assert.equal(TOOLS.some(tool => /approve|enable|put_tool/.test(tool.name)), false);
   // The person adds one by putting a file in tools/.
   await writeFile(join(dir, 'tools', 'calendar.md'), '---\nname: calendar\ndescription: Read the calendar\non: true\n---\n');
@@ -163,6 +168,7 @@ test('an agent keeps a cortex through the tools alone', async () => {
   assert.match((await ask('cortex_start')).value.rules, /What you may not do/);
   const saved = (await ask('cortex_remember', { memory: likes })).value;
   assert.equal(saved.done, true);
+  assert.equal((await ask('cortex_history', { node: `memory/${likes.name}` })).value.changes[0].id, saved.change);
   assert.equal((await ask('cortex_recall', { name: likes.name })).value.memory.writtenBy, 'claude-code');
   const clash = await ask('cortex_remember', { memory: { ...likes, body: 'Different.' } });
   assert.equal(clash.isError, true);

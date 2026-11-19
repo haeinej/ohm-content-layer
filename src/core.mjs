@@ -1,11 +1,34 @@
 export const KINDS = ['person', 'preference', 'project', 'reference'];
 export const NAME = /^[a-z]+(?:-[a-z]+)*$/;
-const FIELDS = ['name', 'description', 'kind', 'always', 'stated', 'from', 'project', 'posts', 'body', 'notes', 'writtenBy', 'seen'];
+const FIELDS = ['name', 'description', 'kind', 'always', 'stated', 'from', 'project', 'blocks', 'evidence', 'body', 'notes', 'writtenBy', 'seen'];
 const bytes = text => new TextEncoder().encode(text).length;
+
+// Evidence is a list of pointers to what something was drawn from: a node at a version (a file of
+// the cortex, or a block in the vault), or a session. Only the shape is checked here; the
+// folder checks that what can be looked up exists. How much evidence makes a memory is judgement,
+// written in the playbook, not a count kept in code.
+const POINTERS = [['node', 'version'], ['session']];
+export function evidenceProblem(evidence) {
+  const says = 'evidence is a list of 1 to 20 pointers, each {node, version} or {session}, with text of at most 300 characters';
+  if (!Array.isArray(evidence) || !evidence.length || evidence.length > 20) return says;
+  for (const pointer of evidence) {
+    if (!pointer || typeof pointer !== 'object' || Array.isArray(pointer)) return says;
+    const keys = Object.keys(pointer).sort();
+    if (!POINTERS.some(shape => shape.length === keys.length && [...shape].sort().every((key, index) => key === keys[index]))) return says;
+    if (keys.some(key => typeof pointer[key] !== 'string' || !pointer[key].trim() || pointer[key].length > 300 || /[\r\n]/.test(pointer[key]))) return says;
+  }
+  if (new Set(evidence.map(pointer => JSON.stringify(Object.entries(pointer).sort()))).size !== evidence.length) return 'evidence names each pointer once';
+  return null;
+}
 
 export class InvalidMemory extends Error {}
 
-export function memoryProblems(memory) {
+// A memory written before channels pointed at its blocks in `posts`. It is read as `blocks`.
+const renamed = memory => memory && typeof memory === 'object' && !Array.isArray(memory) && memory.posts !== undefined && memory.blocks === undefined
+  ? (({ posts, ...rest }) => ({ ...rest, blocks: posts }))(memory) : memory;
+
+export function memoryProblems(given) {
+  const memory = renamed(given);
   if (!memory || typeof memory !== 'object' || Array.isArray(memory)) return ['Give a memory as an object'];
   const problems = [];
   if (typeof memory.name !== 'string' || memory.name.length > 100 || !NAME.test(memory.name)) problems.push('name is lowercase words joined with hyphens, at most 100 characters');
@@ -18,7 +41,8 @@ export function memoryProblems(memory) {
     if (memory[field] !== undefined && (typeof memory[field] !== 'string' || memory[field].length > 2000 || /[\r\n\u0000]/u.test(memory[field]))) problems.push(`${field} is text, at most 2,000 characters`);
   }
   if (memory.notes !== undefined && (!Array.isArray(memory.notes) || memory.notes.length > 100 || new Set(memory.notes).size !== memory.notes.length || memory.notes.some(id => typeof id !== 'string' || !id || id.length > 200))) problems.push('notes is up to 100 distinct note IDs');
-  if (memory.posts !== undefined && (!Array.isArray(memory.posts) || !memory.posts.length || memory.posts.length > 20 || new Set(memory.posts).size !== memory.posts.length || memory.posts.some(id => typeof id !== 'string' || !id.trim() || id.length > 200))) problems.push('posts is up to 20 distinct vault post IDs');
+  if (memory.blocks !== undefined && (!Array.isArray(memory.blocks) || !memory.blocks.length || memory.blocks.length > 20 || new Set(memory.blocks).size !== memory.blocks.length || memory.blocks.some(id => typeof id !== 'string' || !id.trim() || id.length > 200))) problems.push('blocks is up to 20 distinct IDs of blocks in the vault');
+  if (memory.evidence !== undefined && evidenceProblem(memory.evidence)) problems.push(evidenceProblem(memory.evidence));
   if (memory.writtenBy !== undefined && (typeof memory.writtenBy !== 'string' || !memory.writtenBy)) problems.push('writtenBy is text');
   if (memory.seen !== undefined) {
     const seen = memory.seen;
@@ -33,7 +57,8 @@ export function memoryProblems(memory) {
 export function cleanMemory(given) {
   const problems = memoryProblems(given);
   if (problems.length) throw new InvalidMemory(problems.join('\n'));
-  return Object.fromEntries(FIELDS.filter(key => given[key] !== undefined).map(key => [key, given[key]]));
+  const memory = renamed(given);
+  return Object.fromEntries(FIELDS.filter(key => memory[key] !== undefined).map(key => [key, memory[key]]));
 }
 
 function ordered(value) {

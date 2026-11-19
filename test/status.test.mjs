@@ -44,16 +44,21 @@ test('identity proposals clear when confirmed or rejected', async t => {
   }
 });
 
-test('skill and tool proposals each say how to stop waiting', async t => {
-  const { dir, cortex } = await fresh(t);
-  await cortex.proposeSkill({ text: '---\nname: reading-notes\ndescription: File reading notes\n---\nRead it.' });
-  await has(cortex, 'skill-proposal');
-  await cortex.approveSkill('reading-notes');
-  await has(cortex, 'skill-proposal', false);
-  await cortex.proposeTool({ name: 'read-links', description: 'Read links', inputs: 'URL', outputs: 'Text' });
-  await has(cortex, 'tool-proposal');
+test('skill and tool proposals each say how to stop waiting, and an agent\'s direct edits wait for nothing', async t => {
+  const { dir, cortex: person } = await fresh(t);
+  const agent = openCortex(dir, { actor: 'codex' });
+  await agent.proposeSkill({ text: '---\nname: reading-notes\ndescription: File reading notes\n---\nRead it.' });
+  const [item] = await has(person, 'skill-proposal');
+  assert.equal(item.clear, 'cortex approve reading-notes');
+  await person.approveSkill('reading-notes');
+  await has(person, 'skill-proposal', false);
+  await agent.proposeTool({ name: 'read-links', description: 'Read links', inputs: 'URL', outputs: 'Text' });
+  await has(person, 'tool-proposal');
   await rm(join(dir, '.cortex/proposed/tools/read-links.md'));
-  await has(cortex, 'tool-proposal', false);
+  await has(person, 'tool-proposal', false);
+  // A memory an agent writes is a change, not something waiting.
+  await agent.write({ name: 'likes-maps', description: 'Likes maps', kind: 'preference', stated: true, body: 'Maps.' });
+  assert.deepEqual((await cortexStatus(person)).map(entry => entry.kind), []);
 });
 
 test('observations clear when the next agent settles them', async t => {
@@ -64,25 +69,25 @@ test('observations clear when the next agent settles them', async t => {
   await has(cortex, 'notes', false);
 });
 
-test('broken pointers and undescribed or gone sections have working remedies', async t => {
+test('broken pointers and undescribed or gone channels have working remedies', async t => {
   const { base, dir, cortex } = await fresh(t);
   const vault = join(base, 'vault');
   await mkdir(join(vault, 'notes'), { recursive: true });
-  const post = join(vault, 'notes/map.md');
-  await writeFile(post, '---\nid: map\n---\nA map.');
+  const block = join(vault, 'notes/map.md');
+  await writeFile(block, '---\nid: map\n---\nA map.');
   await cortex.connectVault({ kind: 'folder', path: vault });
-  await has(cortex, 'undescribed-section');
-  await cortex.describeSection({ section: 'notes', meaning: 'Reading notes' });
-  await has(cortex, 'undescribed-section', false);
-  await cortex.write({ name: 'map-pointer', description: 'Where the map is', kind: 'reference', stated: true, posts: ['map'], body: 'See map.' });
-  await rm(post);
+  await has(cortex, 'undescribed-channel');
+  await cortex.describeChannel({ channel: 'notes', meaning: 'Reading notes' });
+  await has(cortex, 'undescribed-channel', false);
+  await cortex.write({ name: 'map-pointer', description: 'Where the map is', kind: 'reference', stated: true, blocks: ['map'], body: 'See map.' });
+  await rm(block);
   await has(cortex, 'broken-pointer');
-  await has(cortex, 'gone-section');
-  await writeFile(post, '---\nid: map\n---\nA map.');
+  await has(cortex, 'gone-channel');
+  await writeFile(block, '---\nid: map\n---\nA map.');
   await has(cortex, 'broken-pointer', false);
-  await rm(post);
+  await rm(block);
   await writeFile(join(dir, 'vault.md'), '# How to read the vault\n');
-  await has(cortex, 'gone-section', false);
+  await has(cortex, 'gone-channel', false);
 });
 
 test('unreadable memories, bad identity and an unreachable vault clear after repair', async t => {
@@ -126,7 +131,7 @@ test('status is read-only even when the vault changed, and the CLI returns text 
   const items = await cortexStatus(cortex);
   const json = JSON.parse(execFileSync(process.execPath, [cli, 'status', '--json', dir], { encoding: 'utf8' }));
   assert.deepEqual(json, items);
-  assert.match(execFileSync(process.execPath, [cli, 'status', dir], { encoding: 'utf8' }), /undescribed-section: notes/);
+  assert.match(execFileSync(process.execPath, [cli, 'status', dir], { encoding: 'utf8' }), /undescribed-channel: notes/);
   assert.deepEqual(await snapshot(base), before);
 });
 
@@ -160,7 +165,7 @@ test('a folder with no cortex in it is a problem, not "Nothing is waiting."', as
   assert.deepEqual(JSON.parse(execFileSync(process.execPath, [cli, 'status', '--json', missing], { encoding: 'utf8' })), items);
 });
 
-test('cortex_start tells an agent which sections left the vault', async t => {
+test('cortex_start tells an agent which channels left the vault', async t => {
   const { base, cortex } = await fresh(t);
   const vault = join(base, 'vault');
   await mkdir(join(vault, 'notes'), { recursive: true });
@@ -168,7 +173,7 @@ test('cortex_start tells an agent which sections left the vault', async t => {
   await writeFile(join(vault, 'notes/map.md'), '---\nid: map\n---\nA map.');
   await writeFile(join(vault, 'essays/one.md'), '---\nid: one\n---\nOne.');
   await cortex.connectVault({ kind: 'folder', path: vault });
-  await cortex.describeSection({ section: 'notes', meaning: 'Reading notes' });
+  await cortex.describeChannel({ channel: 'notes', meaning: 'Reading notes' });
   assert.equal((await cortex.start()).vault.gone, undefined);
   await rm(join(vault, 'notes'), { recursive: true });
   const agent = openCortex(cortex.dir, { actor: 'codex' });

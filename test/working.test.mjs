@@ -88,6 +88,9 @@ test('something noticed in two sessions becomes a memory in the third, with nobo
     notes: [{ id: 'titles-claude-1', outcome: 'short-titles' }, { id: 'titles-codex-2', outcome: 'short-titles' }],
   });
   assert.equal(settled.complete, true);
+  // The memory is written at once, as one change marked with the agent that settled it.
+  const [change] = (await openCortex(dir).history({ node: 'memory/short-titles' })).changes;
+  assert.deepEqual([change.actor.name, change.id], ['claude-code', settled.memories[0].change]);
   const { memory } = await openCortex(dir).read('short-titles');
   assert.deepEqual([memory.stated, memory.writtenBy, memory.seen.count], [false, 'claude-code', 2]);
   assert.equal((await openCortex(dir).identityLog()).length, 0, 'the person was not asked anything');

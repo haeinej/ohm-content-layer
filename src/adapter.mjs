@@ -5,7 +5,7 @@
 import { appendFile, mkdir, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readMemoryFile } from './core.mjs';
-import { agentName, openCortex } from './folder.mjs';
+import { agentName, hooksLog, openCortex } from './folder.mjs';
 import { forAgent } from './identity.mjs';
 import { INSTRUCTIONS } from './tools.mjs';
 
@@ -34,20 +34,25 @@ async function cortexAt(dir) {
   if (!found.isFile()) throw new Error(`${dir} is not a cortex`);
 }
 
-const logPath = dir => join(dir, '.cortex', 'sessions.jsonl');
+// The hooks' checkpoints: a session's start, an ask, and a distill, each { agent, session,
+// started | asked | distilled, version }. They are this machine's bookkeeping for when to ask, not
+// history, so they are kept in .cortex/hooks.jsonl, not the journal. A cortex made before kept them
+// in .cortex/sessions.jsonl, which is still read, first.
 async function sessions(dir) {
-  const content = await readFile(logPath(dir), 'utf8').catch(problem => { if (problem.code === 'ENOENT') return ''; throw problem; });
   const lines = [];
-  for (const line of content.split('\n')) {
-    if (!line.trim()) continue;
-    try { const entry = JSON.parse(line); if (entry && typeof entry === 'object') lines.push(entry); } catch {}
+  for (const path of [join(dir, '.cortex', 'sessions.jsonl'), hooksLog(dir)]) {
+    const content = await readFile(path, 'utf8').catch(problem => { if (problem.code === 'ENOENT') return ''; throw problem; });
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try { const entry = JSON.parse(line); if (entry && typeof entry === 'object') lines.push(entry); } catch {}
+    }
   }
   return lines;
 }
 // .cortex/ may not exist, say after a git clone, since git keeps no empty folders.
 async function record(dir, entry) {
   await mkdir(join(dir, '.cortex'), { recursive: true });
-  await appendFile(logPath(dir), `${JSON.stringify(entry)}\n`);
+  await appendFile(hooksLog(dir), `${JSON.stringify(entry)}\n`);
 }
 const tryRecord = (dir, entry) => record(dir, entry).then(() => true, () => false);
 
@@ -112,11 +117,15 @@ function headCut(text, max) {
 // The context put in front of the model at session start, cut to fit the agent's budget, in this
 // order: the memory index, then other agents' working memory (oldest first), then the playbook
 // becomes a pointer to cortex_start (and whatever was cut and now fits comes back), then the middle
-// of this agent's own working memory, then of the memories marked always.
+// of this agent's own working memory, then of the memories marked always. Open dead ends near the
+// project, at most ten short lines, are never cut before the playbook is.
 // Identity is shown as an agent sees it: confirmed fields only, birthdate hidden, and never a
 // proposal or its evidence.
-export async function sessionContext(dir, agent, budget = budgetFor(agent)) {
+export async function sessionContext(dir, agent, budget = budgetFor(agent), { project } = {}) {
   const cortex = openCortex(dir, { actor: agent });
+  // Dead ends recorded near the folder this session works in, so the agent does not try them again.
+  const ends = project ? await cortex.deadEnds({ project, limit: 10 }).catch(() => []) : [];
+  const endsText = ends.map(item => `- ${item.tried}: ${item.why}${item.check ? ` (check: ${item.check})` : ''} [${item.id}, ${item.agent}, ${item.at.slice(0, 10)}]`).join('\n');
   const identity = forAgent(await cortex.identity());
   const always = await alwaysMemories(dir);
   const index = ((await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8').catch(() => '')) ?? '').split('\n').filter(line => line.startsWith('- ')).join('\n');
@@ -135,6 +144,8 @@ export async function sessionContext(dir, agent, budget = budgetFor(agent)) {
     '## Memories marked always',
     kept,
     ...(withIndex ? ['## Memory index', index || '(no other memories)'] : []),
+    // Kept like this agent's own working memory: the playbook gives way to a pointer before they do.
+    ...(endsText ? ['## Dead ends near this project', endsText] : []),
     `## Your working memory from last time (${mine.agent})`,
     own || '(empty)',
     ...(shown.length ? ["## Other agents' working memory", shown.map(other => `### ${other.agent}, updated ${other.updated}\n${other.text.trim()}`).join('\n\n')] : []),
@@ -194,7 +205,7 @@ export async function hook(moment, { dir, agent: given, input = {}, now = () => 
   const { mine } = await openCortex(dir, { actor: agent }).working();
 
   if (moment === 'session-start') {
-    const context = await sessionContext(dir, agent);
+    const context = await sessionContext(dir, agent, budgetFor(agent), { project: typeof input.cwd === 'string' ? input.cwd : undefined });
     const output = JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } });
     // A resume or a compaction fires again for the same session; its start is the first one.
     const after = async () => {
@@ -222,8 +233,8 @@ export async function hook(moment, { dir, agent: given, input = {}, now = () => 
     return { output: JSON.stringify({ decision: 'block', reason: ASK }) };
   }
 
-  // session-end: only what happened.
-  await record(dir, { agent, session, ended: now().toISOString(), distilled: state.distilled });
+  // session-end records nothing. A session is what the agent writes with cortex_session when it
+  // finishes a task; nothing is captured on its behalf.
   return { output: '' };
 }
 
