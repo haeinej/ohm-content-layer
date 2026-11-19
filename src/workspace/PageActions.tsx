@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { notify } from "@/components/ui/notice"
 import { byId, titleOf } from "@/data/sample"
 import { cn } from "@/lib/cn"
-import { deleteDoc, renameDoc, renameFolder } from "./store"
+import { createChannel, deleteDoc, renameDoc, renameFolder, revealFolder } from "./store"
 
 /**
  * A name edited in place: the text selected, a forest ring. Enter or leaving keeps it; Escape puts
@@ -52,11 +52,21 @@ export function InlineRename({ id, className, onDone }: { id: string; className?
   return <InlineField initial={doc.title} className={className} onDone={onDone} onCommit={next => renameDoc(id, next)} />
 }
 
-/** A vault folder's name, in place: `label` or `label/sublabel`. */
+/** Makes a channel, shows it in the tree, and starts renaming it in place. */
+export function startChannel(inside?: string) {
+  try {
+    const path = createChannel(inside)
+    revealFolder("vault", path)
+    setTimeout(() => window.dispatchEvent(new CustomEvent("ohm:rename-row", { detail: { id: `vault:${path}` } })), 120)
+  } catch (err) { notify({ message: (err as Error).message }) }
+}
+
+/** A channel's name, in place: `channel` or `channel/inner`. */
 export function InlineRenameFolder({ path, className, onDone }: { path: string; className?: string; onDone: () => void }) {
   const name = path.split("/").at(-1)!
   return <InlineField initial={name} label="Folder name" className={className} onDone={onDone} onCommit={next => {
-    const moved = renameFolder(path, next)
+    let moved: { published: number }
+    try { moved = renameFolder(path, next) } catch (err) { notify({ message: (err as Error).message }); return }
     const to = [...path.split("/").slice(0, -1), next.trim().toLowerCase().replace(/\s+/g, "-")].join("/")
     window.dispatchEvent(new CustomEvent("ohm:folder-renamed", { detail: { from: path, to } }))
     notify({ message: moved.published

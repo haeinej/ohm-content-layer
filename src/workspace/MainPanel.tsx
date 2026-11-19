@@ -12,7 +12,7 @@ import { closeSettings, createDraft, setAudience, setSearchOpen, showGraph, useW
 
 /** Where things open: a page in the editor, an inbox item, or settings. A card of its own, apart from the rack. */
 export function MainPanel() {
-  const { view, agent, audience } = useWorkspace()
+  const { view, agent, audience, restored } = useWorkspace()
   const doc = view.kind === "doc" ? byId(view.id) : undefined
 
   return (
@@ -37,7 +37,8 @@ export function MainPanel() {
           </EmptyContent>
         </Empty>
       ) : doc ? (
-        <PageEditor key={doc.id} doc={doc} />
+        // A restore or revert of this page re-reads it; one of another page leaves this editor alone.
+        <PageEditor key={`${doc.id}:${restored?.id === doc.id ? restored.n : 0}`} doc={doc} />
       ) : view.kind === "settings" ? (
         <>
           <header className="flex h-14 shrink-0 items-center justify-end px-5">

@@ -55,7 +55,7 @@ Each is one closed shape and one inner mark, on Lucide's 24 grid with a stroke o
 
 ## Graph colours
 
-Nodes are coloured by kind, from ohm's palette only: the person forest, the cortex light green, vault labels ink, sublabels ink at 60%, posts grey, other people hollow. Red is never used here; it means destructive.
+Nodes are coloured by kind, from ohm's palette only: the person forest, the cortex light green, channels ink, channels inside them ink at 60%, blocks grey, sources grey at 35%, entities hollow. Edges are coloured by family: evidence grey, inference the cortex's light green, so a guess never looks like a fact. Red is never used here; it means destructive.
 
 ## The side panel and the editor: one active page
 

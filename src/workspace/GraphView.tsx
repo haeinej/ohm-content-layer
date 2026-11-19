@@ -1,9 +1,10 @@
 // The graph, as Obsidian's graph view behaves: a live force layout you pan, zoom and drag; nodes
 // sized by how connected they are; hovering lights a node and its edges and fades everything else;
 // dragging pulls the neighbours along on springs and lets them wobble back; labels come in as you
-// zoom. Unlike a global graph it is a hierarchy centred on one person (graph/model.ts): the person
-// is pinned at the centre and a soft radial force holds each layer at its distance, loosely enough
-// that links between posts can pull branches together.
+// zoom. Unlike a global graph it is centred on one person (graph/model.ts): the person is pinned
+// at the centre and a soft radial force holds each layer at its distance, loosely enough that
+// links between blocks can pull branches together. Evidence edges are grey; the cortex's
+// inferences are drawn in its own light green, so a guess never looks like a fact.
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   forceCollide, forceLink, forceManyBody, forceRadial, forceSimulation, forceX, forceY,
@@ -16,46 +17,52 @@ import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
-import { buildGraph, DEFAULT_FILTERS, type EdgeKind, type GraphNode, type NodeType } from "@/graph/model"
+import { buildGraph, DEFAULT_FILTERS, familyOf, type EdgeKind, type GraphNode, type Layer } from "@/graph/model"
 import { cn } from "@/lib/cn"
 import { kept, me, open, scopeFolders, showGraph, useWorkspace } from "./store"
 
 type SimNode = GraphNode & SimulationNodeDatum
 type SimLink = SimulationLinkDatum<SimNode> & { kind: EdgeKind }
 
-/** How far out each kind of node settles. The cortex is the closest layer to the person. */
-const DISTANCE: Record<NodeType, number> = { person: 0, memory: 110, label: 220, sublabel: 300, post: 385 }
-const OTHER_PEOPLE = 490
-const ringOf = (n: GraphNode) => (n.layer === 5 ? OTHER_PEOPLE : DISTANCE[n.type])
+/** How far out each layer settles: you, the cortex, channels, channels inside them, blocks, sources and entities. */
+const DISTANCE: Record<Layer, number> = { 0: 0, 1: 110, 2: 220, 3: 300, 4: 385, 5: 490 }
+const ringOf = (n: GraphNode) => DISTANCE[n.layer]
 const SPRING: Record<EdgeKind, { length: number; strength: number }> = {
-  hierarchy: { length: 90, strength: 0.35 },
-  knows: { length: 120, strength: 0.22 },
-  about: { length: 170, strength: 0.04 },
-  link: { length: 110, strength: 0.12 },
-  mention: { length: 120, strength: 0.06 },
+  holds: { length: 90, strength: 0.35 },
+  contains: { length: 90, strength: 0.35 },
+  links: { length: 110, strength: 0.12 },
+  mentions: { length: 120, strength: 0.06 },
+  from: { length: 70, strength: 0.2 },
+  // Inferences pull loosely: they show what the cortex drew from without bending the evidence.
+  grounds: { length: 170, strength: 0.04 },
+  observes: { length: 170, strength: 0.03 },
+  learned: { length: 170, strength: 0.03 },
+  acts: { length: 170, strength: 0.02 },
 }
+const isCortex = (n: GraphNode) => n.layer === 1
 
 /** Where each node was last, so re-centring or filtering moves nodes instead of re-scattering them. */
 const last = new Map<string, { x: number; y: number }>()
 
 const radiusOf = (n: GraphNode) => {
-  const base = n.layer === 0 ? 13 : n.type === "label" ? 7 : n.type === "sublabel" ? 5 : n.type === "memory" ? 4.5 : 3.5
+  const base = n.layer === 0 ? 13 : n.layer === 2 ? 7 : n.layer === 3 ? 5 : isCortex(n) ? 4.5 : n.type === "source" ? 2.5 : 3.5
   return base + Math.sqrt(n.degree) * 1.3
 }
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
-/** Labels that always show: the person and the hierarchy's upper layers. */
-const structural = (n: GraphNode) => n.layer === 0 || n.type === "label" || n.type === "sublabel"
+/** Labels that always show: the person and the channels. */
+const structural = (n: GraphNode) => n.layer === 0 || n.type === "channel"
 
 /**
  * What a node is, by colour, from ohm's palette only: the person forest; the cortex light green;
- * the vault's labels in ink and its sublabels a step lighter; posts grey; other people hollow.
+ * channels in ink, channels inside them a step lighter; blocks grey; sources faint; entities hollow.
  */
 const kindFill = (n: GraphNode) =>
   n.layer === 0 ? "fill-primary stroke-primary dark:fill-foreground dark:stroke-foreground"
-    : n.type === "memory" ? "fill-(--ohm-green-light) stroke-(--ohm-green-light)"
-    : n.type === "label" ? "fill-foreground stroke-foreground"
-    : n.type === "sublabel" ? "fill-foreground/60 stroke-foreground/0"
-    : n.layer === 5 ? "fill-card stroke-muted-foreground"
+    : isCortex(n) ? "fill-(--ohm-green-light) stroke-(--ohm-green-light)"
+    : n.layer === 2 ? "fill-foreground stroke-foreground"
+    : n.layer === 3 ? "fill-foreground/60 stroke-foreground/0"
+    : n.type === "source" ? "fill-muted-foreground/35 stroke-muted-foreground/0"
+    : n.type === "entity" ? "fill-card stroke-muted-foreground"
     : "fill-muted-foreground stroke-muted-foreground/0"
 
 /** A floating control over the graph: the popover surface, solid in dark. */
@@ -67,7 +74,7 @@ export function GraphView() {
   // The open page is ringed in the graph too: one active page, everywhere.
   const activeId = view.kind === "doc" ? view.id : null
   const include = useMemo(() => scopeFolders(scope), [scope])
-  const [filters, setFilters] = useState({ people: DEFAULT_FILTERS.people, links: DEFAULT_FILTERS.links })
+  const [filters, setFilters] = useState({ people: DEFAULT_FILTERS.people, links: DEFAULT_FILTERS.links, sources: DEFAULT_FILTERS.sources })
   const graph = useMemo(() => buildGraph({ center, ...include, audience, ...filters, keep: kept }), [center, include, audience, filters, repoFilters, rev]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const svgRef = useRef<SVGSVGElement>(null)
@@ -88,17 +95,17 @@ export function GraphView() {
     return () => ro.disconnect()
   }, [])
 
-  // Each label gets its own direction from the person, spread evenly, and its sublabels and posts
-  // lean that way; memories spread evenly around the cortex ring. A gentle pull toward those
+  // Each top-level channel gets its own direction from the person, spread evenly, and what it
+  // contains leans that way; the cortex spreads evenly around its ring. A gentle pull toward those
   // directions keeps the hierarchy readable as sectors, while links can still tug across them.
   const { nodes, links, aim } = useMemo(() => {
     const angleOf = new Map<string, number>()
-    const branches = [...new Set(graph.nodes.filter(n => n.type === "label").map(n => n.branch))]
+    const branches = [...new Set(graph.nodes.filter(n => n.layer === 2).map(n => n.branch))]
     branches.forEach((b, i) => angleOf.set(b, (i / branches.length) * Math.PI * 2 - Math.PI / 2))
-    const memoryList = graph.nodes.filter(m => m.type === "memory")
+    const cortexList = graph.nodes.filter(isCortex)
     const aim = new Map<string, { x: number; y: number }>()
     for (const n of graph.nodes) {
-      const a = n.type === "memory" ? (memoryList.indexOf(n) / memoryList.length) * Math.PI * 2 - Math.PI / 2 + Math.PI / memoryList.length : angleOf.get(n.branch)
+      const a = isCortex(n) ? (cortexList.indexOf(n) / cortexList.length) * Math.PI * 2 - Math.PI / 2 + Math.PI / cortexList.length : angleOf.get(n.branch)
       if (a !== undefined && n.layer > 0 && n.layer < 5) aim.set(n.id, { x: Math.cos(a) * ringOf(n), y: Math.sin(a) * ringOf(n) })
     }
     const nodes: SimNode[] = graph.nodes.map(n => {
@@ -117,11 +124,11 @@ export function GraphView() {
     const sim = forceSimulation<SimNode, SimLink>(nodes)
       .force("link", forceLink<SimNode, SimLink>(links).id(d => d.id)
         .distance(l => SPRING[l.kind].length).strength(l => SPRING[l.kind].strength))
-      .force("charge", forceManyBody<SimNode>().strength(n => (n.type === "label" ? -280 : n.type === "memory" ? -200 : -120)).distanceMax(500))
+      .force("charge", forceManyBody<SimNode>().strength(n => (n.layer === 2 ? -280 : isCortex(n) ? -200 : -120)).distanceMax(500))
       .force("collide", forceCollide<SimNode>(n => radiusOf(n) + 6).strength(0.7))
-      .force("radial", forceRadial<SimNode>(ringOf, 0, 0).strength(n => (n.layer === 0 ? 0 : n.type === "memory" ? 0.8 : n.layer === 4 ? 0.12 : 0.3)))
-      .force("aimX", forceX<SimNode>(n => aim.get(n.id)?.x ?? 0).strength(n => (aim.has(n.id) ? (n.type === "post" ? 0.03 : 0.08) : 0)))
-      .force("aimY", forceY<SimNode>(n => aim.get(n.id)?.y ?? 0).strength(n => (aim.has(n.id) ? (n.type === "post" ? 0.03 : 0.08) : 0)))
+      .force("radial", forceRadial<SimNode>(ringOf, 0, 0).strength(n => (n.layer === 0 ? 0 : isCortex(n) ? 0.8 : n.layer === 4 ? 0.12 : 0.3)))
+      .force("aimX", forceX<SimNode>(n => aim.get(n.id)?.x ?? 0).strength(n => (aim.has(n.id) ? (n.type === "block" ? 0.03 : 0.08) : 0)))
+      .force("aimY", forceY<SimNode>(n => aim.get(n.id)?.y ?? 0).strength(n => (aim.has(n.id) ? (n.type === "block" ? 0.03 : 0.08) : 0)))
       // Soft springs, moderate friction and very slow cooling: nodes drift and settle like soft
       // rubber, over seconds, never snapping or stopping short.
       .velocityDecay(0.3)
@@ -221,7 +228,7 @@ export function GraphView() {
   }
   const activate = (n: GraphNode) => {
     if (n.doc) open(n.doc.id)
-    else if (n.type === "person" && n.layer === 5) showGraph(n.person!.handle)
+    else if (n.type === "entity" && n.person) showGraph(n.person.handle)
   }
 
   const isMe = graph.center.did === me.did
@@ -237,13 +244,15 @@ export function GraphView() {
           {links.map((l, i) => {
             const a = l.source as SimNode, b = l.target as SimNode
             const on = lit ? a.id === lit || b.id === lit : null
+            const inferred = familyOf(l.kind) === "inference"
             return (
               <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} vectorEffect="non-scaling-stroke"
                 strokeWidth={on ? 1.4 : 1}
                 className={cn(
-                  // Every edge the same thin grey line, as in Obsidian; the lit node's edges turn forest.
+                  // Thin lines, as in Obsidian: evidence grey, the cortex's inferences light green; the
+                  // lit node's edges turn forest.
                   "transition-[opacity,stroke] duration-(--ohm-duration-open) ease-(--ohm-ease-out)",
-                  on ? "stroke-primary dark:stroke-foreground" : "stroke-muted-foreground",
+                  on ? "stroke-primary dark:stroke-foreground" : inferred ? "stroke-(--ohm-green-light)" : "stroke-muted-foreground",
                   on === false ? "opacity-[.07]" : on ? "opacity-100" : "opacity-35",
                 )} />
             )
@@ -253,7 +262,7 @@ export function GraphView() {
             const isLit = n.id === lit
             const faded = near && !near.has(n.id)
             return (
-              <g key={n.id} data-node transform={`translate(${n.x},${n.y})`} role="button" tabIndex={0} aria-label={n.name}
+              <g key={n.id} data-node data-doc-id={n.doc?.kind === "post" ? n.doc.id : undefined} transform={`translate(${n.x},${n.y})`} role="button" tabIndex={0} aria-label={n.name}
                 className={cn("cursor-pointer outline-none transition-opacity duration-(--ohm-duration-open) ease-(--ohm-ease-out)", faded && "opacity-20")}
                 onPointerEnter={() => setHover(n.id)} onPointerLeave={() => setHover(h => (h === n.id ? null : h))}
                 onFocus={() => setHover(n.id)} onBlur={() => setHover(null)}
@@ -281,7 +290,7 @@ export function GraphView() {
               <text key={n.id} x={x} y={y + r + 13} textAnchor="middle" opacity={faded ? 0.15 : show}
                 className={cn("text-small transition-opacity duration-(--ohm-duration-open) ease-(--ohm-ease-out)",
                   n.id === lit || structural(n) ? "fill-foreground" : "fill-muted-foreground",
-                  (n.layer === 0 || n.type === "label") && "font-semibold")}>
+                  (n.layer === 0 || n.layer === 2) && "font-semibold")}>
                 {n.name.length > 32 ? `${n.name.slice(0, 31)}…` : n.name}
               </text>
             )
@@ -304,8 +313,9 @@ export function GraphView() {
           <PopoverContent align="end" className="w-60 gap-0 p-2">
             <p className="px-1.5 pb-1 text-small text-muted-foreground">Show</p>
             {([
-              ["links", "Links between posts"],
-              ["people", "People mentioned"],
+              ["links", "Links between blocks"],
+              ["people", "Entities mentioned"],
+              ["sources", "Sources"],
             ] as const).map(([key, label]) => (
               <label key={key} className="flex min-h-8 items-center justify-between gap-3 rounded-lg px-1.5 text-body hover:bg-muted">
                 {label}
@@ -324,9 +334,12 @@ export function GraphView() {
         <ul aria-label="Key" className={cn(floating, "pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1 text-small text-muted-foreground")}>
           <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-primary dark:bg-foreground" />You</li>
           <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-(--ohm-green-light)" />Cortex</li>
-          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-foreground" />Vault</li>
-          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted-foreground" />Post</li>
-          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full border-[1.5px] border-muted-foreground" />People</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-foreground" />Channel</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted-foreground" />Block</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted-foreground/35" />Source</li>
+          <li className="flex items-center gap-1.5"><span className="size-2 rounded-full border-[1.5px] border-muted-foreground" />Entity</li>
+          <li className="flex items-center gap-1.5"><span className="h-px w-3 bg-muted-foreground" />Evidence</li>
+          <li className="flex items-center gap-1.5"><span className="h-px w-3 bg-(--ohm-green-light)" />Inference</li>
         </ul>
         <div className={cn(floating, "pointer-events-auto flex flex-col p-0.5")} role="group" aria-label="Zoom">
           <Button size="icon-sm" variant="ghost" aria-label="Zoom in" onClick={() => zoomBy(1.3)}><Icon icon={PlusIcon} size="sm" /></Button>

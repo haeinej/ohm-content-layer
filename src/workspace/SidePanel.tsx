@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
-  AtSignIcon, BrainIcon, EllipsisIcon, EyeIcon, EyeOffIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GlobeIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
+  AtSignIcon, BrainIcon, EllipsisIcon, EyeIcon, EyeOffIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, GlobeIcon, HistoryIcon, ListTreeIcon, LockIcon, LogOutIcon, MessageCircleIcon, NetworkIcon, UserPlusIcon, UsersIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -9,29 +9,52 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { byId, cortex, inbox, people, posts, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
+import { byId, channelRecords, channelsOf, cortex, docIdOf, inbox, inOrder, PLACED, placedIn, posts, sectionOf, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
+import { RepoHistory } from "@/history/History"
 import { PrimeIcon } from "./PrimeIcon"
 import { RowMenu } from "./RowMenu"
 import { FilterMenu } from "./FilterMenu"
 import { activeCount, NO_FILTERS } from "./filters"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { VisibilityMarks } from "./VisibilityMarks"
+import { startChannel } from "./PageActions"
 import { SETTINGS_TABS } from "./settings-tabs"
 import { panelTitle, SidePanelFrame } from "./Surface"
 import {
-  createDraft, kept, marks, me, moveDoc, open, openInbox, openSettings, setAudience, setFilters, setRepoMode, setScope, setShowVisibility, useWorkspace,
+  createDraft, kept, marks, me, moveBlock, moveChannel, open, openInbox, openSettings, setAudience, setFilters, setRepoMode, setScope, setShowVisibility, useWorkspace,
 } from "./store"
 
-/** label › sublabel › item, as folders. Folder ids are prefixed so they never collide with docs. */
-function toTree(prime: string, docs: Doc[], order?: string[]): FileTreeNode[] {
-  const labels = new Map<string, Map<string | undefined, Doc[]>>()
-  for (const d of docs) {
-    const subs = labels.get(d.label) ?? new Map()
-    subs.set(d.sublabel, [...(subs.get(d.sublabel) ?? []), d])
-    labels.set(d.label, subs)
+/**
+ * Folders › folders inside them › items. In the vault the folders are channels, and a block is in
+ * every channel it was collected into: its row in its site section has its own id, and each other
+ * row `id@channel`. In the cortex the folders are fixed categories. Folder ids are prefixed so they
+ * never collide with docs.
+ */
+type Placement = { path: string; id: string }
+const inSection = (d: Doc): Placement[] => [{ path: sectionOf(d), id: d.id }]
+const inChannels = (d: Doc): Placement[] => channelsOf(d).map((path, i) => ({ path, id: i === 0 ? d.id : `${d.id}${PLACED}${path}` }))
+function toTree(prime: string, docs: Doc[], order?: string[], placements = inSection, empty: string[] = []): FileTreeNode[] {
+  const labels = new Map<string, Map<string | undefined, { doc: Doc; id: string }[]>>()
+  // Channels are records: an empty one is still a folder.
+  for (const path of empty) {
+    const [top, inner] = path.split("/")
+    const subs = labels.get(top) ?? new Map()
+    if (inner && !subs.has(inner)) subs.set(inner, [])
+    labels.set(top, subs)
+  }
+  for (const d of docs) for (const { path, id } of placements(d)) {
+    const [top, inner] = path.split("/")
+    const subs = labels.get(top) ?? new Map()
+    subs.set(inner, [...(subs.get(inner) ?? []), { doc: d, id }])
+    labels.set(top, subs)
+  }
+  // Blocks in each channel's own order (data/sample.ts inOrder).
+  const leaves = (path: string, list: { doc: Doc; id: string }[] = []): FileTreeNode[] => {
+    const ordered = inOrder(path, list.map(l => l.doc))
+    return ordered.map(d => list.find(l => l.doc === d)!).map(({ doc: d, id }) => ({ id, name: `${d.icon ? `${d.icon} ` : ""}${titleOf(d)}` }))
   }
   const names = [...labels.keys()].sort((a, b) => {
     if (a === "other") return 1
@@ -41,12 +64,11 @@ function toTree(prime: string, docs: Doc[], order?: string[]): FileTreeNode[] {
   })
   return names.map(label => {
     const subs = labels.get(label)!
-    const leaf = (d: Doc) => ({ id: d.id, name: `${d.icon ? `${d.icon} ` : ""}${titleOf(d)}` })
     return {
       id: `${prime}:${label}`, name: label,
       children: [
-        ...[...subs].filter(([s]) => s).map(([s, list]) => ({ id: `${prime}:${label}/${s}`, name: s!, children: list.map(leaf) })),
-        ...(subs.get(undefined) ?? []).map(leaf),
+        ...[...subs].filter(([s]) => s).map(([s, list]) => ({ id: `${prime}:${label}/${s}`, name: s!, children: leaves(`${label}/${s}`, list) })),
+        ...leaves(label, subs.get(undefined)),
       ],
     }
   })
@@ -65,9 +87,17 @@ const AUDIENCES: { id: Audience; label: string; note: string; icon: LucideIcon }
 // ─── Personal repository ──────────────────────────────────────────────────────
 
 
+/** A channel's row being dragged: the channel's path. Blocks travel as DOC_DRAG, with their row in ROW_DRAG. */
+const CHANNEL_DRAG = "application/x-ohm-channel"
+const ROW_DRAG = "application/x-ohm-row"
+const shown = (path: string) => path.replace("/", " › ")
+
 /**
- * Tree rows as drag sources (a page) and drop targets (a vault folder). FileTree draws the rows; this
- * marks them draggable and handles the events by delegation, so the tree itself stays as ohm-ui has it.
+ * Dragging in the tree moves things, as in a file manager. A block's row dropped on a channel moves it
+ * there; dropped above or below another block, it moves to that place in that block's channel. Hold
+ * ⌥ to add it there and keep it where it was. A channel's row dropped on another channel goes inside
+ * it; dropped on the vault row, it goes to the top. FileTree draws the rows; this marks them
+ * draggable and handles the events by delegation, so the tree itself stays as ohm-ui has it.
  */
 function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unknown[]) {
   useEffect(() => {
@@ -75,50 +105,94 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
     if (!root) return
     root.querySelectorAll<HTMLElement>("[data-slot=file-tree-item]").forEach(row => {
       const id = row.dataset.id ?? ""
-      row.draggable = !id.includes(":")
+      row.draggable = !id.includes(":") || id.startsWith("vault:")
     })
   })
   useEffect(() => {
     const root = ref.current
     if (!root) return
-    const rowOf = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>("[data-slot=file-tree-item]")
-    const folderOf = (row: HTMLElement | null) => (row?.dataset.id?.startsWith("vault:") ? row.dataset.id.slice(6) : null)
+    type Target = { row: HTMLElement; channel: string | null; where: "into" | "before" | "after"; block?: string }
+    let dragging: { kind: "block"; id: string; from: string | null } | { kind: "channel"; path: string } | null = null
     let over: HTMLElement | null = null
     const clear = () => { over?.removeAttribute("data-drop"); over = null }
+    const rowOf = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>("[data-slot=file-tree-item], [data-drop-prime]")
+    // The channel a block's row sits in: the one in its id, or its section for its own row.
+    const channelOfRow = (id: string) => placedIn(id) ?? (byId(docIdOf(id)) ? sectionOf(byId(docIdOf(id))!) : null)
+
+    // What is being dragged: a row of this tree, or a page from elsewhere (its path pill), read fresh
+    // from each event so a drag that ended outside the tree leaves nothing behind.
+    const current = (e: DragEvent) => dragging ?? (e.dataTransfer?.types.includes(DOC_DRAG) ? { kind: "block" as const, id: "", from: null } : null)
+    const targetOf = (e: DragEvent): Target | null => {
+      const row = rowOf(e)
+      const dragging = current(e)
+      if (!row || !dragging) return null
+      const id = row.dataset.id ?? ""
+      if (row.dataset.dropPrime === "vault") return dragging.kind === "channel" ? { row, channel: null, where: "into" } : null
+      if (id.startsWith("vault:")) return { row, channel: id.slice(6), where: "into" }
+      if (dragging.kind === "block" && !id.includes(":") && byId(docIdOf(id))?.kind === "post") {
+        const r = row.getBoundingClientRect()
+        return { row, channel: channelOfRow(id), where: e.clientY < r.top + r.height / 2 ? "before" : "after", block: docIdOf(id) }
+      }
+      return null
+    }
+
     const start = (e: DragEvent) => {
       const id = rowOf(e)?.dataset.id
-      if (!id || id.includes(":") || !e.dataTransfer) return
-      e.dataTransfer.setData(DOC_DRAG, id)
-      e.dataTransfer.effectAllowed = "copyMove"
+      if (!id || !e.dataTransfer) return
+      if (id.startsWith("vault:")) {
+        dragging = { kind: "channel", path: id.slice(6) }
+        e.dataTransfer.setData(CHANNEL_DRAG, dragging.path)
+        e.dataTransfer.effectAllowed = "move"
+      } else if (!id.includes(":")) {
+        dragging = { kind: "block", id: docIdOf(id), from: channelOfRow(id) }
+        e.dataTransfer.setData(DOC_DRAG, docIdOf(id))
+        e.dataTransfer.setData(ROW_DRAG, id)
+        e.dataTransfer.effectAllowed = "copyMove"
+      }
     }
     const dragover = (e: DragEvent) => {
-      const row = rowOf(e)
-      if (!folderOf(row) || !e.dataTransfer?.types.includes(DOC_DRAG)) return clear()
+      // A page dragged in from elsewhere (its path pill) moves from its section.
+      const t = targetOf(e)
+      if (!t) return clear()
       e.preventDefault()
-      e.dataTransfer.dropEffect = "move"
-      if (row !== over) { clear(); over = row; row!.setAttribute("data-drop", "") }
+      e.dataTransfer!.dropEffect = current(e)?.kind === "block" && e.altKey ? "copy" : "move"
+      if (t.row !== over || over?.dataset.drop !== t.where) { clear(); over = t.row; t.row.setAttribute("data-drop", t.where) }
     }
     const drop = (e: DragEvent) => {
-      const folder = folderOf(rowOf(e))
-      const id = e.dataTransfer?.getData(DOC_DRAG)
+      const t = targetOf(e)
+      const was = current(e)
       clear()
-      if (!folder || !id) return
+      dragging = null
+      if (!t || !was) return
       e.preventDefault()
-      const [label, sublabel] = folder.split("/")
       try {
-        moveDoc(id, label, sublabel)
-        notify({ message: `Filed under ${folder.replace("/", " › ")}`, tone: "info" })
+        if (was.kind === "channel") {
+          const { path, published } = moveChannel(was.path, t.channel)
+          if (path !== was.path) window.dispatchEvent(new CustomEvent("ohm:folder-renamed", { detail: { from: was.path, to: path } }))
+          notify({ message: `Moved ${shown(was.path.split("/").at(-1)!)} to ${t.channel ? shown(t.channel) : "the top"}${published ? `. ${published} published ${published === 1 ? "page gets" : "pages get"} the new address when you publish` : ""}`, tone: "info" })
+          return
+        }
+        const id = was.id || e.dataTransfer?.getData(DOC_DRAG) || ""
+        const doc = byId(id)
+        if (!doc || !t.channel || t.block === id) return
+        const from = was.from ?? sectionOf(doc)
+        const { published } = moveBlock(id, from, t.channel, { keep: e.altKey, ...(t.where === "before" ? { before: t.block } : t.where === "after" ? { after: t.block } : {}) })
+        notify({ message: from === t.channel ? `Moved within ${shown(t.channel)}`
+          : `${e.altKey ? "Added" : "Moved"} “${titleOf(doc)}” to ${shown(t.channel)}${published ? ". Its address changes when you next publish" : ""}`, tone: "info" })
       } catch (err) { notify({ message: (err as Error).message }) }
     }
+    const end = () => { dragging = null; clear() }
     root.addEventListener("dragstart", start)
     root.addEventListener("dragover", dragover)
     root.addEventListener("dragleave", clear)
     root.addEventListener("drop", drop)
+    root.addEventListener("dragend", end)
     return () => {
       root.removeEventListener("dragstart", start)
       root.removeEventListener("dragover", dragover)
       root.removeEventListener("dragleave", clear)
       root.removeEventListener("drop", drop)
+      root.removeEventListener("dragend", end)
     }
   }, deps) // eslint-disable-line react-hooks/exhaustive-deps
 }
@@ -127,21 +201,22 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
  * One of the repo's two prime folders: its own icon (PrimeIcon) and its name, bold forest. The icon is an
  * outline when closed and filled when open, so open and closed read at a glance.
  */
-function PrimeRow({ prime, open: isOpen, onOpen, locked, onExpandAll, allOpen, onOnly, onNew }: {
+function PrimeRow({ prime, open: isOpen, onOpen, locked, onExpandAll, allOpen, onOnly, onNew, onNewChannel }: {
   prime: "cortex" | "vault"; open: boolean; onOpen: () => void; locked?: boolean
-  onExpandAll: () => void; allOpen: boolean; onOnly: () => void; onNew?: () => void
+  onExpandAll: () => void; allOpen: boolean; onOnly: () => void; onNew?: () => void; onNewChannel?: () => void
 }) {
   const [menu, setMenu] = useState(false)
   const run = (k: string) => {
     if (k === "e") onExpandAll()
     else if (k === "o") onOnly()
     else if (k === "n" && onNew) onNew()
+    else if (k === "c" && onNewChannel) onNewChannel()
     else return false
     setMenu(false)
     return true
   }
   return (
-    <div className="group/prime relative" onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && run(e.key.toLowerCase())) e.preventDefault() }}>
+    <div className="group/prime relative" data-drop-prime={prime === "vault" ? "vault" : undefined} onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && run(e.key.toLowerCase())) e.preventDefault() }}>
       <button type="button" aria-expanded={isOpen} onClick={onOpen} disabled={locked}
         className="ux-row flex w-full items-center gap-1.5 px-1.5 pe-8 text-left">
         <Icon icon={isOpen ? ChevronDownIcon : ChevronRightIcon} size="sm" className={cn("text-muted-foreground", locked && "invisible")} />
@@ -160,6 +235,7 @@ function PrimeRow({ prime, open: isOpen, onOpen, locked, onExpandAll, allOpen, o
           <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-56"
             onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase())) e.preventDefault() }}>
             {onNew && <DropdownMenuItem onClick={() => run("n")}>New page<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>}
+            {onNewChannel && <DropdownMenuItem onClick={() => run("c")}>New channel<DropdownMenuShortcut>C</DropdownMenuShortcut></DropdownMenuItem>}
             <DropdownMenuItem onClick={() => run("e")}>{allOpen ? "Collapse all" : "Expand all"}<DropdownMenuShortcut>E</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuItem onClick={() => run("o")}>Show only {prime}<DropdownMenuShortcut>O</DropdownMenuShortcut></DropdownMenuItem>
           </DropdownMenuContent>
@@ -179,7 +255,9 @@ function RepoPanel() {
   const archived = posts.filter(d => marks.archived.has(d.id) && kept(d))
   const [showArchived, setShowArchived] = useState(false)
   const [rows, setRows] = useState<HTMLDivElement | null>(null)
-  const vaultTree = useMemo(() => toTree("vault", vaultDocs), [vaultDocs])
+  // Empty channels show to you, unfiltered; seen as someone else, a channel shows only what they can see in it.
+  const vaultTree = useMemo(() => toTree("vault", vaultDocs, undefined, inChannels,
+    audience === "personal" && !filtering ? channelRecords.map(c => c.path) : []), [vaultDocs, audience, filtering, rev]) // eslint-disable-line react-hooks/exhaustive-deps
   const showCortex = scope.cortex, showVault = scope.vault
   const treeRef = useRef<HTMLDivElement | null>(null)
   useTreeDragDrop(treeRef, [repoMode])
@@ -222,7 +300,6 @@ function RepoPanel() {
     window.addEventListener("ohm:folder-renamed", moved)
     return () => window.removeEventListener("ohm:folder-renamed", moved)
   }, [])
-  const everything = allFolders.length > 0 && allFolders.every(id => expanded.has(id))
   // One prime folder's own expand-all, from its ⋯.
   const primeFolders = (p: "cortex" | "vault") => [`prime:${p}`, ...folderIds(p === "cortex" ? cortexTree : vaultTree)]
   const primeAllOpen = (p: "cortex" | "vault") => primeFolders(p).every(id => expanded.has(id))
@@ -236,7 +313,7 @@ function RepoPanel() {
   return (
     <SidePanelFrame
       label={`${me.name}'s repository`}
-      scroll={repoMode === "tree"}
+      scroll={repoMode !== "graph"}
       heading={
         /* Whose repository: you, in a pill. Its menu chooses what shows: All, or Cortex and Vault. */
         <DropdownMenu>
@@ -280,16 +357,21 @@ function RepoPanel() {
           </PopoverContent>
         </Popover>
         <FilterMenu />
+        {/* History: every change and save, by you and by agents. Pressed while it shows. */}
+        <Button size="icon-sm" variant="ghost" className={toggle} aria-label="History" title="History" aria-pressed={repoMode === "history"}
+          onClick={() => setRepoMode(repoMode === "history" ? "tree" : "history")}>
+          <Icon icon={HistoryIcon} size="sm" />
+        </Button>
         {/* One switch: it shows the view you would go to. */}
         <Button size="icon-sm" variant="ghost" className="text-muted-foreground"
-          aria-label={repoMode === "tree" ? "Show as graph" : "Show as list"} title={repoMode === "tree" ? "Graph" : "List"}
-          onClick={() => setRepoMode(repoMode === "tree" ? "graph" : "tree")}>
-          <Icon icon={repoMode === "tree" ? NetworkIcon : ListTreeIcon} size="sm" />
+          aria-label={repoMode === "graph" ? "Show as list" : "Show as graph"} title={repoMode === "graph" ? "List" : "Graph"}
+          onClick={() => setRepoMode(repoMode === "graph" ? "tree" : "graph")}>
+          <Icon icon={repoMode === "graph" ? ListTreeIcon : NetworkIcon} size="sm" />
         </Button>
       </>}
     >
       {repoMode === "tree" ? (
-        <div ref={el => { treeRef.current = el; setRows(el) }} data-show-visibility={showVisibility || undefined} className="relative flex flex-col gap-0.5 [&_[data-drop]]:bg-primary/10 [&_[data-drop]]:ring-1 [&_[data-drop]]:ring-primary/40">
+        <div ref={el => { treeRef.current = el; setRows(el) }} data-show-visibility={showVisibility || undefined} className="relative flex flex-col gap-0.5 [&_[data-drop=into]]:bg-primary/10 [&_[data-drop=into]]:ring-1 [&_[data-drop=into]]:ring-primary/40">
           {pinned.length > 0 && <>
             <p className="px-2 pt-1 pb-0.5 text-small text-muted-foreground">Pinned</p>
             {pinned.map(d => (
@@ -320,10 +402,10 @@ function RepoPanel() {
           {showVault && <>
             <PrimeRow prime="vault" open={expanded.has("prime:vault")} onOpen={() => flip("prime:vault")}
               allOpen={primeAllOpen("vault")} onExpandAll={() => expandPrime("vault")} onOnly={() => setScope({ cortex: false, vault: true })}
-              onNew={() => createDraft()} />
+              onNew={() => createDraft()} onNewChannel={() => startChannel()} />
             {expanded.has("prime:vault") && (
               <FileTree aria-label="vault" className="ms-4 [--tree-inset:1rem] animate-in fade-in-0 slide-in-from-top-1 duration-(--ohm-duration-open)" nodes={vaultTree}
-                expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(id)} />
+                expanded={expanded} onExpandedChange={setExpanded} selected={selected} onSelect={id => open(docIdOf(id))} />
             )}
           </>}
           {archived.length > 0 && <>
@@ -341,6 +423,8 @@ function RepoPanel() {
           <RowMenu container={rows} />
           <VisibilityMarks container={rows} />
         </div>
+      ) : repoMode === "history" ? (
+        <RepoHistory />
       ) : (
         <div className="-mx-1 flex min-h-0 flex-1 overflow-hidden rounded-2xl bg-background">
           <GraphView />

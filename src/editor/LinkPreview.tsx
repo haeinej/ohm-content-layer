@@ -13,7 +13,7 @@ const setLinked = (id: string | null) => { if (id !== linked) { linked = id; lis
 export const useLinkedHover = () => useSyncExternalStore(l => (listeners.add(l), () => listeners.delete(l)), () => linked)
 
 const excerpt = (d: Doc) =>
-  d.body.replace(/^#\s+.*\n*/, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[\[([a-z0-9-]+)\]\]/gi, (_, s) => bySlug(s)?.title ?? s)
+  d.body.replace(/^#\s+.*\n*/, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[\[([a-z0-9-]+)(?:\|([^\]\n]+))?\]\]/gi, (_, s, words) => words ?? bySlug(s)?.title ?? s)
     .replace(/[#>*_`|-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 220)
 
 export function LinkPreview({ container }: { container: HTMLElement | null }) {

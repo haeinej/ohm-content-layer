@@ -64,6 +64,12 @@ const TOOLS: { name: ToolName; title: string; does: string; reads: boolean }[] =
   { name: "workspace.graph", title: "Show graph", does: "Shows the graph, centred on a person", reads: true },
   { name: "workspace.create", title: "New post", does: "Starts a private draft", reads: false },
   { name: "workspace.save-draft", title: "Save draft", does: "Saves the open draft as private", reads: false },
+  { name: "history.list", title: "History", does: "Reads who changed what, and when", reads: true },
+  { name: "history.save", title: "Save", does: "Names this point in history; changes nothing", reads: false },
+  { name: "history.session", title: "Finish task", does: "Records what an agent did and its dead ends", reads: false },
+  { name: "history.revert", title: "Revert this change", does: "Undoes one change", reads: false },
+  { name: "history.versions", title: "Versions", does: "Reads the versions of the open page", reads: true },
+  { name: "history.restore", title: "Restore this version", does: "Brings a page back to an earlier version", reads: false },
 ]
 
 function Page({ tab }: { tab: SettingsTab }) {

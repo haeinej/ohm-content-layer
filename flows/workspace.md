@@ -29,40 +29,43 @@ The rack sits on the page itself. The side panel and the main panel are separate
 | ohm dot | Nothing. The brand mark, at icon size |
 | Search (⌘K) | Unchanged. Search opens over everything |
 | New post (⌘N) | Unchanged. A private draft opens in the editor |
-| **Personal repository** | The repository, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders, **cortex** (a minimal brain) and **vault** (a minimal box), are bold forest rows that open in place. Their icons are outlines when closed and filled when open. The header has the eye (click: who each page is for; hover: View as), a filter (platform, type, who it is for, edited, status), and one switch between list and graph. Drag a page from the tree onto the main panel to open it, or onto a vault folder to file it there. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device. Hover a page for its **⋯** (right-click opens the same menu): **Open in ›** (this window, a new tab, the graph), **Pin** (P: pinned pages show on top), **Mark as unread** (U: a forest dot and bold title until opened), **Rename** (R: in place on the row, the name selected; Enter or leaving keeps it, Escape puts it back), **Move to section ›**, **Archive** (A: out of the tree, into Archived at the bottom, with Restore), **Delete** (D, red, asks first). The letters work while the menu is open or the row has focus. A vault folder (a label or sublabel) has its own **⋯**: **New page here** (N) and **Rename** (R, in place). Renaming a folder refiles every page in it and keeps it open. Published pages get the new address when you next publish, and the notice says how many. The cortex and vault rows have a ⋯ too: **Expand all / Collapse all** (E), **Show only cortex / vault** (O), and for the vault, **New page** (N). The folders inside the cortex are fixed categories and have no menu. **Visibility lives here:** the eye in the header shows who each page is for. Every page gets a small round icon at its end (a globe for Everyone, tinted forest; people for Friends; a lock for Only you), labelled on hover, that changes it in place; showing a page to more people asks first, and marking is not publishing. Cortex items always read Only you. **View as** (You, Friends or Public) is in the eye's hover menu, and turning visibility off returns to You |
+| **Personal repository** | The repository, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders, **cortex** (a minimal brain) and **vault** (a minimal box), are bold forest rows that open in place. Their icons are outlines when closed and filled when open. The header has the eye (click: who each page is for; hover: View as), a filter (platform, type, who it is for, edited, status), **history** (Dates, You and Agents on a vertical timeline; every change marked with who made it, and reverted from there: [flows/history.md](history.md)), and one switch between list and graph. The vault's folders are **channels**: a block is listed in every channel it is in, its site section first (`photos › tokyo`) and any channel of your own (`slowness`) as well. **Dragging moves things, as in a file manager:** drag a block's row onto a channel to move it there, or above or below another block to move it to that place (each channel keeps its own order, so a block can be first in one and last in another). Hold ⌥ to add it to the other channel and keep it where it was. Drag a channel's row onto another channel to put it inside, or onto the vault row to bring it to the top; a channel that holds channels cannot go inside another yet. Drag a page onto the main panel to open it. A block's **first channel** is the one its published address comes from (`/posts/<channel>/<slug>`), so moving it out of that one changes its address on the next publish, and the notice says so. **The dot** at the right end of a block's row, on hover: click it for the block's connections card, or press it and pull a line to another block's row, a graph node or the open page to connect the two. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device. Hover a page for its **⋯** (right-click opens the same menu): **Open in ›** (this window, a new tab, the graph), **Pin** (P: pinned pages show on top), **Mark as unread** (U: a bold title until opened), **Rename** (R: in place on the row, the name selected; Enter or leaving keeps it, Escape puts it back), **Move to ›** (moves this row, as dragging does), **Channels ›** (check the channels it is in; its first channel is always checked), **Remove from <channel>** (on a row in a channel that is not its first), **Archive** (A: out of the tree, into Archived at the bottom, with Restore), **Delete** (D, red, asks first). The letters work while the menu is open or the row has focus. A channel has its own **⋯**: **New page here** (N: filed there if the channel is a site section, otherwise collected into it and filed under `other`), **New channel inside** (C, for a top-level channel), **Rename** (R, in place) and **Delete channel** (D, only when it is empty). The vault row's ⋯ adds **New channel** (C). Channels are records: an empty one stays, and is offered in Move to › and Channels ›. Renaming a channel renames it wherever a block was collected into it, refiles every page whose section it is and keeps it open. Published pages get the new address when you next publish, and the notice says how many. The cortex and vault rows have a ⋯ too: **Expand all / Collapse all** (E), **Show only cortex / vault** (O), and for the vault, **New page** (N). The folders inside the cortex are fixed categories and have no menu. **Visibility lives here:** the eye in the header shows who each page is for. Every page gets a small round icon at its end (a globe for Everyone, tinted forest; people for Friends; a lock for Only you), labelled on hover, that changes it in place; showing a page to more people asks first, and marking is not publishing. Cortex items always read Only you. **View as** (You, Friends or Public) is in the eye's hover menu, and turning visibility off returns to You |
 | **Inbox** | Replies, mentions, friend requests and cortex notes, newest first, with new ones marked. One about a post opens that post; the others open in the main panel |
 | **Notifications** (bell) | Unchanged. A panel opens beside the rack, after agentic-twitter's notification center. **Agent** shows what an agent is doing now (its status), then what agents did through the page's WebMCP tools. **System** shows the workspace's notices. Each item shows how long ago it happened, can be removed on hover, and opens the page it is about. Clear all empties the list. A dot on the bell means something is unread; it pulses light green while an agent is working. Opening a tab marks it read |
 | You (avatar) | Your picture, then your name with your handle under it. Below that, the settings sections: Your profile, Identity, Agents, Vault, Cortex, Appearance, and Sign out |
 
 ## The graph
 
-The graph lives in the side panel, in the personal repo. It is a hierarchy centred on one person, which then intertwines:
+The graph lives in the side panel, in the personal repo. It is one person's knowledge graph, centred on them:
 
 ```
-person ── cortex (memories, skills, notes) ── vault labels ── sublabels ── posts ── people mentioned
+you ── cortex (memories, notes, skills, tools) ── channels ── channels inside them ── blocks ── sources and entities
 ```
 
-| Layer | Nodes | Hangs from |
+| Layer | Nodes | Joined by |
 | --- | --- | --- |
-| 0 | The person (forest, pinned at the centre) | none |
-| 1 · cortex | Memories, notes, skills and tools, spread evenly close to the person | the person |
-| 2 | Vault labels | the memories that know about them; the person when none does |
-| 3 | Sublabels | their label |
-| 4 | Posts | their sublabel or label |
-| 5 | People mentioned | each post that mentions them |
+| 0 | You (forest, pinned at the centre) | none |
+| 1 · cortex | Memories, notes, skills and tools, spread evenly close to you | you hold them |
+| 2 | Top-level channels | you hold them |
+| 3 | Channels inside a channel | `contains` |
+| 4 | Blocks. A block can be in any number of channels | `contains` |
+| 5 | Sources a block was captured from, and entities (people) it mentions | `from`, `mentions` |
 
-The cortex is the closest layer, and it connects the person to their vault. Across the hierarchy, `[[links]]` between posts and memories about particular posts tie branches together.
+Edges come in two families, and the difference is the point:
+
+- **Evidence**, grey: what the content itself shows. A channel contains a block, a block links to another with `[[slug]]`, mentions `@someone`, or was captured from a source. Anyone can check it and it is rebuilt from the content. No model draws evidence.
+- **Inference**, light green: what the cortex concluded. A model never draws an edge between two blocks; it writes a memory, note, skill or tool, and that node points at the channels and blocks it was drawn from. Remove the inference and the evidence is untouched. Where both join the same pair, evidence wins.
 
 How it looks and behaves, as Obsidian's graph view does (from the screen recordings):
 
-- **Look:** dots sized by how connected they are, coloured by what they are, from ohm's palette only: you in forest, the cortex in light green, vault labels in ink, sublabels a step lighter, posts grey, and other people hollow. A small key names the colours. Every edge is the same thin, solid grey line, with no dashes or rings.
-- **Motion:** a force layout (d3-force) with soft springs, moderate friction and very slow cooling, so nodes drift and settle over seconds like soft rubber, never snapping or stopping short. A soft radial force keeps each layer at its distance, and a gentle pull toward each label's own direction gives every branch its own sector, while links still tug across.
+- **Look:** dots sized by how connected they are, coloured by what they are, from ohm's palette only: you in forest, the cortex in light green, channels in ink, channels inside them a step lighter, blocks grey, sources faint, and entities hollow. Edges are thin solid lines with no dashes: evidence grey, inference light green. A small key names the colours.
+- **Motion:** a force layout (d3-force) with soft springs, moderate friction and very slow cooling, so nodes drift and settle over seconds like soft rubber, never snapping or stopping short. A soft radial force keeps each layer at its distance, and a gentle pull toward each top-level channel's own direction gives every branch its own sector, while links still tug across.
 - **Hover** rings the node and lights its edges in forest, and fades everything else over ohm's open duration.
 - **Drag** pins a node under the pointer, and its neighbours follow on soft springs. Release it and they ease back.
-- **Pan and zoom** (d3-zoom). Labels for the upper layers always show. Labels for posts and memories fade in as you zoom, and for the hovered node's neighbours.
+- **Pan and zoom** (d3-zoom). Names of you and the channels always show. Names of blocks and the cortex fade in as you zoom, and for the hovered node's neighbours.
 - **Fit:** the graph stays fitted to the panel as the panel resizes and the layout settles, until you pan or zoom yourself.
-- **Popover:** turns links between posts and people mentioned on or off, and lays the graph out again.
-- **Clicking:** a post or memory opens it in the main panel. Clicking a person re-centres on them, showing the posts that mention them; "Back to me" returns.
+- **Popover:** turns links between blocks, entities mentioned and sources on or off, and lays the graph out again.
+- **Clicking:** a block or cortex item opens it in the main panel. Clicking an entity re-centres on them, showing the blocks that mention them; "Back to me" returns.
 - **What it draws:** the repository's scope (all, cortex or vault) and the audience. The cortex is only ever yours.
 - **Code:** built in `src/graph/model.ts` (nodes, layers and edges) and `src/workspace/GraphView.tsx` (forces, interaction, drawing).
 
@@ -72,9 +75,9 @@ Every page opens in the main panel in one block editor, built after the referenc
 
 - **Path.** The toolbar starts with the page's path in a pill, such as `vault / writing / journal / Monday, rain`.
   - **Rename:** click the page's name to rename it in place, with a forest ring around it and the text selected.
-  - **Save by dragging:** drag the pill out of the window to save the page as a `.md` file, or onto a vault folder in the side panel to file it there.
-  - **The ⌄ beside it** opens the page's menu, as a session list has it: Open in › (new tab, graph), Rename (R), Open file…, Save as Markdown, Move to section ›, Archive (A), Delete (D, asks first).
-- **Toolbar.** After the path, a pill of inserts: Text, Image, Table, and + for everything. On the right: History and you. Toolbar inserts go after the block the caret is in, never inside a table or list.
+  - **Save by dragging:** drag the pill out of the window to save the page as a `.md` file, or onto a channel in the side panel to move it there.
+  - **The ⌄ beside it** opens the page's menu, as a session list has it: Open in › (new tab, graph), Rename (R), Open file…, Save as Markdown, Move to › (from its first channel), Archive (A), Delete (D, asks first).
+- **Toolbar.** After the path, a pill of inserts: Text, Image, Table, and + for everything. On the right: the connections button (with its count), History (the page's versions) and you. Toolbar inserts go after the block the caret is in, never inside a table or list.
 - **Dropping.**
   - **Images** dropped or pasted onto the page go in where they land. Image in the toolbar or `/` opens a file picker.
   - **Pages and files:** dropping a `.md` or `.txt` file, or a page from the tree, opens it. A veil says what the drop will do.
@@ -90,10 +93,18 @@ Every page opens in the main panel in one block editor, built after the referenc
   - **"+" bars** below and to the right add a row or a column.
   - Columns resize by dragging their edges.
   - **Cells:** the cell with the caret is outlined in forest, and a selection of cells is tinted. Over a cell selection, the floating bar keeps only Ask for change and the marks.
-- **Selected text** brings up the floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), Bold, Italic, Underline, Strikethrough, Code, and **Text ▾** to turn the block into another kind (with a check on the current one).
+- **Selected text** brings up the floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), **Connect** (shown when the selection is inside one paragraph, heading or item: find a block, and the words become a link to it, `[[slug|the words]]`), Bold, Italic, Underline, Strikethrough, Code, and **Text ▾** to turn the block into another kind (with a check on the current one).
 - **Links.** A `[[slug]]` reads as a chunk of green text: the linked page's title, with the brackets hidden. While the caret is inside it, it shows as written, so it can be edited, as in Obsidian's live preview.
   - **Hover:** a card shows the linked page (its path, title and opening lines), and the page is shaded green in the side panel's tree.
   - **Click:** opens the page.
+  - **Your own words:** `[[slug|the words]]` reads as your words, linked to the page, with its title on hover. Connect in the floating bar writes it.
+- **The connections card.** A block's connections open as a card beside it, like an info panel. Two ways in: the connections button (with a count) in the page's toolbar, and a button that shows next to the **⋯** at the right end of a block's row in the side panel when you hover it. The card holds, top to bottom:
+  - **The graph around the block**, still and small, in the main graph's colours: its channels in ink, blocks it connects with in grey, cortex items drawn from it in green. Click a node to open it.
+  - **In channels:** the part of the tree the block sits in, each of its channels with it (selected) and up to four neighbours, and "more…" to show the rest in the tree.
+  - **Connections:** what it connects to (↗) and what connects to it (↙). Each row says where the connection was read: *in the text*, with the linked words, or a connection on the whole block with its line on why. **+ Connect** finds a block and connects the whole page to it; its *Why?* field and its ✕ are on its row.
+  - **Open in the graph.**
+
+  On a private page you change connections; on a page others see they are read-only, as the text is. These are evidence: you made them and they are in the content, so they show in the graph as grey `links`. No agent tool makes one; the cortex can only point at them.
   - **Missing pages:** a link to a page that doesn't exist reads muted and struck through.
   - **Mentions:** an `@handle` reads as a link; ⌘-click follows it while editing.
   - **Markdown:** both stay plain text, so search and the graph still find them.

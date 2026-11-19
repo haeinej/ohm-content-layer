@@ -1,7 +1,9 @@
 // The ⋯ on a page in the repository, as a session list has it: it shows on hover (and right-click opens
 // the same menu), and its single-key shortcuts work while the menu is open or the row has focus.
-// Open in ›, Pin, Mark as unread, Rename (in place), Move to section ›, Archive, Delete.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+// Open in ›, Pin, Mark as unread, Rename (in place), Move to ›, Channels ›, Archive, Delete.
+// Beside it on a block, a dot: click it for the block's connections card, or pull a line from it to
+// another block to connect them (ConnectionsCard).
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { EllipsisIcon } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut,
@@ -9,24 +11,33 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { byId, posts, titleOf } from "@/data/sample"
+import { byId, channelRecords, channelsOf, docIdOf, isSection, placedIn, posts, sectionOf, titleOf } from "@/data/sample"
 import {
-  createDraft, marks, moveDoc, open, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
+  collect, createDraft, deleteChannel, marks, moveBlock, open, uncollect, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
 } from "./store"
-import { InlineRename, InlineRenameFolder, requestDelete } from "./PageActions"
+import { InlineRename, InlineRenameFolder, requestDelete, startChannel } from "./PageActions"
 import { useLinkedHover } from "@/editor/LinkPreview"
+import { ConnectionsButton } from "@/editor/ConnectionsCard"
 
 type Row = { id: string; top: number; height: number; textLeft: number }
-const isPage = (id?: string) => !!id && !id.includes(":") && !!byId(id)
-/** A vault folder row: `vault:label` or `vault:label/sublabel`. Cortex folders are fixed. */
+const isPage = (id?: string) => !!id && !id.includes(":") && !!byId(docIdOf(id))
+/** A vault channel row: `vault:channel` or `vault:channel/inner`. Cortex folders are fixed. */
 const folderPath = (id?: string) => (id?.startsWith("vault:") ? id.slice(6) : null)
 const isTarget = (id?: string) => isPage(id) || !!folderPath(id)
+/** Whether a channel holds no blocks and no channels. */
+const isEmpty = (path: string) =>
+  !posts.some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) && !channelRecords.some(c => c.path.startsWith(`${path}/`))
 
 export function RowMenu({ container }: { container: HTMLElement | null }) {
   const { rev } = useWorkspace()
   const linked = useLinkedHover()
   const [row, setRow] = useState<Row | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [cardOpen, setCardOpen] = useState(false)
+  const [linking, setLinking] = useState(false)
+  // Something open over a row holds it still: the menu, the connections card, a line being pulled from
+  // its dot, or renaming.
+  const held = menuOpen || cardOpen || linking
   const [renaming, setRenaming] = useState<string | null>(null)
 
   const place = useCallback((el: HTMLElement) => {
@@ -37,18 +48,31 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     setRow({ id: el.dataset.id!, top: r.top - base.top + container.scrollTop, height: r.height, textLeft: label.getBoundingClientRect().left - base.left })
   }, [container])
 
+  // A new channel asks to be renamed at once.
+  useEffect(() => {
+    const rename = (e: Event) => {
+      const { id } = (e as CustomEvent<{ id: string }>).detail
+      const el = container?.querySelector<HTMLElement>(`[data-slot=file-tree-item][data-id="${CSS.escape(id)}"]`)
+      if (!el) return
+      place(el)
+      setRenaming(id)
+    }
+    window.addEventListener("ohm:rename-row", rename)
+    return () => window.removeEventListener("ohm:rename-row", rename)
+  }, [container, place])
+
   // Follow the pointer over page rows; hold still while the menu is open.
   useEffect(() => {
     if (!container) return
     const rowOf = (t: EventTarget | null) => (t as HTMLElement | null)?.closest<HTMLElement>("[data-row-id], [data-slot=file-tree-item]")
     const move = (e: PointerEvent) => {
-      if (menuOpen || renaming) return
+      if (held || renaming) return
       if ((e.target as HTMLElement).closest("[data-row-menu]")) return
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
       if (el && isTarget(id)) { el.dataset.id = id; place(el) } else setRow(null)
     }
-    const leave = () => { if (!menuOpen && !renaming) setRow(null) }
+    const leave = () => { if (!held && !renaming) setRow(null) }
     const context = (e: MouseEvent) => {
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
@@ -60,7 +84,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     }
     // Shortcuts on a focused row, without opening the menu.
     const key = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || menuOpen || renaming) return
+      if (e.metaKey || e.ctrlKey || e.altKey || held || renaming) return
       const el = rowOf(e.target)
       const id = el?.dataset.rowId ?? el?.dataset.id
       if (!isTarget(id)) return
@@ -78,18 +102,22 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     }
   }) // re-binds with the latest state
 
-  // Unread pages carry a dot; the tree is ohm-ui's, so the mark goes on by attribute.
+  // Unread pages show in weight; the tree is ohm-ui's, so the mark goes on by attribute.
   useEffect(() => {
     container?.querySelectorAll<HTMLElement>("[data-slot=file-tree-item]").forEach(el => {
-      el.toggleAttribute("data-unread", marks.unread.has(el.dataset.id ?? ""))
-      // The page a hovered [[link]] points to, shaded green.
-      el.toggleAttribute("data-linked", !!linked && el.dataset.id === linked)
+      const id = docIdOf(el.dataset.id ?? "")
+      el.toggleAttribute("data-unread", marks.unread.has(id))
+      // The page a hovered [[link]] points to, shaded green, in every channel it is in.
+      el.toggleAttribute("data-linked", !!linked && id === linked)
     })
   })
 
-  const folders = useMemo(() => {
+  /** Every channel: the site sections and the channels of your own. */
+  const channels = useMemo(() => {
     const set = new Set<string>()
-    for (const p of posts) { set.add(p.label); if (p.sublabel) set.add(`${p.label}/${p.sublabel}`) }
+    for (const p of posts) for (const c of channelsOf(p)) { set.add(c.split("/")[0]); set.add(c) }
+    // Channels are records: an empty one is offered too.
+    for (const c of channelRecords) set.add(c.path)
     return [...set].sort()
   }, [rev]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -98,16 +126,26 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     const folder = folderPath(id)
     if (folder) {
       if (k === "r") { setRenaming(id); setMenuOpen(false); return true }
+      if (k === "c" && !folder.includes("/")) { setMenuOpen(false); startChannel(folder); return true }
+      if (k === "d") {
+        setMenuOpen(false)
+        try { deleteChannel(folder); notify({ message: `Deleted the empty channel ${folder.replace("/", " › ")}`, tone: "info" }) }
+        catch (err) { notify({ message: (err as Error).message }) }
+        return true
+      }
       if (k === "n") {
-        const [label, sublabel] = folder.split("/")
-        const d = createDraft({ label })
-        const page = byId(d.id)
-        if (page) page.sublabel = sublabel
+        // In a site section the new block is filed there; in a channel of your own it is collected
+        // into it, and filed under `other` until you give it a section.
+        if (isSection(folder)) {
+          const [label, sublabel] = folder.split("/")
+          createDraft({ label, sublabel })
+        } else createDraft({ channels: [folder] })
         setMenuOpen(false)
         return true
       }
       return false
     }
+    id = docIdOf(id)
     const doc = byId(id)
     if (!doc) return false
     const post = doc.kind === "post"
@@ -125,7 +163,9 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
   }
 
   const folder = row ? folderPath(row.id) : null
-  const doc = row && !folder ? byId(row.id) : undefined
+  const doc = row && !folder ? byId(docIdOf(row.id)) : undefined
+  /** The channel this row shows the block in, when it is not its section. */
+  const placed = row ? placedIn(row.id) : null
   const post = doc?.kind === "post"
   const here = doc ? (doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label) : ""
 
@@ -142,13 +182,22 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
           <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-56"
             onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase(), row.id)) e.preventDefault() }}>
             <DropdownMenuItem onClick={() => run("n", row.id)}>New page here<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>
+            {!folder.includes("/") && <DropdownMenuItem onClick={() => run("c", row.id)}>New channel inside<DropdownMenuShortcut>C</DropdownMenuShortcut></DropdownMenuItem>}
             <DropdownMenuItem onClick={() => run("r", row.id)}>Rename<DropdownMenuShortcut>R</DropdownMenuShortcut></DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" disabled={!isEmpty(folder)} onClick={() => run("d", row.id)}>
+              {isEmpty(folder) ? "Delete channel" : "Delete (empty it first)"}<DropdownMenuShortcut>D</DropdownMenuShortcut>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     )}
     {row && doc && !renaming && (
       <div data-row-menu className="pointer-events-none absolute inset-x-0 z-10" style={{ top: row.top, height: row.height }}>
+        {post && (
+          <ConnectionsButton doc={doc} editable={doc.visibility === "private"} variant="dot" open={cardOpen} onOpenChange={setCardOpen} onLinking={setLinking}
+            className="pointer-events-auto absolute top-1/2 right-8 -translate-y-1/2" />
+        )}
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger render={
             <button type="button" aria-label={`More for “${titleOf(doc)}”`}
@@ -172,13 +221,32 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
             <DropdownMenuItem disabled={!post} onClick={() => run("r", doc.id)}>Rename<DropdownMenuShortcut>R</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger disabled={!post}>Move to section</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger disabled={!post}>Channels</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-72 w-52 overflow-y-auto">
-                {folders.map(f => (
-                  <DropdownMenuCheckboxItem key={f} checked={f === here} onCheckedChange={() => {
-                    const [label, sublabel] = f.split("/")
-                    moveDoc(doc.id, label, sublabel)
-                    notify({ message: `Moved to ${f.replace("/", " › ")}`, tone: "info" })
+                {channels.map(c => {
+                  const section = sectionOf(doc) === c
+                  return (
+                    <DropdownMenuCheckboxItem key={c} disabled={section} checked={section || !!doc.channels?.includes(c)} onCheckedChange={on => {
+                      if (on) collect(doc.id, c); else uncollect(doc.id, c)
+                      notify({ message: `${on ? "Added to" : "Removed from"} ${c.replace("/", " › ")}`, tone: "info" })
+                    }}>{c.replace("/", " › ")}</DropdownMenuCheckboxItem>
+                  )
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            {placed && (
+              <DropdownMenuItem onClick={() => { uncollect(doc.id, placed); notify({ message: `Removed from ${placed.replace("/", " › ")}`, tone: "info" }); setMenuOpen(false) }}>
+                Remove from {placed.split("/").at(-1)}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger disabled={!post}>Move to</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="max-h-72 w-52 overflow-y-auto">
+                {/* Moves this row, as dragging it does: from the channel it shows in, to another. */}
+                {channels.map(f => (
+                  <DropdownMenuCheckboxItem key={f} checked={f === (placed ?? here)} onCheckedChange={() => {
+                    const { published } = moveBlock(doc.id, placed ?? here, f)
+                    notify({ message: `Moved to ${f.replace("/", " › ")}${published ? ". Its address changes when you next publish" : ""}`, tone: "info" })
                     setMenuOpen(false)
                   }}>{f.replace("/", " › ")}</DropdownMenuCheckboxItem>
                 ))}

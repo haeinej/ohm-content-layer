@@ -1,10 +1,11 @@
 // Workspace state, and the handlers both the UI and the WebMCP tools call (AGENTS.md rule 2).
 import { useSyncExternalStore } from "react"
-import { all, byId, inbox, owner, posts, titleOf, type Audience, type Doc, type Visibility } from "@/data/sample"
+import { all, byId, channelByPath, channelRecords, channelsOf, ensureChannel, inbox, inOrder, owner, posts, sectionOf, type Audience, type Doc, type Visibility } from "@/data/sample"
 import { buildGraph } from "@/graph/model"
 import type { AgentState } from "@/components/agent-status"
 import type { SettingsTab } from "./settings-tabs"
 import { NO_FILTERS, passes, type Filters } from "./filters"
+import { actor, applySnapshot, changeById, recordSession, save as saveJournal, snap, snapshotAt, syncJournal, type DeadEnd, type Snapshot } from "@/data/journal"
 
 /** What the side panel shows. The rack chooses it. */
 export type Side = "repo" | "visibility" | "inbox" | "profile" | null
@@ -26,11 +27,12 @@ const savedWidth = () => {
   try { const w = Number(localStorage.getItem("ohm-ux:side-width")); return w >= SIDE_WIDTH.min && w <= SIDE_WIDTH.max ? w : SIDE_WIDTH.initial } catch { return SIDE_WIDTH.initial }
 }
 export type ToolName = "workspace.search" | "workspace.open" | "workspace.graph" | "workspace.create" | "workspace.save-draft"
+  | "history.list" | "history.save" | "history.session" | "history.revert" | "history.versions" | "history.restore"
 
 type State = {
   side: Side
   /** The personal repo: as a tree, or as the graph. */
-  repoMode: "tree" | "graph"
+  repoMode: "tree" | "graph" | "history"
   /** Which of the repo's two prime folders the side panel and the graph show. */
   scope: RepoScope
   /** The side panel's width, set with its handle. */
@@ -46,6 +48,10 @@ type State = {
   searchOpen: boolean
   agent: { state: AgentState; label: string } | null
   rev: number
+  /** The last page brought back by a restore or revert, so only its open editor re-reads it. */
+  restored: { id: string; n: number } | null
+  /** A change chosen in the repository's timeline: its page's history card opens on it. */
+  historyFocus: { id: string; line: string; n: number } | null
   appearance: Appearance
   density: Density
   /** Pages opened, oldest first, and where we are in them: back and forward walk this. */
@@ -67,13 +73,17 @@ const sideAfterOpen = (): Partial<State> => (narrow() ? { side: null } : {})
 
 let state: State = {
   side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal", showVisibility: false, filters: NO_FILTERS,
-  graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0,
+  graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0, restored: null, historyFocus: null,
   appearance: "system", density: savedDensity(), agentsAllowed: true,
   history: [], at: -1, returnTo: null, reveal: null, lastSide: "repo",
-  offered: { "workspace.search": true, "workspace.open": true, "workspace.graph": true, "workspace.create": true, "workspace.save-draft": true },
+  offered: {
+    "workspace.search": true, "workspace.open": true, "workspace.graph": true, "workspace.create": true, "workspace.save-draft": true,
+    "history.list": true, "history.save": true, "history.session": true, "history.revert": true, "history.versions": true, "history.restore": true,
+  },
 }
 const listeners = new Set<() => void>()
 let walking = false
+let pendingChange: Parameters<typeof syncJournal>[0]
 const set = (patch: Partial<State>) => {
   // The one place the open page changes: record it in history, and have the tree reveal it.
   const next = patch.view
@@ -85,6 +95,8 @@ const set = (patch: Partial<State>) => {
     patch = { ...patch, reveal: { target: next.id, n: (state.reveal?.n ?? 0) + 1 } }
   }
   if (patch.side) patch = { ...patch, lastSide: patch.side }
+  // Every change to the repository goes into the journal (data/journal.ts): who, what, when.
+  if (patch.rev !== undefined) { syncJournal(pendingChange); pendingChange = undefined }
   state = { ...state, ...patch }
   listeners.forEach(l => l())
 }
@@ -207,14 +219,17 @@ export function showGraph(center?: string) {
 }
 
 let draftCount = 0
-export function createDraft(input: { label?: string; title?: string } = {}) {
+export function createDraft(input: { label?: string; sublabel?: string; channels?: string[]; title?: string } = {}) {
   draftCount += 1
   const slug = `untitled-${Date.now().toString(36)}`
+  // Everything about the new page is set here, before the one change that records it.
   const doc: Doc = {
     id: `draft-${draftCount}`, kind: "post", slug, title: input.title?.trim() ?? "",
-    label: input.label?.trim() || "other", visibility: "private",
+    label: input.label?.trim() || "other", ...(input.label && input.sublabel ? { sublabel: input.sublabel } : {}),
+    ...(input.channels?.length ? { channels: [...input.channels] } : {}), visibility: "private",
     updated: new Date().toISOString().slice(0, 10), body: "",
   }
+  for (const c of channelsOf(doc)) ensureChannel(c)
   posts.push(doc)
   all.push(doc)
   set({ view: { kind: "doc", id: doc.id, mode: "edit" }, ...bump(), searchOpen: false, ...sideAfterOpen() })
@@ -259,12 +274,152 @@ export function autosave(id: string, patch: { title?: string; body?: string }) {
   set(bump())
 }
 
-/** Files a post under another label (and sublabel). Moving keeps who it is for. */
-export function moveDoc(id: string, label: string, sublabel?: string) {
+/**
+ * Collects a block into a channel, keeping every channel it is already in: a block can be in any
+ * number of them. Its first channel, its site section, is changed only by moving it (moveBlock).
+ */
+export function collect(id: string, path: string) {
   const doc = byId(id)
-  if (!doc || doc.kind !== "post") throw new DOMException("Only posts can be filed in the vault", "DataError")
-  doc.label = label
-  doc.sublabel = sublabel
+  if (!doc || doc.kind !== "post") throw new DOMException("Only blocks can be collected into channels", "DataError")
+  ensureChannel(path)
+  if (sectionOf(doc) === path || doc.channels?.includes(path)) return { added: false }
+  doc.channels = [...(doc.channels ?? []), path]
+  set(bump())
+  return { added: true }
+}
+
+/** Puts a block before or after another in one channel's own order. */
+function place(path: string, id: string, at: { before?: string; after?: string }) {
+  const list = inOrder(path, posts.filter(p => channelsOf(p).includes(path))).map(d => d.id).filter(x => x !== id)
+  const i = at.before ? list.indexOf(at.before) : at.after ? list.indexOf(at.after) + 1 : -1
+  list.splice(i < 0 ? list.length : i, 0, id)
+  ensureChannel(path).order = list
+}
+
+/**
+ * Moves a block's row from one channel to another, and to a place in it: what dragging a row does.
+ * The first channel a block is in is its section, which sets its address when published; moving it
+ * out of its section moves its section, so the address changes on the next publish. `keep` adds it to
+ * the other channel and leaves it where it was (⌥ while dragging).
+ */
+export function moveBlock(id: string, from: string, to: string, opts: { before?: string; after?: string; keep?: boolean } = {}) {
+  const doc = byId(id)
+  if (!doc || doc.kind !== "post") throw new DOMException("Only blocks move between channels", "DataError")
+  let section = false
+  ensureChannel(to)
+  if (from !== to) {
+    if (opts.keep) collect(id, to)
+    else if (sectionOf(doc) === from) {
+      const [label, sublabel] = to.split("/")
+      doc.label = label
+      doc.sublabel = sublabel
+      doc.channels = doc.channels?.filter(c => c !== to)
+      section = true
+    } else {
+      doc.channels = (doc.channels ?? []).filter(c => c !== from)
+      if (sectionOf(doc) !== to && !doc.channels.includes(to)) doc.channels.push(to)
+    }
+  }
+  if (opts.before || opts.after) place(to, id, opts)
+  set(bump())
+  return { section, published: section && doc.visibility !== "private" }
+}
+
+/**
+ * Moves a channel into another, or to the top with `into` null: what dragging a channel's row does.
+ * Every block in it goes along, and keeps its order. A channel inside a channel holds no channels of
+ * its own yet, so a channel that holds some cannot go inside another.
+ */
+export function moveChannel(path: string, into: string | null) {
+  const name = path.split("/").at(-1)!
+  const next = into ? `${into}/${name}` : name
+  if (into && into.includes("/")) throw new DOMException("A channel inside a channel can't hold channels yet", "DataError")
+  if (into && (into === path || into.startsWith(`${path}/`))) throw new DOMException("A channel can't go inside itself", "DataError")
+  if (into && channelRecords.some(c => c.path.startsWith(`${path}/`))) throw new DOMException(`“${name}” holds channels of its own, so it can't go inside another yet`, "DataError")
+  if (next === path) return { path, published: 0 }
+  let published = 0
+  for (const p of posts) {
+    if (sectionOf(p) === path) {
+      const [label, sublabel] = next.split("/")
+      p.label = label
+      p.sublabel = sublabel
+      if (p.visibility !== "private") published++
+    }
+    if (p.channels) p.channels = p.channels.map(c => (c === path ? next : c))
+  }
+  // The record moves and keeps its id; into a channel of the same name, the two merge. A channel
+  // only blocks name (say, brought back by a restore) gets its record now.
+  const record = ensureChannel(path)
+  const there = channelByPath(next)
+  if (there) { there.order = [...there.order, ...record.order.filter(id => !there.order.includes(id))]; channelRecords.splice(channelRecords.indexOf(record), 1) }
+  else record.path = next
+  if (into) ensureChannel(into)
+  set(bump())
+  return { path: next, published }
+}
+
+/**
+ * Makes a channel: at the top, or inside a top-level channel. It is empty until something is moved or
+ * added into it, and stays when it is emptied again. Returns its path.
+ */
+export function createChannel(inside?: string) {
+  if (inside?.includes("/")) throw new DOMException("A channel inside a channel can't hold channels yet", "DataError")
+  let n = 1, path = inside ? `${inside}/untitled` : "untitled"
+  while (channelByPath(path)) path = `${inside ? `${inside}/` : ""}untitled-${++n}`
+  ensureChannel(path)
+  set(bump())
+  return path
+}
+
+/** Removes an empty channel. One with blocks or channels in it is refused: move them out first. */
+export function deleteChannel(path: string) {
+  if (posts.some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) || channelRecords.some(c => c.path.startsWith(`${path}/`)))
+    throw new DOMException(`“${path.replace("/", " › ")}” is not empty: move what is in it out first`, "DataError")
+  const i = channelRecords.findIndex(c => c.path === path)
+  if (i >= 0) channelRecords.splice(i, 1)
+  set(bump())
+}
+
+/** Takes a block out of a channel. Its first channel stays: moving it (moveBlock) changes that. */
+export function uncollect(id: string, path: string) {
+  const doc = byId(id)
+  if (!doc?.channels?.includes(path)) return { removed: false }
+  doc.channels = doc.channels.filter(c => c !== path)
+  set(bump())
+  return { removed: true }
+}
+
+/**
+ * Connects one block to another as a whole, with an optional line on why. Yours to make: it is
+ * evidence, so no agent tool does it. Like the text, it changes only a private block here; a block
+ * other people see is changed through the steps that ask first.
+ */
+export function connectDocs(id: string, toId: string, why?: string) {
+  const doc = byId(id), target = byId(toId)
+  if (!doc || !target || doc.kind !== "post" || target.kind !== "post") throw new DOMException("Only blocks connect to blocks", "DataError")
+  if (doc.id === target.id) throw new DOMException("A block does not connect to itself", "DataError")
+  if (doc.visibility !== "private") throw new DOMException("Connecting changes what others see; it is not part of this wireframe yet", "NotAllowedError")
+  if (doc.connect?.some(c => c.to === target.slug)) return { added: false }
+  doc.connect = [...(doc.connect ?? []), { to: target.slug, ...(why?.trim() ? { why: why.trim() } : {}) }]
+  doc.updated = new Date().toISOString().slice(0, 10)
+  set(bump())
+  return { added: true }
+}
+
+/** Says why a connection is there, or clears it. */
+export function setWhy(id: string, toSlug: string, why: string) {
+  const doc = byId(id)
+  const c = doc?.connect?.find(c => c.to === toSlug)
+  if (!doc || !c || doc.visibility !== "private") return
+  if (why.trim()) c.why = why.trim(); else delete c.why
+  set(bump())
+}
+
+/** Takes a whole-block connection away. A link in the text is removed by editing the text. */
+export function disconnect(id: string, toSlug: string) {
+  const doc = byId(id)
+  if (!doc?.connect || doc.visibility !== "private") return
+  doc.connect = doc.connect.filter(c => c.to !== toSlug)
   set(bump())
 }
 
@@ -278,7 +433,7 @@ export function openFile(name: string, text: string) {
 
 // ─── Row actions: the ⋯ menu on a page in the repository ──────────────────────
 
-/** Pinned pages show on top of the repository; unread ones carry a dot until opened; archived ones leave the tree. */
+/** Pinned pages show on top of the repository; unread ones show in weight until opened; archived ones leave the tree. */
 export const marks = { pinned: new Set<string>(), unread: new Set<string>(["p11"]), archived: new Set<string>() }
 const flip = (set: Set<string>, id: string, on = !set.has(id)) => { if (on) set.add(id); else set.delete(id); set_(bump()) }
 const set_ = (patch: Partial<State>) => set(patch)
@@ -331,7 +486,13 @@ export function renameFolder(path: string, name: string) {
   const [label, sublabel] = path.split("/")
   const next = name.trim().toLowerCase().replace(/\s+/g, "-")
   let published = 0
+  const to = [...path.split("/").slice(0, -1), next].join("/")
+  if (to !== path && channelByPath(to)) throw new DOMException(`There is already a channel “${to.replace("/", " › ")}”`, "DataError")
+  // The record keeps its id; the channels inside it follow.
+  for (const c of channelRecords) if (c.path === path || c.path.startsWith(`${path}/`)) c.path = to + c.path.slice(path.length)
   for (const p of posts) {
+    // A channel of your own is renamed wherever a block was collected into it.
+    if (p.channels) p.channels = p.channels.map(c => (c === path ? to : c.startsWith(`${path}/`) ? to + c.slice(path.length) : c))
     if (p.label !== label || (sublabel !== undefined && p.sublabel !== sublabel)) continue
     if (sublabel === undefined) p.label = next
     else p.sublabel = next
@@ -340,3 +501,71 @@ export function renameFolder(path: string, name: string) {
   set(bump())
   return { published }
 }
+
+// ─── History: restore, revert, save, sessions (flows/history.md) ─────────────────────────────
+
+/**
+ * Brings a private block back to an earlier version. History is never rewritten: the restore is a
+ * new change, by whoever restored it, so it can itself be undone the same way. A block other people
+ * see changes only through the steps that ask first, so it is refused here.
+ */
+export function restoreVersion(id: string, version: string, reason?: string) {
+  const doc = byId(id), s = snapshotAt(version)
+  if (!doc) throw new DOMException("There is no such page", "NotFoundError")
+  if (!s) throw new DOMException("There is no such version", "NotFoundError")
+  if (doc.visibility !== "private") throw new DOMException("Restoring changes what others see; it asks first, which is not part of this wireframe yet", "NotAllowedError")
+  applySnapshot(doc, s)
+  for (const c of channelsOf(doc)) ensureChannel(c)
+  doc.updated = new Date().toISOString().slice(0, 10)
+  pendingChange = { op: "restore", reason: reason?.trim() || `Restored version ${version}` }
+  set({ ...bump(), restored: { id: doc.id, n: (state.restored?.n ?? 0) + 1 } })
+  return { id: doc.id, version, by: actor().name }
+}
+
+/**
+ * Undoes one change, as `git revert` does: only the parts of the page that change touched go back,
+ * and later changes to other parts stay. If a later change touched the same part, it is refused, and
+ * restoring a whole version is the way. Like a restore, it is a new change, so it can be undone too.
+ */
+export function revertChange(lineId: string) {
+  const line = changeById(lineId)
+  if (!line) throw new DOMException("There is no such change", "NotFoundError")
+  const doc = byId(line.node)
+  if (!doc) throw new DOMException("That page is gone; nothing to revert", "NotFoundError")
+  if (doc.visibility !== "private") throw new DOMException("Reverting changes what others see; it asks first, which is not part of this wireframe yet", "NotAllowedError")
+  if (!line.before || line.op === "create") throw new DOMException("This change made the page: to undo it, delete the page", "DataError")
+  const before = snapshotAt(line.before)!, after = snapshotAt(line.after)!, now = snap(doc)
+  const fields = line.fields as (keyof Snapshot)[]
+  if (!fields.length) throw new DOMException("This change changed nothing to revert", "DataError")
+  const later = fields.filter(f => JSON.stringify(now[f]) !== JSON.stringify(after[f]))
+  const named = [...new Set(later.map(f => ({ body: "text", label: "first channel", sublabel: "first channel", connect: "connections" } as Record<string, string>)[f] ?? f))]
+  if (later.length) throw new DOMException(`A later change also touched its ${named.join(" and ")}: restore a whole version instead`, "DataError")
+  applySnapshot(doc, { ...now, ...Object.fromEntries(fields.map(f => [f, before[f]])) } as Snapshot)
+  for (const c of channelsOf(doc)) ensureChannel(c)
+  doc.updated = new Date().toISOString().slice(0, 10)
+  pendingChange = { op: "revert", reason: `Reverted “${line.summary}” (${new Date(line.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })})` }
+  set({ ...bump(), restored: { id: doc.id, n: (state.restored?.n ?? 0) + 1 } })
+  return { id: doc.id, reverted: line.id, fields }
+}
+
+/** Opens the open page's history card on one change. */
+export const focusHistory = (id: string, line: string) => set({ historyFocus: { id, line, n: (state.historyFocus?.n ?? 0) + 1 } })
+
+/** Names the repository as it is now, so you or an agent can come back to it. It changes nothing. */
+export function saveNow(name: string, note?: string) {
+  if (!name.trim()) throw new DOMException("A save needs a name", "DataError")
+  const line = saveJournal(name, note)
+  set(bump())
+  return { name: line.name, seq: line.seq }
+}
+
+/** An agent finishing a task: what it did, and the dead ends a later agent should not retry. */
+export function finishSession(done: string, deadEnds: DeadEnd[] = []) {
+  const who = actor()
+  if (who.kind !== "agent") throw new DOMException("Sessions are written by agents, when they finish a task", "NotAllowedError")
+  if (!done.trim()) throw new DOMException("Say in one line what was done", "DataError")
+  const line = recordSession(who, done, deadEnds)
+  set(bump())
+  return { session: line.id, changes: line.changes.length, deadEnds: line.deadEnds.length }
+}
+

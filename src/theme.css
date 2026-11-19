@@ -141,19 +141,18 @@
 }
 [data-slot=file-tree-item]:hover::before { background-color: var(--ux-row-hover); }
 [data-slot=file-tree-item][aria-selected=true]::before { background-color: var(--ux-row-selected); }
-[data-slot=file-tree-item][data-drop]::before { background-color: color-mix(in oklab, var(--ohm-forest) 14%, var(--ohm-card)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ohm-forest) 40%, transparent); }
+/* Dragging: onto a channel (into), or a line above or below a block (before, after); and the row a connecting line is over. */
+[data-slot=file-tree-item][data-drop=before] { box-shadow: inset 0 2px 0 var(--ohm-forest); }
+[data-slot=file-tree-item][data-drop=after] { box-shadow: inset 0 -2px 0 var(--ohm-forest); }
+[data-drop-prime][data-drop=into] > button { background-color: color-mix(in oklab, var(--ohm-forest) 14%, var(--ohm-card)); }
+[data-slot=file-tree-item][data-link-target]::before { background-color: color-mix(in oklab, var(--ohm-green-light) 40%, var(--ohm-card)); box-shadow: inset 0 0 0 1px var(--ohm-forest); }
+[data-link-target]:not([data-slot]) { outline: 2px solid var(--ohm-forest); outline-offset: -2px; }
+[data-slot=file-tree-item][data-drop=into]::before { background-color: color-mix(in oklab, var(--ohm-forest) 14%, var(--ohm-card)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ohm-forest) 40%, transparent); }
 [data-slot=file-tree-item]:focus-visible { box-shadow: none; }
 [data-slot=file-tree-item]:focus-visible::before { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ohm-forest) 45%, transparent); }
 
-/* Unread pages: a forest dot at the row's end, and the title in weight. */
+/* Unread pages: the title in weight, until opened. */
 [data-slot=file-tree-item][data-unread] { color: var(--ohm-ink); font-weight: 600; }
-[data-slot=file-tree-item][data-unread]::after {
-  content: ""; position: absolute; inset-inline-end: 10px; top: 50%; translate: 0 -50%;
-  width: 7px; height: 7px; border-radius: 999px; background: var(--ohm-forest);
-}
-:root[data-theme="dark"] [data-slot=file-tree-item][data-unread]::after { background: var(--ohm-green-light); }
-/* While the ⋯ is over a row, the dot steps aside. */
-[data-slot=file-tree-item]:hover[data-unread]::after { opacity: 0; }
 
 /* The page a hovered [[link]] points to: shaded green, the same shape as every row's shade. */
 [data-slot=file-tree-item][data-linked]::before { background-color: color-mix(in oklab, var(--ohm-green-light) 32%, var(--ohm-card)); }
@@ -163,7 +162,6 @@
 
 /* With visibility shown, rows leave room at their end for the who-it-is-for pill. */
 [data-show-visibility] [data-slot=file-tree-item], [data-show-visibility] [data-row-id] { padding-inline-end: 4.25rem; }
-[data-show-visibility] [data-slot=file-tree-item][data-unread]::after { inset-inline-end: 4.5rem; }
 
 /* A row the tree has just revealed flashes once, so the eye finds it. */
 @keyframes ux-flash { 0% { background-color: color-mix(in oklab, var(--ohm-green-light) 45%, var(--ohm-card)); } 100% { background-color: var(--ux-row-selected); } }
