@@ -1,6 +1,6 @@
 ---
 name: vault
-description: How to work in a person's vault with the ohm-vault tools - reading, searching, saving and editing their posts, and changing who one is for. Use whenever someone asks what they have written about something, wants a post saved or changed, or wants a post made public, shared with friends, or made private.
+description: How to work in a person's vault with the vault's tools (the `ohm-vault` MCP server) - reading, searching, saving and editing their posts, and changing who one is for. Use whenever someone asks what they have written about something, wants a post saved or changed, or wants a post made public, shared with friends, or made private.
 ---
 
 # Working in a vault

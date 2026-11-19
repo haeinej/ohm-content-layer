@@ -1,9 +1,9 @@
 ---
 name: migrate-site
-description: Move an existing website's content, and posts from the owner's social accounts, into ohm-vault without losing anything or changing how the site looks. Use when someone wants to set this project up on their site, bring in their website or social posts, or refactor a site to read its content from records.
+description: Move an existing website's content, and posts from the owner's social accounts, into the vault without losing anything or changing how the site looks. Use when someone wants to set this project up on their site, bring in their website or social posts, or refactor a site to read its content from records.
 ---
 
-# Move a site onto ohm-vault
+# Move a site onto the vault
 
 You are moving what the owner has published into records they own, and changing their website to read from those records. Two things must hold when you finish: nothing is lost, and nothing looks different. You work on a copy until the owner says to go live.
 

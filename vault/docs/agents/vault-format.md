@@ -107,7 +107,7 @@ How `scan` writes the journal: after walking, and **before** the index transacti
 
 ## Cortex contract
 
-[vault/cortex.mjs](../../vault/cortex.mjs): `openVault({ path })` (what ohm-cortex calls for `{ kind: 'module', module, path }`) and `cortexVault(vault, { home })`. They implement ohm-cortex's `src/vault.mjs` contract (`OPERATIONS`: `shape`, `read`, `exists`, `changes`, `profile` and `search`).
+[vault/cortex.mjs](../../vault/cortex.mjs): `openVault({ path })` (what the cortex calls for `{ kind: 'module', module, path }`) and `cortexVault(vault, { home })`. They implement ohm-cortex's `src/vault.mjs` contract (`OPERATIONS`: `shape`, `read`, `exists`, `changes`, `profile` and `search`).
 - **Read-only, as cortex's rule 3 requires.** It never opens the index and writes no journal or cache. It walks the vault (only `.md` files and `_sources/*/source.json`) and each configured root itself, caching file text in memory by stat stamp. Reference-only roots are only `stat`ed. It does not depend on `node:sqlite`, and it loads on Node 22.12 without a flag.
 - **Compatibility with cortex's `folderVault`:**
   - IDs are `id ?? 'path:<node path>'`.
@@ -118,7 +118,7 @@ How `scan` writes the journal: after walking, and **before** the index transacti
 - Only blocks are blocks. `shape().problems` includes config problems, unreadable roots and `readVault` problems.
 - `search` ranks by distinct matched words, then weight: title, slug and tags count 2, body 1. It returns at most 50.
 - `profile()` returns `[]`.
-- **The cortex side** is on ohm-cortex branch `vault-module`.
+- **The cortex side** is `cortex/src/vault.mjs` in this repository (`moduleVault`).
   - `vaultFrom` accepts `{ kind: 'module', module: <absolute file>, path: <absolute folder> }`, and `moduleVault` imports the file on first use and checks the vault it returns with `checkVault`.
   - The CLI form is `cortex vault connect <folder> [dir] --module <file>`.
 - Verified end to end: on a vault holding `writing/_channel.md`, one essay and `_entities/person/ada.md`, cortex's folder reader reported 4 channels and counted the channel file and the entity as blocks. This reader reported 2 channels and the single block, and created no `.vault/`.

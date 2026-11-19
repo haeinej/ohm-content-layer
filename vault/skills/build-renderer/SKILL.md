@@ -29,9 +29,9 @@ The project's files are in `${CLAUDE_PLUGIN_ROOT}`; in a clone of the repository
 The renderer is `render`, and it runs when the site is built, so the site stays plain HTML. Never make a page fetch its content in the visitor's browser.
 
 ```sh
-npx github:haeinej/ohm-vault render adopt --page writing/essay.html --slug essay \
+npx github:haeinej/ohmmmm render adopt --page writing/essay.html --slug essay \
   --rules render-rules.json --kind essay --template templates/essay.html
-npx github:haeinej/ohm-vault render build --slug essay --rules render-rules.json --kind essay \
+npx github:haeinej/ohmmmm render build --slug essay --rules render-rules.json --kind essay \
   --template templates/essay.html --out built/writing/essay.html --against writing/essay.html
 ```
 

@@ -84,7 +84,7 @@ export async function openIndex(vault, { DatabaseSync }) {
 
 const CJK = /[ᄀ-ᇿ぀-ヿ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿]/u;
 // The words of a text, lower case. Korean, Japanese and Chinese have no spaces to split on, so a run
-// of them is taken two characters at a time, as ohm-cortex does.
+// of them is taken two characters at a time, as the cortex does.
 export function words(text) {
   const out = [];
   for (const run of String(text ?? '').toLowerCase().normalize('NFKC').match(/[\p{L}\p{N}_]+/gu) ?? []) {

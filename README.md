@@ -37,13 +37,13 @@ Private blocks are sealed on your device. The service keeps them as `{ id, ciphe
 Node 22.13 or newer.
 
 ```sh
-npx github:haeinej/ohm-vault init alice.example.com   # makes ~/ohmmmm.alice.example.com
+npx github:haeinej/ohmmmm init alice.example.com   # makes ~/ohmmmm.alice.example.com
 cd ~/ohmmmm.alice.example.com
-npx github:haeinej/ohm-vault vault index               # the vault finds ./vault by itself
-npx github:haeinej/ohm-vault cortex status             # the cortex finds ./cortex, and reads ./vault
+npx github:haeinej/ohmmmm vault index               # the vault finds ./vault by itself
+npx github:haeinej/ohmmmm cortex status             # the cortex finds ./cortex, and reads ./vault
 ```
 
-`npx github:haeinej/ohm-vault` runs `bin/ohmmmm.mjs`: `init` and `where` are its own, `cortex …` goes to the cortex, and every other command to the vault's `ohm` (`vault`, `publish`, `sync`, `mcp`…), so commands written for ohm-vault still work. From a checkout, use `node bin/ohmmmm.mjs`, or `node vault/bin/ohm.mjs` and `node cortex/bin/cortex.mjs` directly.
+`npx github:haeinej/ohmmmm` runs `bin/ohmmmm.mjs`: `init` and `where` are its own, `cortex …` goes to the cortex, and every other command to the vault's `ohm` (`vault`, `publish`, `sync`, `mcp`…), so commands written for ohm-vault still work. From a checkout, use `node bin/ohmmmm.mjs`, or `node vault/bin/ohm.mjs` and `node cortex/bin/cortex.mjs` directly.
 
 Inside a home, or with `OHMMMM_HOME` set, the vault and the cortex each find their own folder, and a cortex reads its sibling vault through the vault's reader unless `.cortex/vault.json` names another. Either folder still works on its own.
 
@@ -67,7 +67,7 @@ Read [AGENTS.md](AGENTS.md) first, then the part you are changing: [vault/AGENTS
 
 ## Where this came from
 
-This repository joins two that were separate, each with its full history (`git log --follow vault/…`, `git log --follow cortex/…`): `haeinej/ohm-vault`, now `vault/`, and `haeinej/ohm-cortex`, now `cortex/` (archived).
+This repository joins two that were separate, each with its full history (`git log --follow vault/…`, `git log --follow cortex/…`): `haeinej/ohm-vault` (this repository, renamed `haeinej/ohmmmm` on 19 November 2026), now `vault/`, and `haeinej/ohm-cortex`, now `cortex/` (archived).
 
 ## Status
 

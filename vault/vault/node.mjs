@@ -10,7 +10,7 @@
 //
 // The schemas are lexicons/com/ohmmmm/vault/*.json. A file that was a post (it has a visibility
 // property) is read as a block of kind post, through vault/file.mjs, so nothing that syncs posts
-// changes. Evidence is only what the content shows; a model's conclusions belong to ohm-cortex.
+// changes. Evidence is only what the content shows; a model's conclusions belong to the cortex (`cortex/`).
 import { FILE_TYPES, graphemes, isSlug, kindOf as mediaKind, VaultProblem, VISIBILITIES } from './core.mjs';
 import { filePost, isPostId, newPostId, postFile, postProblems, readProperties, slugOf, splitFile, writeNoteFile } from './file.mjs';
 

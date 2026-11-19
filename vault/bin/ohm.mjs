@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // One entry point for every command, so they can be run from any folder:
-//   npx github:haeinej/ohm-vault <command> [options]
+//   npx github:haeinej/ohmmmm <command> [options]
 const commands = {
   identity: ['identity.mjs', 'Show an identity and the repository it owns. Takes a handle or DID.'],
   configure: ['configure.mjs', 'Print a site configuration for --site and --handle or --did.'],

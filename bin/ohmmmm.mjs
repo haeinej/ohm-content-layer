@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The one command `npx github:haeinej/ohm-vault <command>` runs (npx picks the command named after
+// The one command `npx github:haeinej/ohmmmm <command>` runs (npx picks the command named after
 // the package). It keeps a person's home itself and hands everything else on:
 //
 //   init <handle> [parent]   make ohmmmm.<handle> in parent (default: your home folder), with vault/

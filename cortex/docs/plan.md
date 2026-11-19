@@ -325,7 +325,7 @@ Observations and memories may cite `evidence`: pointers `{node, version}` or `{s
 
 ## What exists now, and what changes
 
-Built in the `ohm-cortex` repository and tested (119 tests, run by CI on Node 20 and 22). Steps 1 to 7 and 9 are built; step 8 is not planned:
+Built in the `ohm-cortex` repository (now `cortex/` in ohmmmm) and tested (119 tests, run by CI on Node 20 and 22). Steps 1 to 7 and 9 are built; step 8 is not planned:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |

@@ -17,8 +17,8 @@ It works on a copy of your site the whole time. Your live site keeps running, an
 
 - **Set up the tools.** Follow [Set up your site](../README.md#run-your-own-pds-and-site) to install them and create your PDS. You can ask the agent to walk you through it. Your DID is the root of everything that follows. [Identity](identity.md)
 - **Get your exports.** Download your archive from each platform you want to bring in. The agent converts each export itself.
-- **Give your agent the skills.** In Claude Code, run `/plugin install ohm --marketplace haeinej/ohm-vault`. With another agent, point it at this repository's `AGENTS.md` and `skills/` folder.
-- **Open your website's source with the agent.** The commands run there with `npx github:haeinej/ohm-vault`, so nothing has to be cloned to convert and preview.
+- **Give your agent the skills.** In Claude Code, run `/plugin install ohm --marketplace haeinej/ohmmmm`. With another agent, point it at this repository's `AGENTS.md` and `skills/` folder.
+- **Open your website's source with the agent.** The commands run there with `npx github:haeinej/ohmmmm`, so nothing has to be cloned to convert and preview.
 
 No website yet? Skip to step 2. The agent helps you decide your sections, and you publish posts into them as you go.
 
