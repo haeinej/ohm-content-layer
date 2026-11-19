@@ -6,7 +6,7 @@ Human guide: [docs/vault-format.md](../vault-format.md). Design and what comes n
 
 [vault/node.mjs](../../vault/node.mjs) reads and writes a vault folder as four kinds of nodes (block, channel, entity, source) and derives evidence edges from their content. It is pure: callers pass `{ path, text }` pairs and write what they get back. It does no I/O, indexing, sync or publishing, and it holds no inference: agent conclusions live in ohm-cortex, which refers to blocks by ID.
 
-**Implemented and tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)); read-only roots and the index ([test/indexer.test.mjs](../../test/indexer.test.mjs), real temporary folders and node:sqlite). **Not built:** two-way roots, the cortex vault contract, the MCP tools, and service storage for non-post blocks. The service, `syncFolder` and publishing still handle posts only.
+**Implemented and tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)); read-only roots and the index ([test/indexer.test.mjs](../../test/indexer.test.mjs), real temporary folders and node:sqlite). Provenance and the cortex contract are tested in [test/provenance.test.mjs](../../test/provenance.test.mjs). **Not built:** two-way roots, the MCP tools, service storage for non-post blocks, and the change in ohm-cortex that would let it open this vault. The service, `syncFolder` and publishing still handle posts only.
 
 ## Schemas
 
@@ -70,7 +70,53 @@ Human guide: [docs/vault-format.md](../vault-format.md). Design and what comes n
 
 Tables: `meta`, `files(root,path,…)`, `nodes(key,…,node JSON)`, `edges`, `terms`, `problems`. Never write to them outside `scan`.
 
-CLI: [scripts/vault.mjs](../../scripts/vault.mjs), run as `ohm vault init|index|status|inspect REF|search WORDS [--vault DIR] [--limit N]`. It defaults to `OHM_VAULT_FOLDER`, then the current folder. It prints JSON and exits 1 with a sentence on failure. Without `node:sqlite` it re-runs itself with `--experimental-sqlite`. It makes no network calls.
+CLI: [scripts/vault.mjs](../../scripts/vault.mjs), run as `ohm vault init|add SOURCE|index|status|inspect REF|search WORDS|hook [--vault DIR] [--limit N] [--channel C] [--title T] [--by agent:NAME] [--move] [--agent NAME]`. `init` also creates the vault folder. It defaults to `OHM_VAULT_FOLDER`, then the current folder. It prints JSON and exits 1 with a sentence on failure. Without `node:sqlite` it re-runs itself with `--experimental-sqlite`. It makes no network calls.
+
+## Journal and provenance
+
+[vault/journal.mjs](../../vault/journal.mjs) manages `.vault/journal.jsonl` (`JOURNAL`).
+- The journal is append-only. It is **not** derived data: never truncate or rewrite it, and sync it with the vault.
+- Event shape: `{ at, op, root, path, from?, origin?, by, via, session?, hash? }`.
+  - `op` is one of `added`, `changed`, `moved` (needs `from`), `removed`, `written`, `copied-from` (needs `origin`) or `downloaded-from` (needs `origin`).
+  - `by` is `me`, `unknown` or `agent:<name>`.
+  - `via` is `add`, `hook`, `scan`, `editor` or `sync`.
+- `appendEvents` checks every event, then writes all of them or none, in one append.
+- `readEvents` skips unparsable lines and counts them. `scan` reports that count as a problem.
+- `downloadedFrom(abs)` works on macOS only. It reads `com.apple.metadata:kMDItemWhereFroms` with `xattr -px`, decodes it with `plutil`, and returns only addresses. On other systems it returns `[]`, and also on error.
+
+How `scan` writes the journal: after walking, and **before** the index transaction commits, it appends:
+- for each added file, `added`, unless an `add`, `hook` or `editor` event since the last scan already said `added`;
+- `changed`, `moved` and `removed` events;
+- for a new file in the vault folder that has no stated origin, `copied-from` when its content address matches another indexed file (read-only roots preferred);
+- for a new non-`.md` file, `downloaded-from` from macOS.
+
+`by` comes from the latest non-scan event for that path since the last scan (`meta.scanned`); otherwise it is `unknown`. The whole journal is then loaded into the `events` table. A crash between the append and the commit can repeat an event; it cannot lose one. `INDEX_VERSION` is 2. `history(db, root, path)` follows `moved` events backwards, and `inspect` returns it as `history`.
+
+[vault/add.mjs](../../vault/add.mjs):
+- `addToVault({ vault, source, channel = 'inbox', by = 'me', title, move })`:
+  - **Absolute path:** a file only. It refuses folders, anything already inside the vault, and missing files.
+  - **`.md` file:** written with `setProperty` for `origin` (only if absent), `title`, `created`, and `by` plus `status: proposed` for agents.
+  - **Any other file:** copied with `COPYFILE_EXCL` (or moved, falling back to copy then unlink across devices), plus a block `<slug>.md` with `kind` (`code` for `CODE_ENDINGS`), `title`, `origin`, the same marks, and body `![[name]]`.
+  - **HTTP(S) address:** `_sources/<id>/source.json` (`retain: reference`) plus a link block with `from`. No network call.
+  - **Names:** taken names get `-2`, `-3`.
+  - **Inbox:** `inbox/_channel.md` (`kind: inbox`) is made on first use.
+  - **Journal:** `added` events with `via: add`.
+- `hookEvent(input, { vault, agent })` maps Claude Code PostToolUse JSON (`tool_name` in `WRITING_TOOLS`, `tool_input.file_path`/`notebook_path`, `cwd`, `session_id`) to a `written` event. It returns `null` outside the vault, for `.`-paths, for other tools, and for an invalid agent name.
+  - `ohm vault hook` reads stdin, writes no output, never loads SQLite, and always exits 0.
+
+## Cortex contract
+
+[vault/cortex.mjs](../../vault/cortex.mjs): `cortexVault(vault, { DatabaseSync, fresh = true })` implements ohm-cortex's `src/vault.mjs` contract (`OPERATIONS`: `shape`, `read`, `exists`, `changes`, `profile`, `search`), plus `close()`.
+- With `fresh`, it scans before each answer; only changed files are read.
+- Compatibility with cortex's `folderVault`:
+  - **IDs:** `id ?? 'path:<node path>'`.
+  - **Channel:** `home || 'other'`. A channel counts every block under it.
+  - **Cursor:** the same shape, `{ [id]: { title, channel, hash } }`.
+  - **Hash:** `sha256(text).hex.slice(0,16)` for files with text (identical to cortex). Otherwise the content address, or `size:mtime` for reference-only files.
+  - **Legacy cursors:** `label`/`sublabel` entries are accepted.
+- Only `type = 'block'` nodes are blocks. `profile()` returns `[]`.
+- `search` uses the index ranking and returns at most 50.
+- Cortex cannot open it yet. `vaultFrom` in ohm-cortex knows only `{ kind: 'folder' }`, so a host must pass this object in, or cortex must learn a kind that loads it. That change belongs in ohm-cortex.
 
 ## Use
 
@@ -83,7 +129,7 @@ const { path, text } = nodeFile({ ...vault.blocks[0], channels: ['reading'] });
 
 ## Verification
 
-From the repository root: `node --test test/node.test.mjs`, `node --experimental-sqlite --test test/indexer.test.mjs`, then `npm test` for the whole suite (the post-file tests prove nothing about posts changed). Not verified: a real Google Drive mount; the reference-only path is tested with an unreadable file instead.
+From the repository root: `node --test test/node.test.mjs`, `node --experimental-sqlite --test test/indexer.test.mjs test/provenance.test.mjs`, then `npm test` for the whole suite (the post-file tests prove nothing about posts changed). Not verified: a real Google Drive mount; the reference-only path is tested with an unreadable file instead.
 
 ## Maintenance
 

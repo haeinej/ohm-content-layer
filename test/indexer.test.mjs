@@ -213,5 +213,5 @@ test('the vault command makes a configuration, indexes and answers, without touc
   assert.equal(JSON.parse((await ohm('inspect', 'churn-query')).stdout).node.title, 'Churn query');
   assert.equal(JSON.parse((await ohm('status')).stdout).files, 8);
   await assert.rejects(ohm('inspect', 'nothing-here'), /Nothing in the index is "nothing-here"/);
-  await assert.rejects(ohm('dance'), /Say what to do: init, index, status, inspect, search/);
+  await assert.rejects(ohm('dance'), /Say what to do: init, add, index, status, inspect, search, hook/);
 });

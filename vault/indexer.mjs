@@ -16,12 +16,13 @@ import { join } from 'node:path';
 import { blobCid, FILE_TYPES, kindOf as mediaKind } from './core.mjs';
 import { slugOf } from './file.mjs';
 import { evidence, nodeKey, originKind, readVault } from './node.mjs';
+import { appendEvents, downloadedFrom, readEvents } from './journal.mjs';
 import { CANONICAL, CONFIG, readConfig } from './roots.mjs';
 
 export const INDEX = '.vault/index.sqlite';
 export const CACHE = '.vault/cache';
 // Raise this when the tables change; an index of another version is rebuilt from the files.
-export const INDEX_VERSION = '1';
+export const INDEX_VERSION = '2';
 
 // Endings whose files are text: their words are searchable when a root keeps text.
 export const TEXT_ENDINGS = new Set(['md', 'txt', 'csv', 'tsv', 'json', 'yaml', 'yml', 'toml', 'xml', 'html', 'css', 'sql', 'py', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'sh', 'rb', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cpp', 'r', 'ipynb']);
@@ -47,6 +48,10 @@ CREATE INDEX edges_src ON edges (src);
 CREATE INDEX edges_dst ON edges (dst);
 CREATE TABLE terms (term TEXT NOT NULL, key TEXT NOT NULL, weight INTEGER NOT NULL, PRIMARY KEY (term, key));
 CREATE TABLE problems (root TEXT NOT NULL, path TEXT NOT NULL, problem TEXT NOT NULL);
+CREATE TABLE events (
+  seq INTEGER PRIMARY KEY, at TEXT NOT NULL, op TEXT NOT NULL, root TEXT NOT NULL, path TEXT NOT NULL, from_path TEXT,
+  origin TEXT, by TEXT NOT NULL, via TEXT NOT NULL, session TEXT, hash TEXT);
+CREATE INDEX events_path ON events (root, path);
 `;
 
 // The index, opened, and made again from nothing when it is of another version or cannot be read.
@@ -129,7 +134,8 @@ const stampOf = info => `${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs
 // Bring the index into line with the vault folder and its roots, and say what changed.
 //   vault: the vault's absolute path; db: from openIndex; home: for "~" in the configuration
 export async function scan({ vault, db, home = homedir(), now = new Date() }) {
-  const report = { at: now.toISOString(), roots: [], added: [], changed: [], removed: [], moved: [], unchanged: 0, opened: 0, cached: 0, problems: [] };
+  const report = { at: now.toISOString(), roots: [], added: [], changed: [], removed: [], moved: [], recognised: [], journaled: 0, unchanged: 0, opened: 0, cached: 0, problems: [] };
+  const lastScan = db.prepare("SELECT value FROM meta WHERE key = 'scanned'").get()?.value ?? '';
   let config;
   try {
     config = JSON.parse(await readFile(join(vault, CONFIG), 'utf8'));
@@ -213,6 +219,7 @@ export async function scan({ vault, db, home = homedir(), now = new Date() }) {
       else report.added.push({ root: row.root, path: row.path });
     }
     report.removed.push(...gone.map(row => ({ root: row.root, path: row.path })));
+    await journal(vault, db, report, lastScan);
     rebuild(db, roots, report);
     db.prepare("INSERT INTO meta (key, value) VALUES ('scanned', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(report.at);
     db.exec('COMMIT');
@@ -221,6 +228,54 @@ export async function scan({ vault, db, home = homedir(), now = new Date() }) {
     throw problem;
   }
   return report;
+}
+
+// Write what this scan found to the journal, then load the whole journal into the index.
+// Who did something is taken from what an agent's hook, ohm vault add or the editor said about that
+// file since the last scan; otherwise it is unknown. A file new to the vault folder is checked for
+// where it came from: the same bytes as a file the index already knows, or the address macOS kept
+// when it was downloaded. Nothing is guessed.
+async function journal(vault, db, report, lastScan) {
+  const { events: before, unreadable } = await readEvents(vault);
+  if (unreadable) report.problems.push({ root: CANONICAL, path: '.vault/journal.jsonl', problems: [`${unreadable} line(s) of the journal cannot be read and are skipped. The rest is used.`] });
+  const told = new Map();
+  for (const event of before) if (event.at > lastScan && event.via !== 'scan') told.set(`${event.root}\u0000${event.path}`, event);
+  const row = db.prepare('SELECT abs, hash FROM files WHERE root = ? AND path = ?');
+  const twins = db.prepare("SELECT root, path, abs FROM files WHERE hash = ? AND NOT (root = ? AND path = ?) ORDER BY root = 'vault', root, path LIMIT 1");
+  const at = report.at;
+  const events = [];
+  const said = (root, path) => told.get(`${root}\u0000${path}`);
+  for (const { root, path } of report.added) {
+    const file = row.get(root, path);
+    const known = said(root, path);
+    if (known?.op !== 'added') events.push({ at, op: 'added', root, path, by: known?.by ?? 'unknown', via: 'scan', ...(known?.session ? { session: known.session } : {}), ...(file?.hash ? { hash: file.hash } : {}) });
+    if (root !== CANONICAL || known?.origin) continue;
+    const twin = file?.hash ? twins.get(file.hash, root, path) : null;
+    if (twin) {
+      events.push({ at, op: 'copied-from', root, path, origin: twin.abs, by: known?.by ?? 'unknown', via: 'scan', hash: file.hash });
+      report.recognised.push({ path, copiedFrom: twin.abs });
+    }
+    if (!path.endsWith('.md')) {
+      const [address] = await downloadedFrom(file.abs);
+      if (address) {
+        events.push({ at, op: 'downloaded-from', root, path, origin: address, by: known?.by ?? 'unknown', via: 'scan' });
+        report.recognised.push({ path, downloadedFrom: address });
+      }
+    }
+  }
+  for (const { root, path } of report.changed) {
+    const known = said(root, path);
+    events.push({ at, op: 'changed', root, path, by: known?.by ?? 'unknown', via: 'scan', ...(known?.session ? { session: known.session } : {}), ...(row.get(root, path)?.hash ? { hash: row.get(root, path).hash } : {}) });
+  }
+  for (const { root, from, to } of report.moved) events.push({ at, op: 'moved', root, path: to, from, by: said(root, to)?.by ?? 'unknown', via: 'scan' });
+  for (const { root, path } of report.removed) events.push({ at, op: 'removed', root, path, by: 'unknown', via: 'scan' });
+  await appendEvents(vault, events);
+  report.journaled = events.length;
+  db.exec('DELETE FROM events');
+  const insert = db.prepare('INSERT INTO events (at, op, root, path, from_path, origin, by, via, session, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  for (const event of [...before, ...events]) {
+    insert.run(event.at, event.op, event.root, event.path, event.from ?? null, event.origin ?? null, event.by, event.via, event.session ?? null, event.hash ?? null);
+  }
 }
 
 // A file in a read-only root as a block: in the root's channel, under the folders it sits in there,
@@ -324,7 +379,23 @@ export function inspect(db, ref) {
     ...(file ? { file: { ...plain(file), size: Number(file.size), cached: Boolean(file.cached) } } : {}),
     out: db.prepare('SELECT kind, dst AS node, at FROM edges WHERE src = ? ORDER BY kind, dst').all(row.key).map(plain),
     in: db.prepare('SELECT kind, src AS node, at FROM edges WHERE dst = ? ORDER BY kind, src').all(row.key).map(plain),
+    ...(row.file ? { history: history(db, row.root, row.file) } : {}),
   };
+}
+
+// What the journal says happened to a file, oldest first, following it back through its moves.
+export function history(db, root, path) {
+  const paths = [path];
+  const moved = db.prepare("SELECT from_path FROM events WHERE root = ? AND path = ? AND op = 'moved' ORDER BY seq DESC LIMIT 1");
+  for (let at = paths[0]; ;) {
+    const earlier = moved.get(root, at)?.from_path;
+    if (!earlier || paths.includes(earlier)) break;
+    paths.push(earlier);
+    at = earlier;
+  }
+  const marks = paths.map(() => '?').join(', ');
+  return db.prepare(`SELECT at, op, path, from_path, origin, by, via, session FROM events WHERE root = ? AND path IN (${marks}) ORDER BY seq`).all(root, ...paths)
+    .map(event => Object.fromEntries(Object.entries({ ...event, from: event.from_path, from_path: undefined }).filter(([, value]) => value !== null && value !== undefined)));
 }
 
 // Nodes ranked by how many of the words they hold, then by weight: a word in a title, slug, alias or

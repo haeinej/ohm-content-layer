@@ -44,4 +44,4 @@ Keep member content private and use synthetic examples in public documentation.
 - Deciding sections: [skills/suggest-labels/SKILL.md](skills/suggest-labels/SKILL.md)
 - Making a site's pages build from records: [skills/build-renderer/SKILL.md](skills/build-renderer/SKILL.md)
 - Documenting completed work for people and agents: [skills/document-work/SKILL.md](skills/document-work/SKILL.md)
-- The commands: `npm run identity`, `posts`, `profile`, `publish:post`, `render`, `lexicon`, `configure`, `migrate`, and `ohm vault init|index|status|inspect|search` for a vault folder on this machine ([docs/vault-format.md](docs/vault-format.md)). Run `npm test` after changing code.
+- The commands: `npm run identity`, `posts`, `profile`, `publish:post`, `render`, `lexicon`, `configure`, `migrate`, and `ohm vault init|add|index|status|inspect|search|hook` for a vault folder on this machine ([docs/vault-format.md](docs/vault-format.md)). Run `npm test` after changing code.

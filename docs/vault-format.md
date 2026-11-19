@@ -118,9 +118,60 @@ npx github:haeinej/ohm-vault vault status
 
 If Google Drive is not running, its root cannot be read. The index keeps what it knew about it and says so, rather than treating its files as removed. The index can always be deleted: the next `vault index` makes it again from your files.
 
+## Where things came from
+
+Once a file has been copied into a folder, nothing in it says where it was copied from. So the vault writes down where things came from at the moment they arrive, in `.vault/journal.jsonl`: one line for each file added, changed, moved or removed, with who did it and how. Unlike the index, the journal cannot be made again from your files, so it is only ever added to, and it stays with the vault.
+
+**Adding through ohm** records everything. An agent, or you, can bring in a file or an address:
+
+```sh
+npx github:haeinej/ohm-vault vault add ~/Downloads/attention.pdf --channel reading
+npx github:haeinej/ohm-vault vault add ~/work/queries/churn.sql --by agent:claude-code
+npx github:haeinej/ohm-vault vault add https://example.com/essays/on-rain --title "On rain"
+```
+
+- A Markdown file is copied into the channel with an `origin` property.
+- Any other file is copied in, with a small block beside it that embeds it and gives its `origin`.
+- An address becomes a source that refers to it and a link block from that source. Nothing is fetched.
+- The original stays where it was, unless you add `--move`.
+- Nothing already in the vault is overwritten.
+- With no `--channel`, things go to `inbox`.
+
+When an agent adds something with `--by agent:<name>`, the block is marked `status: proposed` for you to keep or not.
+
+**Dropping a file in by hand** records what can be checked, and nothing more. When indexing finds a new file in the vault folder, it looks for two things:
+
+- whether its bytes are exactly those of a file it already knows (in a root, or elsewhere in the vault), and if so records that it was copied from there;
+- whether macOS kept the address it was downloaded from, as browsers and mail do, and if so records that address.
+
+Otherwise the file is recorded as added by someone unknown. The vault does not guess.
+
+**An agent writing straight into the folder**, such as Claude Code editing a note, looks to the vault like anyone else's edit. To have those writes recorded as the agent's, add a hook to Claude Code's settings (`.claude/settings.json` in the project, or `~/.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [{ "type": "command", "command": "npx github:haeinej/ohm-vault vault hook --vault ~/Vault --agent claude-code" }] }
+    ]
+  }
+}
+```
+
+The hook notes each file the agent writes inside the vault, and the next `vault index` records the change as the agent's, with its session. It never fails the agent's work. Files an agent creates by running shell commands are not seen by this hook.
+
+`vault inspect` shows a file's history from the journal, following it through its moves.
+
+## Using the vault from ohm-cortex
+
+ohm-cortex keeps what agents learn about you, and reads your vault to find what that learning rests on. It reads a vault through a small set of questions: what channels there are, one block, whether blocks still exist, what changed since last time, and a search. This vault answers them from its index (`vault/cortex.mjs`), so cortex sees blocks only (not channel files, entities or sources) and sees the blocks of your roots too. A block is known by its `id`, or by its path when it has none, exactly as cortex's own folder reader knows it, so nothing cortex remembers is lost by switching.
+
+Today cortex itself opens only plain folders. Using this reader needs a small change in ohm-cortex: its `vaultFrom` has to accept a vault of this kind. Until then, connecting cortex to the vault folder works with cortex's own reader, which also reads `_channel.md` and entity files as if they were blocks.
+
 ## What happens to your files
 
-The vault reads your files and writes them back exactly as it found them, so your folder only changes when you change something. Size, dates and content addresses are not written into your files; they are in `.vault/index.sqlite`, which can always be rebuilt. Nothing is ever written in a root, and indexing never reaches the vault service or publishes anything.
+The vault reads your files and writes them back exactly as it found them, so your folder only changes when you change something. Size, dates and content addresses are not written into your files; they are in `.vault/index.sqlite`, which can always be rebuilt. Besides the index, the vault keeps `.vault/journal.jsonl`, and `vault add` writes the files it brings in. Nothing is ever written in a root, and nothing here reaches the vault service or publishes anything.
 
 When something cannot be read, the vault says so in a sentence and leaves the file as it is: a channel that is not a folder, two files with the same name, an origin it does not understand, a copied file that carries another file's ID.
 
