@@ -34,7 +34,7 @@ const memory = object({
 const change = object({ memory, version }, ['memory']);
 
 export const TOOLS = [
-  { name: 'cortex_start', description: 'Call first in every session. Returns the playbook for keeping this cortex (follow it), the person\'s own added rules included, the identity in full, how to read the vault (each channel, how many blocks it holds, what it means and how blocks there are filed, and memories pointing at blocks no longer there), the memories marked always, a line for every other memory and approved skill, the tools switched on, the notes waiting to be settled, what is waiting for the person (your proposals among them, each saying if it is stale), the open dead ends, and working memory: yours from last time and every other agent\'s.',
+  { name: 'cortex_start', description: 'Call first in every session. Returns the playbook for keeping this cortex (follow it), the person\'s own added rules included, the identity in full, how to read the vault (each channel, how many blocks it holds, what it means and how blocks there are filed, and memories pointing at blocks no longer there), the memories marked always, a line for every other memory and approved skill, the tools switched on, the notes waiting to be settled, what is waiting for the person (identity facts to confirm, skills to approve, tools asked for), the open dead ends, and working memory: yours from last time and every other agent\'s.',
     inputSchema: object({}), annotations: { readOnlyHint: true } },
   { name: 'cortex_propose_identity', description: 'Propose one identity fact: kind, name, preferredName, pronouns, emails, websites, city, timezone, languages, birthdate, occupation, organization or position. It changes nothing until the person confirms it. Give its source: the person\'s own words ({kind: "person", quote}), or a block in the vault that states it ({kind: "vault", block, passage}). Something you worked out is not a source, and an empty field is a valid answer. Pronouns only ever come from the person\'s words; never infer them from a name. Propose a birthdate only when the passage states the date outright.',
     inputSchema: object({
@@ -42,7 +42,7 @@ export const TOOLS = [
       value: { description: 'Text for most fields. emails: a list of {label, address}. websites and languages: lists of text. birthdate: YYYY-MM-DD, or --MM-DD with no year.' },
       source: object({ kind: { type: 'string', enum: ['person', 'vault'] }, quote: text, block: text, post: { type: 'string', description: 'Deprecated: the old name of block' }, passage: text }, ['kind']),
     }, ['field', 'value', 'source']) },
-  { name: 'cortex_working', description: 'Rewrite your own working memory, in full: how the person is working today, corrections they made, and threads still open. Write freely, as often as you like: it is the one thing you write without the person accepting it. Pass the version cortex_start or your last write returned. You can read other agents\' working memory in cortex_start, and never write theirs.',
+  { name: 'cortex_working', description: 'Rewrite your own working memory, in full: how the person is working today, corrections they made, and threads still open. Write freely, as often as you like. Pass the version cortex_start or your last write returned. You can read other agents\' working memory in cortex_start, and never write theirs.',
     inputSchema: object({ text: { type: 'string', description: 'Markdown, at most 8 KB' }, version }, ['text']) },
   { name: 'cortex_distill', description: 'End a session. Read every agent\'s working memory together (cortex_start gives them), record as notes what you judge was seen in more than one session or by more than one agent, and leave your own working memory as what is still open for next time. The working memory it replaces is kept.',
     inputSchema: object({
@@ -51,28 +51,28 @@ export const TOOLS = [
       working: { type: 'string', description: 'Your working memory for next time, in full. Empty to clear it' },
       version,
     }, ['session', 'working']) },
-  { name: 'cortex_describe_channel', description: 'Propose what a channel of the vault means and how blocks there are filed, one line each, from what you see in the vault and what the person says. No need to ask first: vault.md changes when the person accepts it. If the person has written it themselves, theirs stands and this is refused: suggest a change to them instead.',
+  { name: 'cortex_describe_channel', description: 'Write what a channel of the vault means and how blocks there are filed, one line each, from what you see in the vault and what the person says. No need to ask first: it is recorded as your change, and the person can revert it. If the person has written it themselves, theirs stands and this is refused: suggest a change to them instead.',
     inputSchema: object({ channel: { type: 'string', description: 'A channel as cortex_start lists it, such as essays or notes/reading' }, meaning: text, conventions: text }, ['channel']) },
   { name: 'cortex_note', description: 'Record in one line something you noticed about the person. It changes no memory. Make the ID once and reuse it if you retry; name the real session. Cite what you saw it in as evidence when you can.',
     inputSchema: object({ id: { type: 'string', maxLength: 200 }, note: { type: 'string', maxLength: 500 }, session: { type: 'string', maxLength: 200 }, project: text, evidence }, ['id', 'note', 'session']) },
-  { name: 'cortex_settle', description: 'Without arguments, read the notes waiting and the ones kept from earlier sessions. Otherwise give every note an outcome: kept (seen once, not a memory yet), dropped, or the name of the memory it went into; and give the memories you rewrote in changes, each with the version you read. The outcomes are recorded now; each memory it touches is proposed to the person. Returns the proposals and the notes still waiting.',
+  { name: 'cortex_settle', description: 'Without arguments, read the notes waiting and the ones kept from earlier sessions. Otherwise give every note an outcome: kept (seen once, not a memory yet), dropped, or the name of the memory it went into; and give the memories you rewrote in changes, each with the version you read. Each memory it touches is rewritten, as your change. Returns the changes and the notes still waiting.',
     inputSchema: object({ changes: { type: 'array', items: change, maxItems: 100 }, notes: { type: 'array', minItems: 1, maxItems: 100, items: object({ id: text, outcome: { type: 'string', description: 'kept, dropped, or a memory name' } }, ['id', 'outcome']) } }) },
   { name: 'cortex_recall', description: 'Read one memory in full by name, or find memories by words. A named read gives its version; ask for history to see earlier versions, or name a version to read one back.',
     inputSchema: object({ name, query: text, limit: { type: 'integer', minimum: 1, maximum: 50 }, history: { type: 'boolean' }, version }), annotations: { readOnlyHint: true } },
-  { name: 'cortex_remember', description: 'Propose a whole memory. It is written when the person accepts it. To change an existing memory, read it first and pass its version. Leaving notes, blocks or evidence out keeps the ones it had.',
+  { name: 'cortex_remember', description: 'Save a whole memory at once. It is recorded as your change, with your reason, and the person can revert it. To change an existing memory, read it first and pass its version. Leaving notes, blocks or evidence out keeps the ones it had.',
     inputSchema: object({ memory, version, reason: { type: 'string', maxLength: 500 } }, ['memory']) },
-  { name: 'cortex_forget', description: 'Propose removing a memory, in two calls. The first returns the memory and a confirm value: show the memory to the person, and call again with confirm only if they agree. The memory goes when they accept the proposal.',
+  { name: 'cortex_forget', description: 'Remove a memory, in two calls. The first returns the memory and a confirm value: show the memory to the person, and call again with confirm only if they agree. What it removes is kept, and can be restored.',
     inputSchema: object({ name, confirm: text }, ['name']), annotations: { destructiveHint: true } },
   { name: 'cortex_skill', description: 'Read one approved skill and the files beside it, when its description fits the task. A skill still waiting for approval is refused.',
     inputSchema: object({ name }, ['name']), annotations: { readOnlyHint: true } },
-  { name: 'cortex_propose_skill', description: 'Propose a skill: the full SKILL.md, with name and description between --- lines, and any text files beside it. It waits for the person to accept it and is not used before.',
+  { name: 'cortex_propose_skill', description: 'Propose a skill: the full SKILL.md, with name and description between --- lines, and any text files beside it. It waits for the person to approve it and is not used before.',
     inputSchema: object({ text, files: { type: 'array', maxItems: 20, items: object({ path: text, text }, ['path', 'text']) } }, ['text']) },
-  { name: 'cortex_propose_tool', description: 'Propose a tool that ought to exist: what it is for, what it would take and what it would give. Accepted, it is added to tools/ switched off; it does nothing until it is built and the person switches it on.',
+  { name: 'cortex_propose_tool', description: 'Write down a tool that ought to exist: what it is for, what it would take and what it would give. It does nothing and cannot be switched on: the person builds it, adds it and switches it on.',
     inputSchema: object({ name, description: text, inputs: text, outputs: text }, ['name', 'description', 'inputs', 'outputs']) },
   { name: 'cortex_file_advice', description: 'Ask how to file a source the person handed you: up to three likely channels from vault.md, each with what it means, its conventions and why it fits; the approved skill for that kind of source, if one fits; up to five related blocks; and one question to put to them. It writes nothing. Propose once, and on their yes save through the vault\'s own tools, with their words as given.',
     inputSchema: object({ kind: { type: 'string', maxLength: 200, description: 'What the source is, in your words: "meeting transcript", "reading note", "link"' }, title: { type: 'string', maxLength: 500 }, text: { type: 'string', description: 'The source as given, or enough of it to tell what it is about' } }, ['kind']),
     annotations: { readOnlyHint: true } },
-  { name: 'cortex_history', description: 'List what changed in the cortex, oldest first: each change\'s seq, time, who made it (the person or which agent), the node (such as memory/<name>, identity, skill/<name>, tool/<name>, working/<agent> or channel/<path>), what was done, its versions before and after, and the proposal and decision behind it; and the saves, the points named in history. Filter by node (a node, or a prefix ending in / such as memory/), since (a seq, or a date), or actor (a name, or human or agent). It writes nothing.',
+  { name: 'cortex_history', description: 'List what changed in the cortex, oldest first: each change\'s seq, time, who made it (the person or which agent), the node (such as memory/<name>, identity, skill/<name>, tool/<name>, working/<agent> or channel/<path>), what was done, its versions before and after, why, and its evidence; and the saves, the points named in history. Filter by node (a node, or a prefix ending in / such as memory/), since (a seq, or a date), or actor (a name, or human or agent). It writes nothing.',
     inputSchema: object({ node: text, since: { type: ['string', 'integer'], description: 'A seq: changes after it. A date such as 2026-11-19, or a time: changes from then on' }, actor: text, limit: { type: 'integer', minimum: 1, maximum: 500 } }),
     annotations: { readOnlyHint: true } },
   { name: 'cortex_as_of', description: 'Read one node of the cortex as it was at a point: a save\'s name, a date such as 2026-11-19 (the end of that day), a time, or a seq. Returns its version and text (or content) then, or says it did not exist, or that that version was not kept. It writes nothing.',
@@ -80,14 +80,14 @@ export const TOOLS = [
     annotations: { readOnlyHint: true } },
   { name: 'cortex_save', description: 'Name this point in the cortex\'s history with a note, such as before a large change, so it can be read back with cortex_as_of. A save changes nothing: every change is already recorded. The name is lowercase words or digits joined by hyphens.',
     inputSchema: object({ name: { type: 'string', maxLength: 100 }, note: { type: 'string', maxLength: 500 } }, ['name', 'note']) },
-  { name: 'cortex_restore', description: 'Propose bringing a node back to an earlier version. Accepted, it is a new change: what it replaces is kept, and nothing in the history is rewritten. Your own working memory is restored at once. Find the version with cortex_history or cortex_recall, and pass the version you read now. Identity and the playbook are restored only by the person.',
+  { name: 'cortex_restore', description: 'Bring a node back to an earlier version, as a new change: what it replaces is kept, and nothing in the history is rewritten. Find the version with cortex_history or cortex_recall, and pass the version you read now. Identity, the playbook, skills and tools are restored only by the person, and so is another agent\'s working memory.',
     inputSchema: object({ node: { type: 'string', description: 'A node, such as memory/<name>' }, to: { type: 'string', description: 'The earlier version to bring back' }, version, reason: { type: 'string', maxLength: 500 } }, ['node', 'to']) },
-  { name: 'cortex_revert', description: 'Propose undoing one change from cortex_history: its node goes back to what it was before. Refused once the node has changed again; restore a version instead.',
+  { name: 'cortex_revert', description: 'Undo one change from cortex_history, as a new change: its node goes back to what it was before. Refused once the node has changed again; restore a version instead. Changes to identity, the playbook, skills and tools are reverted only by the person.',
     inputSchema: object({ change: { type: ['string', 'integer'], description: 'The change\'s seq or ID' }, reason: { type: 'string', maxLength: 500 } }, ['change']) },
-  { name: 'cortex_session', description: 'When you finish a task, or give it up, record it: one line of what was done, the IDs of the proposals and changes it made, and the dead ends: what you tried, why you dropped it, and a command that would show whether it still holds. Name the project folder, so the next session there sees the dead ends. Mark dead ends that no longer hold as resolved.',
+  { name: 'cortex_session', description: 'When you finish a task, or give it up, record it: one line of what was done, the IDs of the changes it made, and the dead ends: what you tried, why you dropped it, and a command that would show whether it still holds. Name the project folder, so the next session there sees the dead ends. Mark dead ends that no longer hold as resolved.',
     inputSchema: object({
       summary: { type: 'string', maxLength: 300 }, outcome: { type: 'string', enum: ['done', 'stopped'] },
-      made: { type: 'array', maxItems: 100, items: text, description: 'Proposal and change IDs from this task' },
+      made: { type: 'array', maxItems: 100, items: text, description: 'The IDs of the changes you made in this task, as your writes returned them' },
       deadEnds: { type: 'array', maxItems: 20, items: object({ tried: text, why: text, check: text }, ['tried', 'why']) },
       resolved: { type: 'array', maxItems: 50, items: text, description: 'IDs of dead ends that no longer hold' },
       project: text, session: text,
@@ -140,8 +140,7 @@ export function createTools(cortex) {
         if (given.blocks === undefined && given.posts === undefined && held.memory.blocks !== undefined) given.blocks = [...held.memory.blocks];
         if (given.evidence === undefined && held.memory.evidence !== undefined) given.evidence = held.memory.evidence.map(pointer => ({ ...pointer }));
       }
-      const done = await cortex.write(given, { replaces: version ?? null, reason });
-      return { done: !done.proposed, ...done };
+      return { done: true, ...await cortex.write(given, { replaces: version ?? null, reason }) };
     },
     async cortex_forget({ name, confirm }) {
       const issued = confirm === undefined ? null : confirmations.get(confirm);
@@ -156,8 +155,7 @@ export function createTools(cortex) {
         confirmations.set(token, { name, version: held.version });
         return { done: false, willRemove: held.memory, confirm: token, next: 'Show this memory to the person. Only if they agree, call again with the same name and this confirm value.' };
       }
-      const done = await cortex.remove(name, { replaces: issued.version });
-      return { done: !done.proposed, ...done };
+      return { done: true, ...await cortex.remove(name, { replaces: issued.version }) };
     },
     cortex_skill: ({ name }) => cortex.getSkill(name),
     cortex_propose_skill: args => cortex.proposeSkill(args),

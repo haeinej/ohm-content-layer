@@ -28,7 +28,7 @@ Cortex uses ohm's words for what is in a vault. [The guide](guide.md) explains t
 2. **The person controls content.** Something enters the vault only when the person hands it over. The agent files it as given, proposes where it goes, and indexes it. It never writes a block or a fact on its own initiative, and it edits a block only when asked.
 3. **The folder is the cortex.** A cortex is a folder of Markdown files the person can open, read and edit. Hand edits are what the agent gets next. There is no hidden second copy. A host such as ohm is a place it syncs to, not the original.
 4. **Identity is the root, and it is strict.** Everything in a cortex is about one identity. Identity facts are few, typed, rarely change, and are never guessed.
-5. **Every edit goes through the person.** The agent proposes what it learns, whole, and nothing in the folder changes until the person accepts it. Only its own working memory it writes at once. It cannot accept its own proposal, set an identity fact, approve its own skill, or give itself a tool.
+5. **Agents edit directly; every change is marked with who made it; the person reverts.** The agent writes what it learns without asking, and each write is a change in the journal under its name, so the person can see it and undo it. Identity, skills and tools need the person: the agent cannot set an identity fact, approve its own skill, or give itself a tool.
 6. **What the person said outranks what the agent worked out.** Every memory says which it is.
 7. **Nothing is lost.** Every replaced or removed file is kept and can be restored.
 8. **Private.** A cortex is for one person. Nothing in it is published, used for matching, or sent to another service. Secrets have one place and never leave the machine.
@@ -49,7 +49,7 @@ cortex/
 ├── tools/                what the agent may use. One file per tool, on or off
 ├── .cortex/              machinery the person does not need to look at
 │   ├── working/          working memory, one file per agent: this session, and what was left open
-│   ├── journal.jsonl     every proposal, decision, change, note, session and save, with who did it
+│   ├── journal.jsonl     every change, note, settlement, session and save, with who did it
 │   ├── hooks.jsonl       the hooks' checkpoints on this machine: when to ask for a distill. Not committed
 │   ├── identity.jsonl    identity facts proposed, confirmed and turned down
 │   └── history/          every earlier version of every file, by version
@@ -66,12 +66,12 @@ For someone non-technical it is: who I am, how my vault is laid out, what my age
 | `agents/AGENTS.md` | Nothing | Add their own rules at the end | Every session |
 | `agents/secrets/` | Nothing, and never read a value into anything | Put a secret there | When a tool needs it, by file name |
 | `identity.md` | Propose a field, with evidence | Confirm, correct or clear a field | Every session, in full |
-| `vault.md` | Keep the structure and counts in step with the vault (cortex does this); propose a channel's meaning and conventions | Accept or reject; edit anything in it; what they write outranks the agent's | Every session |
-| `memory/` | Propose writing, rewriting and removing | Accept or reject; edit or remove anything | Index every session; a memory when it fits |
+| `vault.md` | Keep the structure and counts in step with the vault (cortex does this); write a channel's meaning and conventions | Revert the agent's words; edit anything in it; what they write outranks the agent's | Every session |
+| `memory/` | Write, rewrite and remove, each a change under its name | Revert or restore any change; edit or remove anything | Index every session; a memory when it fits |
 | `.cortex/working/<agent>.md` | Write its own at once; read the others' | Edit or clear any of them | Every session |
-| `skills/` | Propose | Accept (approve) | Descriptions every session; a skill when it fits |
-| `tools/` | Propose one to be built | Accept it, switched off; add one, switch one on or off | The list every session |
-| The journal | Propose, note, record its sessions, save | Accept and reject, and everything the agent may | History, as-of, and what waits |
+| `skills/` | Propose | Approve | Descriptions every session; a skill when it fits |
+| `tools/` | Ask for one to be built | Add one, switch one on or off | The list every session |
+| The journal | Note, record its sessions, save; restore and revert what it may write | Restore and revert anything, and everything the agent may | History and as-of |
 | `.gitignore`, `.gitattributes` | Nothing | Change the policy | Never by the agent |
 
 ## Identity
@@ -135,7 +135,7 @@ Behind each value, `.cortex/identity.jsonl` records where it came from: the pers
 `vault.md` is the agent's index of the vault, so a new session knows where things are without reading everything.
 
 - **Structure and counts** come from the vault: each channel and sub-channel, how many blocks, what is recent. Cortex keeps these in step with vault events, without asking, because they are derived, not content.
-- **Meanings** say what each channel is for and what goes in it. The agent proposes them without being asked, from what it sees in the vault and what the person says, and the person accepts them. The person can edit any of it, and what they write outranks what the agent wrote.
+- **Meanings** say what each channel is for and what goes in it. The agent writes them without being asked, from what it sees in the vault and what the person says. The person can edit any of it, and what they write outranks what the agent wrote.
 - **Filing conventions** per channel: how titles are written, what properties a block there carries, what it usually links to.
 
 Pointers to specific blocks live in `reference` memories, by block ID.
@@ -169,13 +169,13 @@ What an agent is noticing in this session, and what was left open last time. Eac
 | --- | --- | --- |
 | Holds | How they work, across sessions | How they are working today, and open threads |
 | Example | Wants a short first draft first | Answering in Korean today, one-line replies. Filing three meeting notes, two done |
-| Written | Proposed when stated, or seen in more than one session; written when the person accepts | At once, all session, by the agent it belongs to |
+| Written | When stated, or seen in more than one session | At once, all session, by the agent it belongs to |
 | Life | Until corrected | Refreshed every session |
 
 The cycle:
 
 1. **Session start: before, then refresh.** The agent reads its own working memory and every other agent's beside long-term memory and the vault index, then rewrites its own for today. It keeps open threads, takes up any another agent left, and drops what was only about that day.
-2. **During the session.** The agent updates its own working memory as it works. A correction goes there at once. Anything the person states outright is also proposed for long-term memory straight away.
+2. **During the session.** The agent updates its own working memory as it works. A correction goes there at once. Anything the person states outright is also written to long-term memory straight away.
 3. **Session end: distill and merge.** The agent reads every agent's working memory together. What more than one of them saw, or one saw across sessions, becomes a note, and a memory at the next settle. What is left stays in its own file as "last time".
 
 When something has been seen enough to become a memory is judgement, written in the playbook, not a count kept in code. Style is learned in three steps: noticed today, seen again, remembered.
@@ -200,11 +200,10 @@ What each part can do, in plain words. Tool names are given where they exist.
 ### In
 
 **From the person**
-- **Tell it something about themselves.** Proposed at once, marked as theirs. `cortex_remember`
-- **Correct it.** The rewrite is proposed; the old version kept. `cortex_remember`
-- **Have it forget.** They see exactly what goes, then accept it. `cortex_forget`
-- **Accept or reject what an agent proposed.** `cortex proposals`, `cortex accept`, `cortex reject`. *Built*
-- **Undo a change, or go back to a version.** `cortex revert`, `cortex restore`. *Built*
+- **Tell it something about themselves.** Remembered at once, marked as theirs. `cortex_remember`
+- **Correct it.** Rewritten at once; the old version kept. `cortex_remember`
+- **Have it forget.** They see exactly what goes first. `cortex_forget`
+- **Undo what an agent did, or go back to a version.** `cortex history --actor agent`, then `cortex revert`, `cortex restore`. *Built*
 - **Confirm who they are.** Accept, correct or clear an identity field. *New*
 - **Approve a skill.** A procedure the agent proposed becomes usable. `cortex approve`
 - **Switch a tool on or off.** By editing its file. *A command is new*
@@ -212,8 +211,8 @@ What each part can do, in plain words. Tool names are given where they exist.
 
 **From the agent**
 - **Note what it noticed.** One line, changes nothing yet. `cortex_note`
-- **Propose an edit.** Every edit but its own working memory is a proposal for the person.
-- **Record a task.** What was done, what it proposed, and the dead ends. `cortex_session`. *Built*
+- **Edit the cortex.** Each edit is a change marked as its own, with a reason and evidence. *Built*
+- **Record a task.** What was done, the changes it made, and the dead ends. `cortex_session`. *Built*
 - **Update working memory.** What is happening this session. *New*
 - **Propose an identity fact,** with the block and passage that state it. *New*
 - **Propose a skill,** or ask for a tool. `cortex_propose_skill`, `cortex_propose_tool`
@@ -243,7 +242,7 @@ What each part can do, in plain words. Tool names are given where they exist.
 
 **To the person**
 - **Show me what you know about me.** Every file, who wrote it, where it came from, earlier versions.
-- **Is anything off?** Proposals waiting (and stale ones), observations waiting, identity proposals, broken pointers, channels with no meaning. `cortex status`, *built*
+- **Is anything off?** Identity, skill and tool proposals, observations waiting, broken pointers, channels with no meaning. `cortex status`, *built*
 
 **To the vault**
 - **Nothing directly.** Filing goes through the vault's API on the person's say-so.
@@ -256,7 +255,7 @@ Cortex does not run an agent. It is read by one: ChatGPT, Claude, a coding agent
 - **The playbook comes back from `cortex_start`.** Tools are the one MCP feature every client supports, so the cortex's own `agents/AGENTS.md`, the person's added rules included, is returned by that call and read from disk each time.
 - **A prompt for the person.** `start` appears where a client shows prompts, such as a slash command in Claude Code, for when the person wants to begin from their cortex explicitly.
 - **Hooks are the only way that does not depend on the model.** In Claude Code and Codex the adapter (step 7) puts the playbook in front of the model at session start, whether or not it calls a tool. Nothing in MCP itself does that. Rules guide the agent; what it cannot do is enforced by the tools.
-- **The files are resources.** The playbook, identity, `vault.md`, the memory index and each memory, approved skills, and the tool list can be read as `cortex://` resources. Secrets, birthdate, proposals and history are never served.
+- **The files are resources.** The playbook, identity, `vault.md`, the memory index and each memory, approved skills, and the tool list can be read as `cortex://` resources. Secrets, birthdate, proposals and the journal are never served as resources.
 - **The tools change things.** Everything that writes goes through a tool, so the limits are enforced in code.
 - **Two ways to connect.** Over standard input and output, for agents on the person's machine (`cortex mcp`). Over HTTP, for clients that connect to a remote server, such as ChatGPT and Claude in the browser. Over HTTP it is `cortex serve`, signed in with a bearer token from `cortex token`; ChatGPT and Claude's web connectors need OAuth, which is not built.
 
@@ -289,23 +288,22 @@ A block saved in a known channel needs nothing and is not noted. With a vault co
 
 | `type` | Written when | Holds |
 | --- | --- | --- |
-| `proposal` | An agent edits anything but its own working memory | `proposal` (its ID), `node`, `op`, `before` (the version it applies to), `after`, `content` (the whole change), `reason`, `evidence` |
-| `decision` | The person accepts or rejects a proposal; or notes are settled | The proposal's ID, `accepted` or `rejected`, and why; or the note's ID and its outcome |
-| `change` | The person edits, or accepts a proposal; an agent rewrites its working memory | `node`, `op` (create, update, remove, restore), `before` and `after` versions, `reason`; for an accepted proposal its `proposal` and `decision`, and the agent as actor |
-| `note` | An agent or a host notes something | The note's ID, text, optional project and `evidence`. It changes no file, so it needs no acceptance |
-| `session` | An agent finishes or gives up a task | `summary`, `outcome` (done or stopped), `made` (the proposals and changes), `deadEnds` (each with `id`, `tried`, `why`, and `check`, a command to recheck it), `resolved`, `project` |
+| `change` | The person or an agent writes a node | `node`, `op` (create, update, remove, restore), `before` and `after` versions, `reason`, `evidence`; `restores` or `reverts` for an undo; `proposedBy` for a confirmed identity fact or an approved skill |
+| `note` | An agent or a host notes something | The note's ID, text, optional project and `evidence`. It changes no file |
+| `settled` | Notes are settled | The note's ID and its outcome: kept, dropped, or a memory's name |
+| `session` | An agent finishes or gives up a task | `summary`, `outcome` (done or stopped), `made` (the IDs of its changes), `deadEnds` (each with `id`, `tried`, `why`, and `check`, a command to recheck it), `resolved`, `project` |
 | `save` | The person or an agent names a point | `name` and `note`. It changes nothing. Lines written as `stamp` read as saves |
 
-A cortex made before the journal is still read: `.cortex/notes.jsonl` and `.cortex/sessions.jsonl` are read first and never written again. The journal is marked `merge=union`, and since every line has its own ID, two machines' lines join without a conflict; lines that share a `seq` after a merge are ordered by time, then ID.
+A cortex made before the journal is still read: `.cortex/notes.jsonl` and `.cortex/sessions.jsonl` are read first and never written again. `proposal` and `decision` lines, written while agents' edits waited for the person, are read and kept, and change nothing; a `decision` about a note reads as `settled`. The journal is marked `merge=union`, and since every line has its own ID, two machines' lines join without a conflict; lines that share a `seq` after a merge are ordered by time, then ID.
 
-**Every edit goes through the person.** An agent's edit is a proposal. The person sees what waits with `cortex proposals` (or `cortex status`) and runs `cortex accept <id>` or `cortex reject <id>`, with `--reason` if they like. Accepting checks that the node is still at the proposal's `before`; a stale proposal is refused, and the agent proposes again. Only then is the file written, the replaced version kept, and the change recorded as the agent's, pointing at the proposal and decision. The person's own edits from the command line are changes at once. Accepting and rejecting are command-line only: no MCP client is known to be the person, so no tool an agent is given reaches them. Identity facts keep their per-field proposals in `.cortex/identity.jsonl` and are mirrored as proposal lines; `cortex accept <field>` and `cortex confirm` both confirm one.
+**Agents edit directly; every change is marked with who made it; the person reverts.** An agent's write is made at once: the replaced version is kept, and a change line records it under the agent's name, with its reason and evidence, and the write returns the change's ID. The person reads what agents did with `cortex history --actor agent` and undoes what they do not want with `cortex revert <change>` or `cortex restore <node> <version>`, each a new change of their own. What needs trust stays with the person, from the command line, since no MCP client is known to be the person: identity facts are proposed in `.cortex/identity.jsonl` and set by `cortex confirm` (or turned down by `cortex reject`), skills wait in `.cortex/proposed/skills/` for `cortex approve`, and tools are asked for in `.cortex/proposed/tools/`. The change a confirmation or approval makes is the person's, and names the agent in `proposedBy`.
 
-`.cortex/history/` keeps every replaced version under its version, and a proposal carries its content, so any node can be read back:
+`.cortex/history/` keeps every replaced version under its version, so any node can be read back:
 
 - `cortex_history` (and `cortex history`) lists changes and saves, filtered by node or prefix, since a seq or a date, and by actor.
 - `cortex_as_of` (and `cortex as-of`) reads a node as it was at a save, a date (the end of that day, in UTC), a time or a seq. An agent reading `identity` gets it as agents always do, without the birthdate.
 - `cortex_save` (and `cortex save`) names this point with a note, and changes nothing.
-- `cortex_restore` (and `cortex restore`) brings an earlier version back as a new change with op `restore`. `cortex_revert` (and `cortex revert`) undoes one change the same way, or removes the node if that change made it, and is refused once the node has changed again. Nothing in the journal is rewritten. From an agent both are proposals; identity and the playbook are the person's alone.
+- `cortex_restore` (and `cortex restore`) brings an earlier version back as a new change with op `restore`. `cortex_revert` (and `cortex revert`) undoes one change the same way, or removes the node if that change made it, and is refused once the node has changed again. Nothing in the journal is rewritten. An agent restores and reverts only what it may write: never identity, the playbook, a skill or a tool, never another agent's working memory, and never over channel words the person wrote.
 
 **Sessions** are the agent's record, written when a task is done or given up. Nothing is captured for it: the hooks keep only their checkpoints in `.cortex/hooks.jsonl`, and `session-end` records nothing. Open dead ends (those no later session resolved) come back in `cortex_start`, and the session-start hook shows up to ten near the folder it starts in.
 
@@ -322,16 +320,16 @@ Notes and memories may cite `evidence`: pointers `{node, version}` or `{session}
 7. Every replaced or removed file is kept in `.cortex/history/`.
 8. A skill an agent wrote is not used until approved; an agent cannot add a tool or switch one on.
 9. Every save records who made it: the person, or which agent. Every write to a file of the cortex is a `change` line in the journal.
-10. An agent writes nothing but its own working memory. Every other edit is a proposal, and only the person accepts or rejects one, from the command line. A stale proposal is not accepted.
+10. An agent never writes, restores or reverts identity, the playbook, a skill, a tool or another agent's working memory, and never writes over channel words the person wrote. Every change it makes is marked as its own.
 11. No cortex operation writes to the vault.
 
 ## What exists now, and what changes
 
-Built in the `ohm-cortex` repository and tested (117 tests, run by CI on Node 20 and 22). Steps 1 to 7 and 9 are built; step 8 is not planned:
+Built in the `ohm-cortex` repository and tested (119 tests, run by CI on Node 20 and 22). Steps 1 to 7 and 9 are built; step 8 is not planned:
 
 | Built | Keeps | Changes |
 | --- | --- | --- |
-| `cortex status [dir] [--json]`: proposals, observations, broken pointers, undescribed or gone channels, problems and working memory over 30 days old; each item says how to clear it | All | Done (step 5). Uses a read-only folder inspection, without syncing or generating files |
+| `cortex status [dir] [--json]`: identity, skill and tool proposals, observations, broken pointers, undescribed or gone channels, problems and working memory over 30 days old; each item says how to clear it | All | Done (step 5). Uses a read-only folder inspection, without syncing or generating files |
 | The folder store (`src/folder.mjs`) | Memories, history, notes, skill proposals, tool proposals, identity, the vault | |
 | The vault contract (`src/vault.mjs`), a folder vault, and `vault.md` (`src/vaultmap.mjs`): counts kept in step, meanings and conventions written by the agent with `cortex_describe_channel`, the person's words outranking them, notes for what moved or left, broken pointers reported, `blocks` on memories, `cortex vault connect` and `cortex vault sync` | All | Done (step 2). Only the folder kind is built; ohm's comes with sync |
 | Strict identity (`src/identity.mjs`): fixed typed fields, proposals with evidence in `.cortex/identity.jsonl`, `cortex confirm`, `reject`, `clear` and `identity`, `init --account` | History of changes | Done (step 1). With a vault connected, vault evidence is checked against the block |
@@ -344,9 +342,9 @@ Built in the `ohm-cortex` repository and tested (117 tests, run by CI on Node 20
 | The rulebook in `agents/AGENTS.md`, with the identity policy | Secrets, git and identity sections | Rewrite around filing and working memory |
 | Git policy files, with `.cortex/identity.jsonl` as append-only | Both | |
 | MCP over HTTP (`src/http.mjs`): the Streamable HTTP transport of the initialize-based revisions at `/mcp`, a session ID from `initialize`, tools and agent name for each session, answers as JSON, a bearer token from `cortex token` in `agents/secrets/mcp-token`, `cortex serve` bound to 127.0.0.1 unless told otherwise | All | Done (step 6), with a token. OAuth for ChatGPT and Claude's web connectors, TLS and hosting are not built |
-| The journal (`src/journal.mjs`): `.cortex/journal.jsonl` with `proposal`, `decision`, `change`, `note`, `session` and `save` lines, each with seq, ID, time and actor; the old `notes.jsonl` and `sessions.jsonl` still read, and `stamp` lines read as saves; `merge=union` | All | Done (step 9; step 2 of [journal-and-history.md](journal-and-history.md)) |
+| The journal (`src/journal.mjs`): `.cortex/journal.jsonl` with `change`, `note`, `settled`, `session` and `save` lines, each with seq, ID, time and actor; the old `notes.jsonl` and `sessions.jsonl` still read, `stamp` lines read as saves, and `proposal` and `decision` lines from before the reversal read and ignored; `merge=union` | All | Done (step 9; step 2 of [journal-and-history.md](journal-and-history.md)) |
 | Cortex files as nodes (`identity`, `playbook`, `memory/<name>`, `working/<agent>`, `skill/<name>`, `tool/<name>`, `channel/<path>`), each with change lines, kept versions, `cortex_history`, `cortex_as_of`, `cortex_save`, `cortex_restore` and `cortex_revert`, and the commands `history`, `as-of`, `save`, `restore` and `revert` | All | Done (step 9; step 3 of journal-and-history.md). `memory/MEMORY.md` and the counts in `vault.md` are derived and not nodes. Working memory rewritten within a session is not kept, so `cortex_as_of` says so |
-| Every agent edit a proposal: `cortex_remember`, `cortex_forget`, `cortex_settle`, `cortex_describe_channel`, `cortex_propose_skill`, `cortex_propose_tool`, `cortex_restore` and `cortex_revert` propose; the person runs `cortex proposals`, `cortex accept` and `cortex reject` (`confirm` and `approve` still work); stale proposals refused; `cortex status` lists what waits | All | Done. Working memory is the one direct write (an open decision below) |
+| Agents edit directly: `cortex_remember`, `cortex_forget`, `cortex_settle`, `cortex_describe_channel`, `cortex_working`, `cortex_restore` and `cortex_revert` write at once, each a change marked with the agent; the person reverts with `cortex revert` and `cortex restore`, with `--reason`; identity, skills and tools still wait for `confirm`, `reject` and `approve` | All | Done. Replaces, on 19 November, a day of every agent edit being a proposal |
 | Sessions and dead ends: `cortex_session`; open dead ends in `cortex_start` and, near the folder, at session start; hooks' checkpoints in `.cortex/hooks.jsonl`, not committed | All | Done (step 5 of journal-and-history.md) |
 | Evidence on notes and memories: `{node, version}` or `{session}`, checked for shape and, where cortex can look, that it exists | All | Part of step 4 of journal-and-history.md. Settlement rules per kind and staleness are not built |
 | Blocks and channels: the vault contract, `vault.md`, `cortex_start`, filing advice and status speak of channels and blocks; memories point at `blocks`; `cortex_describe_channel` | All | Done. `posts`, an identity source's `post`, old `vault.md` files and cursors are still read; `cortex_describe_section` still answers, unlisted |
@@ -361,7 +359,7 @@ Built in the `ohm-cortex` repository and tested (117 tests, run by CI on Node 20
 6. **Remote MCP over HTTP,** *Done, with a bearer token; OAuth waits for a decision.* With sign-in, so ChatGPT and browser clients can reach a cortex. Done when a client connected over HTTP reads the playbook as its instructions and calls `cortex_start`.
 7. **The hooks adapter.** *Built; the run in a real client is still to do.* `cortex hook <moment>` for Claude Code, then Codex, answering from the folder with no network wait. Done when, with neither model calling a tool, a session starts with working memory refreshed and ends with it distilled.
 8. **Sync with a host.** *Not planned.* On 14 November 2026 the person decided to keep the cortex a folder of its own, not connected to ohm. The design looked at was an exact copy of the cortex files kept on ohm and synced both ways. It is kept here in case that changes.
-9. **The journal and history.** *Done: steps 2, 3 and 5 of [journal-and-history.md](journal-and-history.md), and evidence on notes and memories from its step 4.* One journal; cortex files as nodes; every agent edit a proposal the person accepts; history, as-of, save, restore and revert; sessions with dead ends. Done when every change can be listed with who made it and what it was accepted from, any node can be read as it was at a save, a date or a seq, a restore or revert is a new change, and nothing an agent proposes changes a file before the person accepts it.
+9. **The journal and history.** *Done: steps 2, 3 and 5 of [journal-and-history.md](journal-and-history.md), and evidence on notes and memories from its step 4.* One journal; cortex files as nodes; every change marked with who made it; history, as-of, save, restore and revert; sessions with dead ends. Done when every change can be listed with who made it, any node can be read as it was at a save, a date or a seq, a restore or revert is a new change, and the person can undo any change an agent made.
 
 Steps 4 to 7 were built in parallel from the briefs in [handoff/](handoff/README.md).
 
@@ -394,28 +392,27 @@ On 14 November 2026:
 
 On 19 November 2026, building steps 2 and 3 of [journal-and-history.md](journal-and-history.md), and then as the owner decided its details:
 
-- **One journal, `.cortex/journal.jsonl`,** for proposals, decisions, changes, notes, sessions and saves. The old `notes.jsonl` and `sessions.jsonl` are read and never written. Lines carry their own IDs so a union merge is safe; lines sharing a `seq` are ordered by time, then ID.
+- **One journal, `.cortex/journal.jsonl`,** for changes, notes, settlements, sessions and saves. The old `notes.jsonl` and `sessions.jsonl` are read and never written. Lines carry their own IDs so a union merge is safe; lines sharing a `seq` are ordered by time, then ID.
 - **A point named in history is a save, not a stamp.** It changes nothing. Lines written as `stamp` read as saves.
 - **No traces.** Nothing records what an agent read or searched. Evidence pointers are `{node, version}` and `{session}`.
 - **Cortex files are nodes,** named `identity`, `playbook`, `memory/<name>`, `working/<agent>`, `skill/<name>`, `tool/<name>` and `channel/<path>`. `memory/MEMORY.md` and the headings and counts in `vault.md` are derived from other things, so they are not nodes. A `{node, version}` pointer whose node does not match this naming is a block in the vault.
-- **Every edit goes through the person.** An agent's edit is a proposal holding the whole change; the person's acceptance is a decision; only then is there a change, recorded as the agent's. This replaces "memory needs no review" (principle 5, from 14 November). The person's own edits are changes at once.
-- **Accepting and rejecting are command-line only.** The MCP server cannot tell the person from an agent: it names the actor by what connects, and an agent can never take the person's name, but nothing proves a client is the person. So no MCP tool accepts or rejects.
-- **Identity facts keep their per-field proposals** in `.cortex/identity.jsonl` and are mirrored as proposal lines. They are never stale, since each is about one field; `cortex accept` and `cortex confirm` both confirm one.
-- **Settling records the outcome of each note at once,** as a decision, and proposes each memory it touches, its rewrite and its seen count together, as one proposal.
-- **An accepted tool proposal adds the tool switched off.** It does nothing until it is built and the person switches it on.
-- **Sessions are the agent's own record, written with `cortex_session` when a task is done or given up.** A separate tool, not part of `cortex_distill`: a distill ends a session's working memory, and a session line ends a task, which may come several to a session or none. The hooks capture nothing; their checkpoints move to `.cortex/hooks.jsonl`, which git ignores because they belong to this machine's sessions. `session-end` records nothing.
+- **Agents edit directly; every change is marked with who made it; the person reverts.** This replaces "every edit goes through the person", which had made each agent edit a proposal the person accepted with `cortex accept`; the owner reversed it the same day. An agent's write is a change at once, under its name, with its versions before and after and an optional reason, so its edits show in history as its versions, and the person reverts or restores what they do not want. `proposal` and `decision` lines already written are read and change nothing.
+- **What needs trust stays the person's, as before this branch.** Identity facts are proposed with evidence in `.cortex/identity.jsonl` and confirmed or rejected with `cortex confirm` and `cortex reject`; a confirmation is the person's change, naming the agent in `proposedBy`, and a rejection is kept in `identity.jsonl` alone, since it changes nothing. Skills wait in `.cortex/proposed/skills/` for `cortex approve`, which is a change too. Tools are asked for in `.cortex/proposed/tools/`, and only the person adds or switches one on. An agent never restores or reverts these nodes either, since an earlier version of a tool could switch it on.
+- **Confirming and approving are command-line only.** The MCP server cannot tell the person from an agent: it names the actor by what connects, and an agent can never take the person's name, but nothing proves a client is the person. So no MCP tool confirms or approves.
+- **Settling rewrites each memory it touches at once,** its rewrite and its seen count together as one change, and records what became of each note as a `settled` line.
+- **What the person wrote about a channel stands** against an agent's restore or revert, as against its writes.
+- **Sessions group the changes an agent made in a task by their IDs.** They are the agent's own record, written with `cortex_session` when a task is done or given up.** A separate tool, not part of `cortex_distill`: a distill ends a session's working memory, and a session line ends a task, which may come several to a session or none. The hooks capture nothing; their checkpoints move to `.cortex/hooks.jsonl`, which git ignores because they belong to this machine's sessions. `session-end` records nothing.
 - **A dead end stays open until a later session lists it in `resolved`.** Session start shows up to ten open ones whose project is the folder it starts in, inside it or above it, and keeps them before the full playbook when the budget is tight.
 - **Revert undoes one change** and is refused once the node has changed again; restoring a version covers that case. Reverting a change that created a node removes it.
 - **A date with no time means the end of that day, in UTC,** for `cortex_as_of`; for `cortex_history`'s `since` it means the start of that day. `since` as a seq means after it.
-- **Every replaced file is kept,** now also the seen count's earlier version, `vault.md` before a count update, and skills whole, with the files beside them. A proposal's content is kept in its line, so an accepted version can always be read back.
+- **Every replaced file is kept,** now also the seen count's earlier version, `vault.md` before a count update, and skills whole, with the files beside them. A version only an old proposal line carried can still be read back from it.
 - **Evidence is checked for shape and existence, never counted.** The counts are guidance in the playbook, as decided on 14 November.
 - **The vault's words are block and channel.** Old names are still read; `cortex_describe_section` still answers but is no longer listed, so new sessions see one tool.
 - **A failed change line fails the call,** after the file is written: the write stands and the call reports the error, rather than claim a change it could not record.
 
 ## Open decisions
 
-- **Working memory is the one edit an agent makes without the person.** Each agent rewrites its own many times a session, the stop hook asks for a distill when it changed, and session start hands it to the next session. If each rewrite waited for the person, the hooks could not follow it and the person would be asked to review scratch notes all day. It is still a change line, and an agent never writes another's. Decide whether that stays, or whether working memory should be proposed only at distill.
-- **The rest of the journal.** [journal-and-history.md](journal-and-history.md) steps 2, 3 and 5 are built, and evidence from step 4. Settlement rules per kind, staleness, one `cortex_propose`, the `~/Brain` layout and sync are not.
+- **The rest of the journal.** [journal-and-history.md](journal-and-history.md) steps 2, 3 and 5 are built, and evidence from step 4. Settlement rules per kind, staleness, the `~/Brain` layout and sync are not.
 
 - **Whether a cortex can serve more than one identity,** such as a person and their company. The plan assumes one cortex per identity.
 - **How a remote client signs in** to a cortex served over HTTP.

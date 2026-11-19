@@ -12,15 +12,8 @@ export async function cortexStatus(cortex, { now = new Date() } = {}) {
   const items = [];
   const add = (kind, what, clear) => items.push({ kind, what, clear });
   for (const proposal of state.waiting.identity) add('identity-proposal', `${proposal.field}: ${JSON.stringify(proposal.value)}`, `cortex confirm ${proposal.id} or cortex reject ${proposal.id}`);
-  for (const item of state.waiting.proposals) {
-    const what = `${item.actor.name} proposes to ${item.op} ${item.node}${item.reason ? `: ${item.reason}` : ''}`;
-    if (item.stale) add('stale-proposal', what, `${item.node} changed since. cortex reject ${item.id}; the agent proposes it again if it still holds.`);
-    else add('proposal', what, `Read it with cortex proposals, then cortex accept ${item.id} or cortex reject ${item.id}`);
-  }
-  // Proposals made before they were journal lines, kept in .cortex/proposed/.
-  const journaled = new Set(state.waiting.proposals.map(item => item.node));
-  for (const name of state.waiting.skills) if (!journaled.has(`skill/${name}`)) add('skill-proposal', name, `cortex approve ${name}`);
-  for (const name of state.waiting.tools) if (!journaled.has(`tool/${name}`)) add('tool-proposal', name, `Build ${name} and add it to tools/, then delete .cortex/proposed/tools/${name}.md; or delete that proposal file.`);
+  for (const name of state.waiting.skills) add('skill-proposal', name, `cortex approve ${name}`);
+  for (const name of state.waiting.tools) add('tool-proposal', name, `Build ${name} and add it to tools/, then delete .cortex/proposed/tools/${name}.md; or delete that proposal file.`);
   if (state.notes.length) add('notes', `${state.notes.length} observation${state.notes.length === 1 ? '' : 's'} waiting to be settled`, 'The next agent session settles these with cortex_settle.');
   for (const { memory, block } of state.vault.broken ?? []) add('broken-pointer', `${memory} points at missing block ${block}`, `Ask the agent to rewrite or forget ${memory}, or restore block ${block} in the vault.`);
   for (const channel of state.vault.channels ?? []) if (!channel.meaning) add('undescribed-channel', channel.channel, `Ask the agent to describe ${channel.channel} with cortex_describe_channel, or write its Meaning: in vault.md.`);

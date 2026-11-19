@@ -4,10 +4,11 @@
 //   agents/  identity.md  vault.md  memory/  skills/  tools/      what is in force
 //   .cortex/                                                       the journal, what was replaced, and machinery
 //
-// Every edit goes through the person. An edit the person makes, from the command line, is a change
-// at once. An edit an agent makes is a proposal in the journal, and nothing in the folder changes
-// until the person accepts it; then it is a change whose actor is the agent. Working memory is the
-// one exception: each agent writes its own directly, as a change, so the hooks can follow it.
+// Agents edit directly, and every edit is a change line in the journal that says who made it: the
+// person, or an agent by name. The person reads an agent's changes in history and reverts what
+// they do not want. What needs trust is the person's alone: an identity fact is proposed with
+// evidence and set only when the person confirms it, a skill is used only once the person approves
+// it, and a tool is only ever asked for: the person adds it and switches it on.
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
@@ -127,8 +128,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
   }
 
   // Observations and host events are note lines in the journal, and what became of each is a
-  // decision line. A note changes no file, so it needs no one to accept it. A cortex made before
-  // the journal kept them in .cortex/notes.jsonl: that file is still read, first, and never written.
+  // settled line. A cortex made before the journal kept them in .cortex/notes.jsonl: that file is
+  // still read, first, and never written.
   const oldNotes = at('.cortex', 'notes.jsonl');
   async function notes() {
     const found = new Map();
@@ -143,7 +144,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       // Two machines may both hold a note after a merge. The first one stands.
       if (entry.type === 'note' && typeof entry.note === 'string' && !found.has(entry.note)) {
         found.set(entry.note, { id: entry.note, text: entry.text, session: entry.session, ...(entry.project ? { project: entry.project } : {}), source: entry.source, writtenBy: entry.actor?.name, when: entry.at, ...(entry.evidence ? { evidence: entry.evidence } : {}) });
-      } else if (entry.type === 'decision' && typeof entry.note === 'string' && found.has(entry.note)) {
+      } else if (entry.type === 'settled' && typeof entry.note === 'string' && found.has(entry.note)) {
         Object.assign(found.get(entry.note), { outcome: entry.outcome, settledAt: entry.at });
       }
     }
@@ -243,7 +244,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     return { agent: fileName(agent), text: content, version: await cortexVersion({ working: content }), updated: mtime.toISOString() };
   }
 
-  // Nodes. Every file of the cortex is a node, named the same way in change and proposal lines:
+  // Nodes. Every file of the cortex is a node, named the same way in every change line:
   //   identity          identity.md
   //   playbook          agents/AGENTS.md
   //   memory/<name>     memory/<name>.md
@@ -252,7 +253,9 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
   //   tool/<name>       tools/<name>.md
   //   channel/<path>    what vault.md says a channel means and how blocks there are filed
   // Each knows how to read itself now, write and remove itself, the version of a content, and where
-  // its earlier versions are kept. personOnly nodes are never proposed by an agent.
+  // its earlier versions are kept. An agent never writes a personOnly node, not even to restore it:
+  // identity is confirmed fact by fact, the playbook is the person's, a skill is used only once
+  // approved, and an earlier version of a tool could switch it on.
   const SLUG = '[a-z]+(?:-[a-z]+)*';
   const fileNode = (node, path, kept, extra = {}) => ({
     node, kept, ...extra,
@@ -284,8 +287,17 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         for (const field of ['meaning', 'conventions']) if (next[field] !== was[field] && next[field]) await appendFile(meaningsLog, `${JSON.stringify({ channel, field, text: next[field], by, when: now().toISOString() })}\n`);
       }
     };
+    // What the person wrote by hand stands: an agent may not write over it, by restoring either.
+    const guard = async content => {
+      const { found } = await words();
+      const last = await agentWords();
+      for (const field of ['meaning', 'conventions']) {
+        const current = found?.[field] ?? '';
+        if (current && current !== (content[field] ?? '') && current !== last.get(`${channel}\u0000${field}`)) throw new Refused('PersonWrote', `The person wrote the ${field} of ${channel} themselves, and what they wrote stands. Suggest a change to them instead`, { current });
+      }
+    };
     return {
-      node, channel, kept: ['channels', channel],
+      node, channel, kept: ['channels', channel], guard,
       encode: content => JSON.stringify(content), decode: kept => JSON.parse(kept),
       live: async () => {
         const { found } = await words();
@@ -329,7 +341,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     if ((found = new RegExp(`^skill/(${SLUG})$`).exec(node))) {
       const root = at('skills', found[1]);
       return {
-        node, kept: ['skills', found[1]],
+        node, kept: ['skills', found[1]], personOnly: true,
         // Kept as the whole skill; a skill kept before this was its SKILL.md alone.
         encode: content => JSON.stringify(content),
         decode: kept => { try { const parsed = JSON.parse(kept); if (typeof parsed?.text === 'string') return parsed; } catch {} return kept; },
@@ -345,13 +357,14 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         remove: () => rm(root, { recursive: true, force: true }),
       };
     }
-    if ((found = new RegExp(`^tool/(${SLUG})$`).exec(node))) return fileNode(node, at('tools', `${found[1]}.md`), ['tools', found[1]]);
+    if ((found = new RegExp(`^tool/(${SLUG})$`).exec(node))) return fileNode(node, at('tools', `${found[1]}.md`), ['tools', found[1]], { personOnly: true });
     if ((found = /^channel\/(.+)$/.exec(node)) && !found[1].split('/').some(part => !part || part === '.' || part === '..')) return channelNode(node, found[1]);
     throw new Refused('NotFound', `There is no node ${node}. A node is identity, playbook, memory/<name>, working/<agent>, skill/<name>, tool/<name> or channel/<path>`);
   }
   const encode = (spec, content) => (spec.encode ? spec.encode(content) : content);
-  // The content of a node at one of its versions: as it is now, the copy kept when it was replaced,
-  // or the content a proposal carried.
+  // The content of a node at one of its versions: as it is now, or the copy kept when it was
+  // replaced. A journal from when agents' edits waited for the person may hold proposal lines that
+  // carried their content; those versions can be read back too.
   async function contentAt(spec, version, lines) {
     const live = await spec.live();
     if (live?.version === version) return live.content;
@@ -372,35 +385,36 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     return (await spec.live())?.version ?? null;
   }
 
-  // The one way an edit is made. The person's is a change now. An agent's is a proposal, holding
-  // the whole change, and waits for the person; working memory is written by its own agent at once.
-  // `before` is the version the edit applies to, already checked by the caller.
+  // Whether this actor may write a node. The person may write any. An agent never writes a
+  // personOnly node, nor another agent's working memory.
+  function mayWrite(spec, what) {
+    if (person) return;
+    if (spec.personOnly) throw new Refused('PersonOnly', `Only the person ${what} ${spec.node}, from the command line`);
+    if (spec.agent !== undefined && spec.agent !== fileName(actor)) throw new Refused('PersonOnly', 'An agent writes only its own working memory');
+  }
+
+  // The one way an edit is made, by the person or an agent alike: what it replaces is kept, the node
+  // is written, and a change line says who made it, with its versions before and after, why, and
+  // what it was drawn from. `before` is the version the edit applies to, already checked by the caller.
   async function edit(spec, op, content, { before = null, reason, evidence, session, extra = {} } = {}) {
-    if (person || spec.agent !== undefined) {
-      const after = await apply(spec, content);
-      const line = await journal.append(actor, 'change', { node: spec.node, op, before, after, ...(reason ? { reason } : {}), ...extra }, { session });
-      return { node: spec.node, op, version: after, change: line.id };
-    }
-    const after = content === null ? null : await spec.version(content);
-    // The same edit proposed again, say on a retry, is the proposal already waiting.
-    const same = (await cortex.proposals()).find(item => item.node === spec.node && item.op === op && item.before === before && item.after === after && item.actor.name === actor);
-    if (same) return { node: spec.node, op, version: after, proposed: same.id, waiting: true, unchanged: true };
-    const id = `p${randomBytes(6).toString('hex')}`;
-    await journal.append(actor, 'proposal', { proposal: id, node: spec.node, op, before, after, content, ...(reason ? { reason } : {}), ...(evidence ? { evidence } : {}), ...extra }, { session });
-    return { node: spec.node, op, version: after, proposed: id, waiting: true };
+    mayWrite(spec, op === 'restore' ? 'restores' : 'changes');
+    if (!person && spec.guard) await spec.guard(content ?? {});
+    const after = await apply(spec, content);
+    const line = await journal.append(actor, 'change', { node: spec.node, op, before, after, ...(reason ? { reason } : {}), ...(evidence ? { evidence } : {}), ...extra }, { session });
+    return { node: spec.node, op, version: after, change: line.id, seq: line.seq };
   }
 
   // Changes one field of identity.md and keeps the rest of the file, the person's own fields and
-  // anything they wrote that cannot be read, as it was. `by` is who the change is recorded as: the
-  // agent whose proposal the person accepted, or the person.
-  async function setField(field, value, { by = actor, extra = {} } = {}) {
+  // anything they wrote that cannot be read, as it was. Only the person does this; `extra` names the
+  // agent and the proposal behind a confirmed fact.
+  async function setField(field, value, { extra = {} } = {}) {
     const spec = nodeOf('identity');
     const content = await text(at('identity.md')) ?? '';
     const { properties, body, version } = await readIdentity(content);
     const next = { ...properties };
     if (value === undefined) delete next[field]; else next[field] = value;
     const after = await apply(spec, writeIdentity(next, body));
-    await journal.append(by, 'change', { node: 'identity', op: content ? 'update' : 'create', before: content ? version : null, after, reason: `${field} ${value === undefined ? 'cleared' : 'set'}`, ...extra });
+    await journal.append(actor, 'change', { node: 'identity', op: content ? 'update' : 'create', before: content ? version : null, after, reason: `${field} ${value === undefined ? 'cleared' : 'set'}`, ...extra });
   }
 
   // What cited evidence points at must be there where cortex can look. A node of the cortex must
@@ -474,7 +488,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
   function checkSession({ summary, outcome = 'done', made = [], deadEnds = [], resolved = [], project, session } = {}) {
     if (!oneLine(summary, 300)) throw new Refused('InvalidRequest', 'summary is one line of what was done, at most 300 characters');
     if (!['done', 'stopped'].includes(outcome)) throw new Refused('InvalidRequest', 'outcome is done, or stopped when the task was given up');
-    if (!Array.isArray(made) || made.length > 100 || made.some(id => typeof id !== 'string' || !id || id.length > 100)) throw new Refused('InvalidRequest', 'made is up to 100 IDs of the proposals and changes this task made');
+    if (!Array.isArray(made) || made.length > 100 || made.some(id => typeof id !== 'string' || !id || id.length > 100)) throw new Refused('InvalidRequest', 'made is up to 100 IDs of the changes this task made');
     if (!Array.isArray(deadEnds) || deadEnds.length > 20) throw new Refused('InvalidRequest', 'deadEnds is up to 20 things tried and dropped');
     for (const item of deadEnds) {
       if (!item || typeof item !== 'object' || Object.keys(item).some(key => !['tried', 'why', 'check'].includes(key)) || !oneLine(item.tried) || !oneLine(item.why) || (item.check !== undefined && !oneLine(item.check))) {
@@ -551,14 +565,15 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     },
 
     // Brings a node back to an earlier version, as a new change: what it replaces is kept, and no
-    // line of the journal is rewritten. An agent's restore is a proposal. Identity and the playbook
-    // are restored only by the person; an agent restores only its own working memory.
-    // `replaces`, when given, is the version read now, and the restore is refused if it changed.
+    // line of the journal is rewritten. Identity, the playbook, skills and tools are restored only
+    // by the person; an agent restores only its own working memory, and never over what the person
+    // wrote in vault.md. `replaces`, when given, is the version read now, and the restore is refused
+    // if it changed.
     async restore({ node, version, replaces, reason, extra = {} } = {}) {
       const spec = nodeOf(node);
-      if (spec.personOnly && !person) throw new Refused('PersonOnly', `Only the person restores ${node}. Ask them to run: cortex restore ${node} ${version}`);
-      if (spec.agent !== undefined && !person && spec.agent !== fileName(actor)) throw new Refused('PersonOnly', 'An agent restores only its own working memory');
       if (typeof version !== 'string' || !version) throw new Refused('InvalidRequest', 'Name the version to bring back');
+      if (!person && spec.personOnly) throw new Refused('PersonOnly', `Only the person restores ${node}. Ask them to run: cortex restore ${node} ${version}`);
+      mayWrite(spec, 'restores');
       const why = checkReason(reason);
       const live = await spec.live();
       if (replaces !== undefined && (live?.version ?? null) !== (replaces ?? null)) throw changed(node, live?.version ?? null);
@@ -577,72 +592,24 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     // Undoes one change, as a new change: the node goes back to what it was before that change. It
     // is refused once the node has changed again since; restore a version instead.
     async revert({ change, reason } = {}) {
+      if ((typeof change !== 'string' || !change) && !Number.isSafeInteger(change)) throw new Refused('InvalidRequest', 'Name the change by its seq or ID');
       const lines = await journal.read();
       const target = lines.find(line => line.type === 'change' && (line.id === change || String(line.seq) === String(change)));
       if (!target) throw new Refused('NotFound', `There is no change ${change}`);
       const spec = nodeOf(target.node);
+      if (!person && spec.personOnly) throw new Refused('PersonOnly', `Only the person reverts a change to ${target.node}. Ask them to run: cortex revert ${target.seq}`);
+      mayWrite(spec, 'reverts');
       const live = await spec.live();
       if ((live?.version ?? null) !== target.after) throw new Refused('Changed', `${target.node} has changed since change ${target.seq}. Restore a version instead`, { current: live?.version ?? null });
       const why = checkReason(reason) ?? `reverts change ${target.seq}`;
       if (target.before === null) {
-        if (spec.personOnly && !person) throw new Refused('PersonOnly', `Only the person reverts a change to ${target.node}`);
         return { ...await edit(spec, 'remove', null, { before: live?.version ?? null, reason: why, extra: { reverts: target.id } }), reverted: target.id };
       }
       return { ...await cortex.restore({ node: target.node, version: target.before, reason: why, extra: { reverts: target.id } }), reverted: target.id };
     },
 
-    // Every proposal waiting for the person, oldest first, each saying whether it is stale: the node
-    // changed since, so it cannot be accepted until it is proposed again. Identity facts are waiting
-    // as they always were, one field each, and are never stale.
-    async proposals({ forAgent: hide = false } = {}) {
-      const lines = await journal.read();
-      const decided = new Set(lines.filter(line => line.type === 'decision' && typeof line.proposal === 'string').map(line => line.proposal));
-      const waiting = [];
-      for (const line of lines.filter(line => line.type === 'proposal' && !decided.has(line.proposal) && line.node !== 'identity')) {
-        let stale;
-        try { stale = ((await nodeOf(line.node).live())?.version ?? null) !== line.before; } catch { stale = true; }
-        waiting.push({ id: line.proposal, node: line.node, op: line.op, actor: line.actor, at: line.at, before: line.before, after: line.after, ...(line.reason ? { reason: line.reason } : {}), ...(line.evidence ? { evidence: line.evidence } : {}), ...(line.session ? { session: line.session } : {}), stale, ...(hide ? {} : { content: line.content }) });
-      }
-      for (const proposal of await cortex.identityProposals()) {
-        const shown = hide ? proposalForAgent(proposal) : proposal;
-        const mirror = lines.find(line => line.type === 'proposal' && line.proposal === proposal.id);
-        waiting.push({ id: proposal.id, node: 'identity', op: 'update', actor: mirror?.actor ?? actorOf(proposal.by ?? 'agent'), at: mirror?.at ?? proposal.when, field: shown.field, value: shown.value, source: shown.source, stale: false });
-      }
-      return waiting;
-    },
-
-    // The person accepts a proposal. The node must still be at the version it was proposed against.
-    // The decision is recorded, then the change, whose actor is the agent that proposed it.
-    async accept(id, { reason } = {}) {
-      onlyPerson('accepts a proposal');
-      const why = checkReason(reason);
-      const lines = await journal.read();
-      if (lines.some(line => line.type === 'decision' && line.proposal === id)) throw new Refused('Decided', `Proposal ${id} was already decided`);
-      const line = lines.find(item => item.type === 'proposal' && item.proposal === id);
-      // An identity fact is named by its ID, or by its field when one is waiting for it.
-      if (!line || line.node === 'identity') return cortex.confirmIdentity(id, { reason: why });
-      const spec = nodeOf(line.node);
-      const live = await spec.live();
-      if ((live?.version ?? null) !== line.before) throw new Refused('Stale', `${line.node} has changed since proposal ${id} was made. It cannot be accepted until it is proposed again`, { current: live?.version ?? null });
-      const decision = await journal.append(actor, 'decision', { proposal: id, outcome: 'accepted', ...(why ? { reason: why } : {}) });
-      const after = await apply(spec, line.content, line.actor.name);
-      const change = await journal.append(line.actor.name, 'change', { node: line.node, op: line.op, before: line.before, after, ...(line.reason ? { reason: line.reason } : {}), proposal: id, decision: decision.id, ...(line.restores ? { restores: line.restores } : {}), ...(line.reverts ? { reverts: line.reverts } : {}) }, { session: line.session });
-      return { id, node: line.node, accepted: true, version: after, change: change.id };
-    },
-
-    async reject(id, { reason } = {}) {
-      onlyPerson('rejects a proposal');
-      const why = checkReason(reason);
-      const lines = await journal.read();
-      if (lines.some(line => line.type === 'decision' && line.proposal === id)) throw new Refused('Decided', `Proposal ${id} was already decided`);
-      const line = lines.find(item => item.type === 'proposal' && item.proposal === id);
-      if (!line || line.node === 'identity') return cortex.rejectIdentity(id, { reason: why });
-      await journal.append(actor, 'decision', { proposal: id, outcome: 'rejected', ...(why ? { reason: why } : {}) });
-      return { id, node: line.node, rejected: true };
-    },
-
-    // An agent records a task it finished, or gave up: one line of what was done, the proposals and
-    // changes it made, grouped, and the dead ends, each with what was tried, why it was dropped, and
+    // An agent records a task it finished, or gave up: one line of what was done, the changes it
+    // made, grouped by their IDs, and the dead ends, each with what was tried, why it was dropped, and
     // a command that would show whether it still holds. Only agents write sessions.
     async recordSession(given = {}) {
       if (person) throw new Refused('InvalidRequest', 'A session is written by the agent that did the task');
@@ -650,8 +617,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const { summary, outcome = 'done', made = [], deadEnds = [], resolved = [], project, session } = given;
       const lines = await journal.read();
       for (const id of made) {
-        const found = lines.find(line => (line.type === 'proposal' && line.proposal === id) || (line.type === 'change' && line.id === id));
-        if (!found) throw new Refused('NotFound', `There is no proposal or change ${id}`);
+        const found = lines.find(line => line.type === 'change' && line.id === id);
+        if (!found) throw new Refused('NotFound', `There is no change ${id}`);
         if (found.actor?.name !== actor) throw new Refused('InvalidRequest', `${id} was made by ${found.actor?.name}, not by you`);
       }
       const open = new Set((await cortex.deadEnds()).map(item => item.id));
@@ -681,8 +648,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return { mine: mine ?? { agent: fileName(actor), text: '', version: null }, others: others.sort((a, b) => b.updated.localeCompare(a.updated) || a.agent.localeCompare(b.agent)) };
     },
 
-    // Rewrites this agent's own working memory, as it works. Another agent's is never written. It
-    // is the one thing an agent writes without a proposal: see the plan's open decisions.
+    // Rewrites this agent's own working memory, as it works. Another agent's is never written.
     writeWorking: (given, { replaces = null } = {}) => putWorking(given, replaces),
 
     // The end of a session: the agent has read every agent's working memory together and records,
@@ -752,8 +718,6 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const identity = await cortex.identity();
       const pending = [...(await notes()).values()].filter(note => !note.settledAt);
       const found = [...identity.problems, ...problems, ...(vault.problem ? [`vault: ${vault.problem}`] : []), ...(vault.problems ?? []).map(problem => `vault: ${problem}`)];
-      const proposals = (await cortex.proposals({ forAgent: true })).filter(item => item.node !== 'identity');
-      const named = prefix => proposals.filter(item => item.node.startsWith(prefix)).map(item => item.node.slice(prefix.length));
       return {
         rules: await cortex.rules(),
         identity: forAgent(identity),
@@ -765,12 +729,11 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         tools: (await toolsIn(at('tools'))).filter(tool => tool.on).map(({ name, description }) => ({ name, description })),
         notes: pending,
         working: await cortex.working(),
+        // What only the person can settle: identity facts to confirm, skills to approve, tools asked for.
         waiting: {
           identity: (await cortex.identityProposals()).map(proposalForAgent),
-          proposals,
-          // Skill and tool proposals, by name, including those made before proposals were journal lines.
-          skills: [...new Set([...named('skill/'), ...(await skillsIn(at('.cortex', 'proposed', 'skills'))).map(skill => skill.name)])].sort(),
-          tools: [...new Set([...named('tool/').filter(name => proposals.some(item => item.node === `tool/${name}` && item.op === 'create')), ...(await toolsIn(at('.cortex', 'proposed', 'tools'))).map(tool => tool.name)])].sort(),
+          skills: (await skillsIn(at('.cortex', 'proposed', 'skills'))).map(skill => skill.name),
+          tools: (await toolsIn(at('.cortex', 'proposed', 'tools'))).map(tool => tool.name),
         },
         deadEnds: await cortex.deadEnds(),
         ...(found.length ? { problems: found } : {}),
@@ -849,9 +812,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       };
     },
 
-    // What a channel means and how blocks there are filed. The agent proposes it without being asked;
-    // the person accepts it. Once the person has written over it by hand, theirs stands, and the
-    // agent's proposal is refused.
+    // What a channel means and how blocks there are filed. The agent writes it without being asked.
+    // Once the person has written over it by hand, theirs stands, and the agent's write is refused.
     async describeChannel({ channel, meaning, conventions } = {}) {
       const vault = await theVault();
       if (!vault) throw new Refused('NoVault', 'No vault is connected to this cortex');
@@ -909,7 +871,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     },
 
     // An agent proposes. Nothing it proposes changes identity.md until the person confirms it. The
-    // proposal is kept in .cortex/identity.jsonl, as it always was, and is a proposal line too.
+    // proposal is kept in .cortex/identity.jsonl; the journal records the change once it is confirmed.
     async proposeIdentity({ field, value, source } = {}) {
       if (!Object.hasOwn(IDENTITY, field)) throw new Refused('InvalidIdentity', `${field} is not an identity field. The fields are: ${FIELDS.join(', ')}`);
       const evidence = checkSource(field, source);
@@ -936,26 +898,23 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const same = (await cortex.identityProposals()).find(proposal => factKey(proposal.field, proposal.value) === key);
       if (same) return { id: same.id, field, waiting: true, unchanged: true };
       await recordIdentity({ type: 'proposed', id, field, value: checked, source: evidence });
-      await journal.append(actor, 'proposal', { proposal: id, node: 'identity', op: 'update', field, before: null, after: null });
       return { id, field, waiting: true, ...(fields[field] !== undefined ? { current: shownValue(field, fields[field]) } : {}) };
     },
 
     // The person's answer to a proposal, by its ID, or by the field when only one is waiting for it.
-    // Confirming is the person accepting: the change is recorded as the proposing agent's.
-    async confirmIdentity(ref, { reason } = {}) {
+    // Confirming is the person's change, and names the agent that proposed the fact. A rejection
+    // changes nothing, so it is kept in .cortex/identity.jsonl alone.
+    async confirmIdentity(ref) {
       onlyPerson('confirms an identity fact');
       const proposal = await waitingFor(ref);
-      const mirror = (await journal.read()).find(line => line.type === 'proposal' && line.proposal === proposal.id);
-      const decision = await journal.append(actor, 'decision', { proposal: proposal.id, outcome: 'accepted', ...(reason ? { reason } : {}) });
-      await setField(proposal.field, proposal.value, { by: mirror?.actor?.name ?? proposal.by ?? actor, extra: { proposal: proposal.id, decision: decision.id } });
+      await setField(proposal.field, proposal.value, { extra: { proposedBy: proposal.by ?? 'agent', identityProposal: proposal.id } });
       await recordIdentity({ type: 'confirmed', id: proposal.id, field: proposal.field, value: proposal.value, source: proposal.source });
       return { id: proposal.id, field: proposal.field, value: proposal.value, confirmed: true };
     },
 
-    async rejectIdentity(ref, { reason } = {}) {
+    async rejectIdentity(ref) {
       onlyPerson('rejects an identity fact');
       const proposal = await waitingFor(ref);
-      await journal.append(actor, 'decision', { proposal: proposal.id, outcome: 'rejected', ...(reason ? { reason } : {}) });
       await recordIdentity({ type: 'rejected', id: proposal.id, field: proposal.field, value: proposal.value });
       return { id: proposal.id, field: proposal.field, rejected: true };
     },
@@ -1000,8 +959,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return { memory: found.memory, version: found.version, ...(history ? { earlier: versions.map(({ version, replacedAt }) => ({ version, replacedAt })) } : {}) };
     },
 
-    // A memory, whole. An agent's is a proposal; the person's is written. It names the version it
-    // replaces, and is refused if the memory has changed since.
+    // A memory, whole, written at once and recorded as a change by whoever wrote it. It names the
+    // version it replaces, and is refused if the memory has changed since.
     async write(given, { replaces = null, reason } = {}) {
       const name = given?.name;
       const live = typeof name === 'string' && NAME.test(name) && name.length <= 100 ? await held(name) : null;
@@ -1019,7 +978,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       if (!live) return { name, removed: true, unchanged: true };
       if (live.version !== replaces) throw changed('memory', live.version);
       const done = await edit(nodeOf(`memory/${name}`), 'remove', null, { before: live.version, reason: checkReason(reason) });
-      return { name, ...done, ...(done.proposed ? {} : { removed: true }) };
+      return { name, ...done, removed: true };
     },
 
     async search({ q, limit = 10 } = {}) {
@@ -1058,10 +1017,10 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return { notes: [...(await notes()).values()].filter(note => settled || !note.settledAt) };
     },
 
-    // Says what became of each note, and rewrites the memories they went into. What became of a note
-    // is a decision line at once; each memory it touches, its rewrite and its seen count together, is
-    // one edit, a proposal when an agent settles. Every outcome is checked before anything is
-    // written, so a refused batch leaves the cortex as it was.
+    // Says what became of each note, and rewrites the memories they went into. Each memory it
+    // touches, its rewrite and its seen count together, is one change; what became of each note is a
+    // settled line. Every outcome is checked before anything is written, so a refused batch leaves
+    // the cortex as it was.
     async settle({ changes = [], notes: outcomes } = {}) {
       if (!Array.isArray(outcomes) || !outcomes.length || outcomes.length > 100) throw new Refused('InvalidRequest', 'Give 1 to 100 notes, each with what became of it');
       if (!Array.isArray(changes) || changes.length > 100) throw new Refused('InvalidRequest', 'changes is at most 100 rewritten memories');
@@ -1103,7 +1062,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         const done = await edit(nodeOf(`memory/${name}`), live ? 'update' : 'create', memoryFile(memory), { before: live?.version ?? null, reason: `${rewritten ? 'rewritten, and ' : ''}seen again in ${count} settled note${count === 1 ? '' : 's'}`, evidence: memory.evidence });
         memories.push({ name, ...done, seen: memory.seen });
       }
-      for (const item of outcomes) await journal.append(actor, 'decision', { note: item.id, outcome: item.outcome });
+      for (const item of outcomes) await journal.append(actor, 'settled', { note: item.id, outcome: item.outcome });
       const remaining = (await cortex.listNotes()).notes;
       return { settled: outcomes.length, memories, remaining, complete: remaining.length === 0 };
     },
@@ -1113,13 +1072,13 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     async getSkill(name) {
       const found = await skillAt(at('skills', known(name, 'skill')));
       if (found) return { skill: found.skill, version: found.version };
-      if (await skillAt(at('.cortex', 'proposed', 'skills', name)) || (await cortex.proposals()).some(item => item.node === `skill/${name}`)) throw new Refused('SkillNotApproved', 'This skill is waiting for the person to approve it, and is not used before');
+      if (await skillAt(at('.cortex', 'proposed', 'skills', name))) throw new Refused('SkillNotApproved', 'This skill is waiting for the person to approve it, and is not used before');
       throw new Refused('NotFound', 'There is no such skill');
     },
 
-    // A skill, whole: SKILL.md and the files beside it. An agent's waits for the person to accept it,
-    // and is not read as a skill before.
-    async proposeSkill({ text: content, files = [], reason } = {}) {
+    // A skill, whole: SKILL.md and the files beside it. It is kept apart from skills/, so nothing
+    // reads it as a skill until the person approves it. It changes no node, so it is not a change.
+    async proposeSkill({ text: content, files = [] } = {}) {
       const { properties, found } = splitFront(typeof content === 'string' ? content : '');
       if (!found || typeof properties.name !== 'string' || !NAME.test(properties.name) || properties.name.length > 100) throw new Refused('InvalidSkill', 'SKILL.md starts with a lowercase, hyphenated name between --- lines');
       if (typeof properties.description !== 'string' || !properties.description.trim()) throw new Refused('InvalidSkill', 'SKILL.md needs a one-line description');
@@ -1128,25 +1087,23 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         const path = typeof file?.path === 'string' ? normalize(file.path) : '';
         if (!path || path.startsWith('..') || path.startsWith(sep) || path.split(sep).some(part => part.startsWith('.')) || path === 'SKILL.md' || typeof file.text !== 'string' || bytes(file.text) > 65536) throw new Refused('InvalidSkill', 'Each file beside a skill has a path inside its folder and text of at most 64 KB');
       }
-      const skill = { text: content, files: files.map(file => ({ path: normalize(file.path).split(sep).join('/'), text: file.text })).sort((a, b) => a.path.localeCompare(b.path)) };
-      const spec = nodeOf(`skill/${properties.name}`);
-      const live = await spec.live();
-      const version = await spec.version(skill);
-      if (live?.version === version) return { name: properties.name, version, unchanged: true };
-      const done = await edit(spec, live ? 'update' : 'create', skill, { before: live?.version ?? null, reason: checkReason(reason) });
-      return { name: properties.name, ...done, approved: !done.proposed };
+      const root = at('.cortex', 'proposed', 'skills', properties.name);
+      await rm(root, { recursive: true, force: true });
+      await put(join(root, 'SKILL.md'), content);
+      for (const file of files) await put(join(root, normalize(file.path)), file.text);
+      await put(join(root, '.proposal.json'), JSON.stringify({ by: actor, when: now().toISOString() }));
+      return { name: properties.name, version: (await skillAt(root)).version, approved: false };
     },
 
-    // Only the person does this. A skill proposal made as a journal line is accepted; one made
-    // before, kept in .cortex/proposed/skills/, is moved into skills/ as it always was.
+    // Only the person does this. The skill moves into skills/, whole; the one it replaces is kept,
+    // and the change is the person's, naming the agent that proposed it.
     async approveSkill(name) {
       onlyPerson('approves a skill');
-      known(name, 'skill');
-      const waiting = (await cortex.proposals()).filter(item => item.node === `skill/${name}` && !item.stale).at(-1);
-      if (waiting) return { name, approved: true, ...await cortex.accept(waiting.id) };
-      const root = at('.cortex', 'proposed', 'skills', name);
+      const root = at('.cortex', 'proposed', 'skills', known(name, 'skill'));
       const proposed = await skillAt(root);
       if (!proposed) throw new Refused('NotFound', 'No skill of that name is waiting');
+      let by;
+      try { by = JSON.parse(await text(join(root, '.proposal.json')) ?? 'null')?.by; } catch {}
       const spec = nodeOf(`skill/${name}`);
       const live = await spec.live();
       if (live) await keep(...spec.kept, encode(spec, live.content), live.version);
@@ -1155,23 +1112,22 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       await mkdir(at('skills'), { recursive: true });
       await rename(root, at('skills', name));
       const after = (await spec.live()).version;
-      await journal.append(actor, 'change', { node: spec.node, op: live ? 'update' : 'create', before: live?.version ?? null, after, reason: 'approved from .cortex/proposed/skills/' });
-      return { name, approved: true, version: after };
+      const line = await journal.append(actor, 'change', { node: spec.node, op: live ? 'update' : 'create', before: live?.version ?? null, after, reason: 'approved', ...(typeof by === 'string' && by ? { proposedBy: by } : {}) });
+      return { name, approved: true, version: after, change: line.id };
     },
 
     listTools: () => toolsIn(at('tools')),
 
-    // A tool that ought to exist. Accepted, it is added to tools/ switched off: it does nothing until
-    // it is built and the person switches it on.
-    async proposeTool({ name, description, inputs, outputs, reason } = {}) {
+    // A proposed tool does nothing and cannot be switched on. It is a request for one to be built,
+    // kept in .cortex/proposed/tools/ until the person builds it and adds it to tools/.
+    async proposeTool({ name, description, inputs, outputs } = {}) {
       known(name, 'tool');
       for (const [field, value] of Object.entries({ description, inputs, outputs })) {
         if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw new Refused('InvalidRequest', `${field} is text, at most 2,000 characters`);
       }
       if (await text(at('tools', `${name}.md`)) !== null) throw new Refused('NameTaken', 'A tool already has this name');
-      const content = writeFront({ name, description, on: false, proposedBy: actor }, `## Takes\n\n${inputs}\n\n## Gives\n\n${outputs}\n`);
-      const done = await edit(nodeOf(`tool/${name}`), 'create', content, { before: null, reason: checkReason(reason) });
-      return { name, ...done, proposed: done.proposed ?? true };
+      await put(at('.cortex', 'proposed', 'tools', `${name}.md`), writeFront({ name, description, on: false, proposedBy: actor }, `## Takes\n\n${inputs}\n\n## Gives\n\n${outputs}\n`));
+      return { name, proposed: true };
     },
   };
 

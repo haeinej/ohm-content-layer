@@ -17,15 +17,6 @@ const fresh = async (options = { actor: 'test-agent' }) => {
   return { dir, cortex: openCortex(dir, options) };
 };
 const refused = code => problem => problem.code === code || JSON.parse(problem.message).error === code;
-// The person accepts every proposal waiting that can be accepted, one at a time.
-const acceptAll = async dir => {
-  const person = openCortex(dir, { actor: 'member' });
-  for (;;) {
-    const next = (await person.proposals()).find(item => item.node !== 'identity' && !item.stale);
-    if (!next) return;
-    await person.accept(next.id);
-  }
-};
 const likes = { name: 'prefers-short-titles', description: 'Titles are four words or fewer', kind: 'preference', stated: true, body: 'Keep every title short.' };
 
 test('a memory written as a file reads back the same', () => {
@@ -63,10 +54,8 @@ test('secrets have one place, and git is told never to take them', async () => {
 test('a memory is one file, indexed, and a save names the version it replaces', async () => {
   const { dir, cortex } = await fresh();
   const saved = await cortex.write(likes);
-  // An agent's memory is a proposal until the person accepts it.
-  assert.deepEqual([saved.waiting, saved.node, saved.op], [true, 'memory/prefers-short-titles', 'create']);
-  await assert.rejects(readFile(join(dir, 'memory', 'prefers-short-titles.md'), 'utf8'));
-  await acceptAll(dir);
+  // An agent's memory is written at once, as a change marked with the agent.
+  assert.deepEqual([saved.node, saved.op, typeof saved.change], ['memory/prefers-short-titles', 'create', 'string']);
   assert.equal(readMemoryFile(await readFile(join(dir, 'memory', 'prefers-short-titles.md'), 'utf8')).writtenBy, 'test-agent');
   assert.match(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /prefers-short-titles.*four words/);
   assert.equal((await cortex.write(likes)).unchanged, true);
@@ -75,7 +64,6 @@ test('a memory is one file, indexed, and a save names the version it replaces', 
   await assert.rejects(cortex.write(longer, { replaces: 'cstale' }), refused('Changed'));
   const next = await cortex.write(longer, { replaces: saved.version });
   assert.notEqual(next.version, saved.version);
-  await acceptAll(dir);
   // What was replaced is kept, and can be read back to restore.
   const read = await cortex.read(likes.name, { history: true });
   assert.deepEqual(read.earlier.map(item => item.version), [saved.version]);
@@ -96,11 +84,8 @@ test('a file the person edited by hand is what the agent is given', async () => 
 test('a removed memory is kept in history and gone from the index', async () => {
   const { dir, cortex } = await fresh();
   const { version } = await cortex.write(likes);
-  await acceptAll(dir);
   await assert.rejects(cortex.remove(likes.name, { replaces: 'cstale' }), refused('Changed'));
-  assert.equal((await cortex.remove(likes.name, { replaces: version })).waiting, true);
-  assert.match(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /prefers-short-titles/, 'nothing goes before the person accepts');
-  await acceptAll(dir);
+  assert.equal((await cortex.remove(likes.name, { replaces: version })).removed, true);
   assert.doesNotMatch(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /prefers-short-titles/);
   assert.equal((await cortex.read(likes.name, { version })).memory.body, likes.body);
   await assert.rejects(cortex.read(likes.name), refused('NotFound'));
@@ -124,7 +109,7 @@ test('a note changes no memory, is kept once, and is settled one way or another'
   const wants = { name: 'wants-the-reasoning', description: 'Show why, not only the answer', kind: 'preference', stated: false, body: 'Asked why in two sessions.', notes: ['n1', 'n2'] };
   const done = await cortex.settle({ changes: [{ memory: wants }], notes: [{ id: 'n1', outcome: wants.name }, { id: 'n2', outcome: wants.name }, { id: 'n3', outcome: 'dropped' }] });
   assert.equal(done.complete, true);
-  assert.deepEqual([done.memories[0].seen.count, done.memories[0].waiting], [2, true]);
+  assert.deepEqual([done.memories[0].seen.count, typeof done.memories[0].change], [2, 'string']);
   await assert.rejects(cortex.settle({ notes: [{ id: 'n3', outcome: 'kept' }] }), refused('Changed'));
   await assert.rejects(cortex.write({ ...likes, notes: ['never-recorded'] }), refused('InvalidMemory'));
 });
@@ -166,7 +151,7 @@ test('an agent can ask for a tool, and cannot add one or switch one on', async (
 });
 
 test('an agent keeps a cortex through the tools alone', async () => {
-  const { dir, cortex } = await fresh({ actor: 'claude-code' });
+  const { cortex } = await fresh({ actor: 'claude-code' });
   let seen;
   const handle = createServer({ tools: createTools(cortex), list: TOOLS, instructions: INSTRUCTIONS, onClient: name => { seen = name; } });
   const ask = async (name, args = {}) => {
@@ -182,9 +167,8 @@ test('an agent keeps a cortex through the tools alone', async () => {
 
   assert.match((await ask('cortex_start')).value.rules, /What you may not do/);
   const saved = (await ask('cortex_remember', { memory: likes })).value;
-  assert.deepEqual([saved.done, saved.waiting], [false, true]);
-  assert.equal((await ask('cortex_start')).value.waiting.proposals[0].id, saved.proposed);
-  await acceptAll(dir);
+  assert.equal(saved.done, true);
+  assert.equal((await ask('cortex_history', { node: `memory/${likes.name}` })).value.changes[0].id, saved.change);
   assert.equal((await ask('cortex_recall', { name: likes.name })).value.memory.writtenBy, 'claude-code');
   const clash = await ask('cortex_remember', { memory: { ...likes, body: 'Different.' } });
   assert.equal(clash.isError, true);
@@ -193,14 +177,12 @@ test('an agent keeps a cortex through the tools alone', async () => {
   await ask('cortex_note', { id: 'a', note: 'Rewrote my title to be shorter', session: 's1' });
   assert.equal((await ask('cortex_settle')).value.notes.length, 1);
   assert.equal((await ask('cortex_settle', { notes: [{ id: 'a', outcome: likes.name }] })).value.complete, true);
-  await acceptAll(dir);
 
   const first = (await ask('cortex_forget', { name: likes.name })).value;
   assert.equal(first.done, false);
   assert.equal((await ask('cortex_forget', { name: likes.name, confirm: 'made-up' })).isError, true);
   // A confirmation is used once, and removes the version that was shown.
-  assert.equal((await ask('cortex_forget', { name: likes.name, confirm: first.confirm })).value.waiting, true);
+  assert.equal((await ask('cortex_forget', { name: likes.name, confirm: first.confirm })).value.done, true);
   assert.equal((await ask('cortex_forget', { name: likes.name, confirm: first.confirm })).isError, true);
-  await acceptAll(dir);
   assert.equal((await ask('cortex_recall', { name: likes.name })).isError, true);
 });

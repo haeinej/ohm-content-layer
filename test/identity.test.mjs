@@ -190,9 +190,8 @@ test('an agent cannot write under the person\'s or the account\'s name', async (
   execFileSync('node', [cli, 'mcp', dir], { input: `${lines}\n`, encoding: 'utf8' });
   const cortex = openCortex(dir);
   assert.equal((await cortex.identityLog()).at(-1).by, 'agent:member');
-  const [waiting] = (await cortex.proposals()).filter(item => item.node === 'memory/likes-maps');
-  assert.deepEqual(waiting.actor, { kind: 'agent', name: 'agent:member' }, 'an agent named member is still an agent, and only proposes');
-  await cortex.accept(waiting.id);
+  const [change] = (await cortex.history({ node: 'memory/likes-maps' })).changes;
+  assert.deepEqual(change.actor, { kind: 'agent', name: 'agent:member' }, 'an agent named member is still an agent');
   assert.equal((await cortex.read('likes-maps')).memory.writtenBy, 'agent:member');
 });
 

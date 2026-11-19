@@ -25,15 +25,15 @@ For the person, it is three folders: what my agent has learned, what it knows ho
 | Rulebook | `agents/AGENTS.md` | Cortex itself, plus the person's own additions | Every session |
 | Secrets | `agents/secrets/` | The person only | Never by the agent. Never committed |
 | Identity | `identity.md` | The person confirms; the agent only proposes, with evidence | Every session, in full |
-| Memory | `memory/` | The agent proposes. The person accepts, or edits any time | Index every session, a memory when it fits |
+| Memory | `memory/` | The agent, at once, as its own change. The person reverts or edits any time | Index every session, a memory when it fits |
 | Working memory | `.cortex/working/` | Each agent its own, at once | Every session |
-| Skills | `skills/` | The agent proposes. The person accepts | Descriptions every session, a skill when it fits |
-| Tools | `tools/` | The person only. The agent may propose one, which is added switched off | The list every session |
+| Skills | `skills/` | The agent proposes. The person approves | Descriptions every session, a skill when it fits |
+| Tools | `tools/` | The person only. The agent may ask for one | The list every session |
 | Machinery | `.cortex/` | Cortex itself | Never shown to the model directly |
 
-**Every edit goes through the person.** An agent never writes the folder, except its own working memory: each edit it makes is a proposal, and nothing changes until the person accepts it with `cortex accept`.
+**Agents edit directly; every change is marked with who made it; the person reverts.** Each write is a change in the journal under the agent's name, with a reason, and `cortex revert` or `cortex restore` undoes what the person does not want. Identity facts, skills and tools still wait for the person.
 
-`.cortex/` holds what the person does not need to think about: the journal (every proposal, decision, change, note, session and save, with who made it), and earlier versions of every file.
+`.cortex/` holds what the person does not need to think about: the journal (every change, note, settlement, session and save, with who made it), and earlier versions of every file.
 
 A cortex also carries `.gitignore` and `.gitattributes`, so that one kept in git never commits a secret, keeps the same line endings everywhere, and joins two machines' journals without a conflict.
 
@@ -60,25 +60,23 @@ node /path/to/cortex/bin/cortex.mjs mcp ~/cortex
 | `cortex vault connect <folder> [dir]` | The person | Connects the vault kept in that folder, and writes `vault.md` |
 | `cortex vault [sync] [dir]` | The person or a host | Brings the cortex in step with the vault: counts, what moved or left, memories pointing at blocks no longer there |
 | `cortex identity [dir]` | The person | Shows the confirmed identity and the facts an agent proposed |
-| `cortex proposals [dir] [--json]` | The person | Lists what agents proposed, in full, and which are stale |
-| `cortex accept <id> [dir] [--reason <why>]` | The person | Accepts a proposal: the change is made, recorded as the agent's. An identity field's name works too |
-| `cortex reject <id or field> [dir] [--reason <why>]` | The person | Turns one down. A rejected identity value is not proposed again |
 | `cortex confirm <field or id> [dir]` | The person | Accepts a proposed identity fact |
+| `cortex reject <field or id> [dir]` | The person | Turns one down; that value is not proposed again |
 | `cortex clear <field> [dir]` | The person | Removes an identity field |
 | `cortex mcp [dir]` | An agent | Serves the twenty `cortex_*` tools over standard input and output |
 | `cortex serve [dir] [--port 8765] [--host 127.0.0.1]` | The person | Serves the same tools over HTTP at `/mcp`, for clients that connect to a server |
 | `cortex token [dir] [--replace]` | The person | Makes the token HTTP clients sign in with, saves it in `agents/secrets/mcp-token`, and prints it once |
-| `cortex approve <skill> [dir]` | The person | Accepts the skill an agent proposed under that name |
+| `cortex approve <skill> [dir]` | The person | Moves a skill an agent proposed into `skills/` |
 | `cortex event <text> [dir]` | A host | Records a change from outside, for the agent to settle |
 | `cortex hook <moment> [dir] --agent <name>` | Claude Code or Codex, as a hook | Answers `session-start`, `prompt`, `stop` or `session-end` from the folder: the playbook, working memory and the open dead ends near its folder at the start, a request to distill when working memory changed and was not distilled, once for each change, and nothing at the end. Exits 0 and writes nothing on any error |
 | `cortex install-hooks claude-code\|codex` | The person | Prints the hooks to add to that client's settings. Writes nothing |
 | `cortex history [dir] [--node <node>] [--since <seq or date>] [--actor <name>] [--json]` | The person | Lists every change and save, with who made each |
 | `cortex as-of <node> <save, date or seq> [dir]` | The person | Prints a node as it was then, such as `memory/likes-short-titles` or `identity` |
 | `cortex save <name> <note> [dir]` | The person | Names this point in history. Changes nothing |
-| `cortex restore <node> <version> [dir]` | The person | Brings a node back to an earlier version, as a new change |
-| `cortex revert <change> [dir]` | The person | Undoes one change, as a new change |
+| `cortex restore <node> <version> [dir] [--reason <why>]` | The person | Brings a node back to an earlier version, as a new change |
+| `cortex revert <change> [dir] [--reason <why>]` | The person | Undoes one change, an agent's or their own, as a new change |
 
-An agent has the same history views as tools (`cortex_history`, `cortex_as_of`, `cortex_save`), proposes restores and reverts (`cortex_restore`, `cortex_revert`), and records each task it finishes or gives up, with its dead ends, with `cortex_session`.
+An agent has the same history views as tools (`cortex_history`, `cortex_as_of`, `cortex_save`), restores and reverts what it may write (`cortex_restore`, `cortex_revert`), and records each task it finishes or gives up, with its dead ends, with `cortex_session`.
 
 ### Over HTTP
 
@@ -127,15 +125,15 @@ Built:
 - filing advice and `cortex status`;
 - MCP over standard input and output, and over HTTP with a token;
 - the hooks adapter for Claude Code and Codex;
-- the journal: proposals the person accepts, changes, notes, sessions with dead ends, and saves; history, as-of, restore and revert; evidence on notes and memories;
+- the journal: changes marked with who made them, notes, sessions with dead ends, and saves; history, as-of, restore and revert; evidence on notes and memories;
 - blocks and channels as the vault's words;
 - the twenty tools and the commands above.
 
-117 tests run against temporary folders, and CI runs them on Node 20 and 22 for every pull request.
+119 tests run against temporary folders, and CI runs them on Node 20 and 22 for every pull request.
 
 Not yet tried: the hooks in a real Claude Code or Codex session.
 
-Not built: OAuth for ChatGPT and Claude's web connectors, fitting memories to each prompt, switching tools on from anywhere but the file itself, staleness of memories whose blocks changed, and one `cortex_propose` for every kind of proposal.
+Not built: OAuth for ChatGPT and Claude's web connectors, fitting memories to each prompt, switching tools on from anywhere but the file itself, and staleness of memories whose blocks changed.
 
 Not planned: syncing a cortex with ohm. A cortex stays a folder of its own. The older cortex inside ohm-content-layer is separate and is not connected to this one.
 

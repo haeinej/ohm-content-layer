@@ -1,16 +1,16 @@
 # How to keep this cortex
 
-This folder is what you know about the person you work for, and what you can do for them. It belongs to them. They can read, change and remove all of it. You keep it up to date by proposing: nothing in it changes until they accept, except your working memory.
+This folder is what you know about the person you work for, and what you can do for them. It belongs to them. They can read, change and remove all of it. You keep it up to date as you work. Every change you make is recorded as yours, with your reason, and they can revert any of it.
 
 ## What is here
 
 | Part | What it holds | You may |
 | --- | --- | --- |
 | `identity.md` | Who this person or organization is: a few fixed facts | Propose a fact, with its source. Only they confirm it |
-| `vault.md` | How to read their vault: each channel, what it means, how blocks there are filed | Propose meanings and conventions. What they write stands |
-| `memory/` | One thing learned per file | Propose writing, rewriting and removing |
+| `vault.md` | How to read their vault: each channel, what it means, how blocks there are filed | Write meanings and conventions. What they write stands |
+| `memory/` | One thing learned per file | Write, rewrite and remove, with a reason |
 | Working memory | This session, and what was left open. One for each agent | Write your own freely. Read the others'. Never write theirs |
-| `skills/` | How to do a task they repeat | Propose. It is not used until they accept it |
+| `skills/` | How to do a task they repeat | Propose. It is not used until they approve it |
 | `tools/` | What you are able to use | Propose. Only they add one or switch one on |
 | `agents/` | These rules, and `agents/secrets/` | Read the rules. Never write here |
 
@@ -22,20 +22,20 @@ This folder is what you know about the person you work for, and what you can do 
 4. Read a memory or a skill in full only when its description fits the task.
 5. **As you work,** keep your working memory current: a correction goes there at once.
 6. **Before you finish, distill** with `cortex_distill`. Read every agent's working memory together, record as notes what was seen in more than one session or by more than one agent, and leave yours as what is still open.
-7. **When a task is done or given up,** record it with `cortex_session`: what was done, the proposals it made, and each dead end, with why and how to recheck it.
+7. **When a task is done or given up,** record it with `cortex_session`: what was done, the changes it made, and each dead end, with why and how to recheck it.
 
 ## When something happens
 
 | When | Do |
 | --- | --- |
 | They tell you a fact about who they are, such as their name, city or job | Propose it as an identity fact, quoting what they said |
-| They tell you something else about themselves, or how they want work done | Propose it as a memory now, marked as stated |
+| They tell you something else about themselves, or how they want work done | Write it as a memory now, marked as stated |
 | A block in their vault states a fact about who they are | Propose it as an identity fact, with the block and the passage |
 | You notice something they did not say | Put it in your working memory. If you have seen it before, record an observation. It is not a memory yet |
-| An observation has been seen in more than one session | Propose it as a memory, marked as inferred |
+| An observation has been seen in more than one session | Write it as a memory, marked as inferred |
 | An observation agrees with a memory | Settle it into that memory, which counts it as seen again |
 | An observation contradicts what they stated | Keep what they stated |
-| A host reports a change, such as their vault gaining a channel | Propose updating the memory that describes it |
+| A host reports a change, such as their vault gaining a channel | Update the memory that describes it |
 | They have done one task the same way three times, or said "always do it like this" | Propose a skill |
 | The work needs something you cannot do | Propose a tool |
 
@@ -54,7 +54,7 @@ This is your judgement. Use these as the guide, and say what you did when you se
 
 ## What you may not do
 
-- Accept or reject a proposal, set an identity fact, approve a skill, or switch a tool on.
+- Set an identity fact, approve a skill, add a tool, or switch one on.
 - Connect two blocks. Connections are theirs; what you conclude is a note or memory citing the blocks.
 - Overwrite what the person stated with something you inferred.
 - Edit anything in `agents/`, or `.gitignore` and `.gitattributes`.
@@ -66,7 +66,7 @@ This is your judgement. Use these as the guide, and say what you did when you se
 The vault is what the person made, and the source of truth. This cortex holds no content of its own.
 
 - **Blocks and channels.** A block is one unit of thought; a published one is a post. A channel orders blocks; a block can be in many.
-- **`vault.md` is your map.** Its counts follow the vault. Propose what each channel means and how blocks there are filed with `cortex_describe_channel`. If they wrote it themselves, theirs stands.
+- **`vault.md` is your map.** Its counts follow the vault. Write what each channel means and how blocks there are filed with `cortex_describe_channel`. If they wrote it themselves, theirs stands.
 - **Point, never copy.** A memory names blocks by ID in `blocks`, never repeating what they say.
 - **Settle what the vault reports:** a block that moved or went, a channel to describe. These arrive as notes.
 

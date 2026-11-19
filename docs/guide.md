@@ -1,6 +1,6 @@
 # The cortex, its words, and its history: a guide
 
-For the person whose cortex it is, and for any agent that keeps one. It explains the words ohm and cortex now share, what is evidence and what is inference, how each part of a cortex joins the graph of a vault, and how every change is recorded, proposed, accepted and undone. [plan.md](plan.md) is the specification; [journal-and-history.md](journal-and-history.md) is the design this came from.
+For the person whose cortex it is, and for any agent that keeps one. It explains the words ohm and cortex now share, what is evidence and what is inference, how each part of a cortex joins the graph of a vault, and how every change is recorded with who made it, and undone. [plan.md](plan.md) is the specification; [journal-and-history.md](journal-and-history.md) is the design this came from.
 
 Every person, block and file below is invented. The examples follow one person, Mira Okafor, who writes essays and takes photographs on walks.
 
@@ -56,7 +56,7 @@ Inference is what an agent works out. It is never an edge between two blocks. It
 | Skill | **learned** | The channels and blocks it was used on | "How Mira files walk photos" was learned on `photos/walks` |
 | Tool | **acts** | What it reads and writes | A calendar tool acts on the person's calendar |
 
-So **a model never draws an edge between two blocks.** If an agent sees that two blocks belong together, it writes a note or proposes a memory that cites both. It may also suggest the connection to the person, in words; if the person agrees and connects them, that connection is theirs, an evidence edge like any other. Accepting a suggestion is the person connecting.
+So **a model never draws an edge between two blocks.** If an agent sees that two blocks belong together, it writes a note or a memory that cites both. It may also suggest the connection to the person, in words; if the person agrees and connects them, that connection is theirs, an evidence edge like any other. Accepting a suggestion is the person connecting.
 
 ## 3. How each part of the cortex joins the graph
 
@@ -64,13 +64,13 @@ Every file of the cortex is a node, just as every block is. Each is named one wa
 
 | Node | File | Who changes it |
 | --- | --- | --- |
-| `identity` | `identity.md` | The person confirms; agents propose facts |
+| `identity` | `identity.md` | The person confirms; agents propose facts, with evidence |
 | `playbook` | `agents/AGENTS.md` | The person only |
-| `memory/<name>` | `memory/<name>.md` | Agents propose; the person accepts |
+| `memory/<name>` | `memory/<name>.md` | Agents and the person, at once; the person reverts what they do not want |
 | `working/<agent>` | `.cortex/working/<agent>.md` | That agent, at once |
-| `skill/<name>` | `skills/<name>/` | Agents propose; the person accepts |
-| `tool/<name>` | `tools/<name>.md` | Agents propose; the person accepts it switched off, and switches it on |
-| `channel/<path>` | What `vault.md` says the channel means and how blocks there are filed | Agents propose; the person accepts, and what the person wrote by hand stands |
+| `skill/<name>` | `skills/<name>/` | Agents propose; the person approves |
+| `tool/<name>` | `tools/<name>.md` | The person adds it and switches it on; agents only ask for one |
+| `channel/<path>` | What `vault.md` says the channel means and how blocks there are filed | Agents and the person, at once; what the person wrote by hand stands |
 
 How each kind of cortex node joins the graph, and what evidence it needs:
 
@@ -80,9 +80,9 @@ How each kind of cortex node joins the graph, and what evidence it needs:
 | Memory about the person | Sessions, blocks they wrote | grounds | Two or more sessions, or the session where they said it |
 | Note | What it observed | observes | One session, or a node at a version |
 | Skill | Channels and blocks it was used on | learned | Three or more sessions |
-| Tool | What it reads and writes | acts | Its declaration, which the person accepts |
+| Tool | What it reads and writes | acts | Its declaration, which the person writes |
 | Identity fact | The person | about | Their words, or the block and passage that state it |
-| Session | What it proposed and changed | shown from the journal, not stored as edges | The journal |
+| Session | The changes it made | shown from the journal, not stored as edges | The journal |
 
 ### Evidence in practice
 
@@ -105,7 +105,7 @@ A note or memory carries `evidence`: a list of pointers, each a node at a versio
 
 Cortex checks that each pointer is well formed, that a cited cortex node had that version, and, when a vault is connected, that a cited block is still there. It does not count. How much evidence is enough is judgement, written in the playbook as a guide:
 
-- **Stated** by the person: the session they said it in. Proposed as a memory at once.
+- **Stated** by the person: the session they said it in. Written as a memory at once.
 - **Inferred about the person:** two or more sessions.
 - **Inferred about their work:** two or more distinct blocks, each at the version read.
 - **A skill:** three sessions where the same method was used.
@@ -119,12 +119,13 @@ Everything that happens in a cortex is a line in one append-only file, `.cortex/
 
 | Type | Written when | It holds |
 | --- | --- | --- |
-| `proposal` | An agent wants to change a node | The whole change: node, op, the version it applies to, the content after, why, evidence |
-| `decision` | The person accepts or rejects a proposal, or notes are settled | Accepted or rejected, by whom, and why |
-| `change` | A node changes | Node, op (create, update, remove, restore), versions before and after, why; for an agent's change, the proposal and decision it came from |
-| `note` | An agent or a host observes something | One line, with evidence. It changes no file, so nobody needs to accept it |
-| `session` | An agent finishes or gives up a task | What was done, what it proposed and changed, and its dead ends |
+| `change` | A node changes, by the person or an agent | Node, op (create, update, remove, restore), versions before and after, why, evidence |
+| `note` | An agent or a host observes something | One line, with evidence. It changes no file |
+| `settled` | Notes are settled | What became of a note: kept, dropped, or the memory it went into |
+| `session` | An agent finishes or gives up a task | What was done, the IDs of the changes it made, and its dead ends |
 | `save` | Someone names a point in history | A name and a note. It changes nothing |
+
+A journal from an earlier version of cortex, when every agent edit waited for the person, may also hold `proposal` and `decision` lines. They are still read and kept, and change nothing.
 
 The person and the signed-in account are human actors; every other name is an agent, by the name it connected with. An agent can never act under the person's name.
 
@@ -132,40 +133,33 @@ The file is marked `merge=union` for git. Every line has its own ID, so when two
 
 `.cortex/history/` keeps every earlier version of every node, filed by its version hash. Between the two, any node can be read as it was at any point.
 
-### Every edit goes through the person
+### Agents edit; every change says who made it
 
-An agent never writes the folder. When Codex learns that Mira wants short titles, it proposes:
+An agent writes directly. When Codex learns that Mira wants short titles, it writes the memory, and the journal records it as Codex's:
 
 ```json
-{"seq":41,"id":"m3x1-4f2a9c0b7d11","at":"2026-11-19T10:02:00.000Z","actor":{"kind":"agent","name":"codex"},"type":"proposal","proposal":"p8c1e2a4b9f03","node":"memory/likes-short-titles","op":"create","before":null,"after":"c91…","content":"---\nname: \"likes-short-titles\"\n…","reason":"Mira cut three titles to four words"}
+{"seq":41,"id":"m3x1-4f2a9c0b7d11","at":"2026-11-19T10:02:00.000Z","actor":{"kind":"agent","name":"codex"},"type":"change","node":"memory/likes-short-titles","op":"create","before":null,"after":"c91…","reason":"Mira cut three titles to four words"}
 ```
 
-Nothing in `memory/` has changed. Mira sees what waits:
+The write returns the change's ID. Mira sees what agents did in the history:
 
 ```
-$ cortex proposals
-p8c1e2a4b9f03  codex proposes to create memory/likes-short-titles
-  why: Mira cut three titles to four words
-  | ---
-  | name: "likes-short-titles"
-  | description: "Titles of four words or fewer"
-  | …
+$ cortex history --actor agent
+41  2026-11-19T10:02:00.000Z  codex  create memory/likes-short-titles  (none) -> c91…  Mira cut three titles to four words
 ```
 
-and answers:
+If she does not want it, she reverts it:
 
 ```
-$ cortex accept p8c1e2a4b9f03 --reason "Yes, always"
-Proposal p8c1e2a4b9f03 accepted: memory/likes-short-titles changed
+$ cortex revert 41 --reason "Only for essays"
+Change 41 is undone: memory/likes-short-titles is back as it was. What it replaced is kept.
 ```
 
-That writes a `decision` (accepted, by Mira, "Yes, always"), then the file, then a `change` whose actor is Codex and which names the proposal and the decision. `cortex reject <id>` records a rejection and changes nothing.
+That is a new change, Mira's, which names the change it reverts. Codex's version stays in the history and can be brought back with `cortex restore`.
 
-If something else changed the memory between the proposal and Mira's answer, the proposal is **stale**: its `before` is no longer the memory's version. It cannot be accepted. Mira rejects it, and Codex proposes again from what is there now.
+**What needs trust still waits for the person.** An identity fact is proposed with its evidence and set only when Mira runs `cortex confirm`; `cortex reject` turns it down for good. A skill an agent writes waits in `.cortex/proposed/skills/` until `cortex approve`, and is not used before. A tool is only asked for: Mira builds it, adds it to `tools/` and switches it on. Confirming and approving are command-line only, because an MCP client cannot prove it is the person; the change they make is Mira's, and names the agent that proposed it in `proposedBy`.
 
-Mira's own edits from the command line, such as restoring a version, are changes at once. Accepting and rejecting are command-line only: an MCP client cannot prove it is the person, so no tool an agent is given can accept anything.
-
-**One exception: working memory.** Each agent rewrites its own scratch file all session, and the stop hook asks for a distill when it changed. If every rewrite waited for Mira, the hooks could not follow it and she would be reviewing scratch notes all day. So an agent writes its own working memory at once; it is still a `change` line, and it never writes another agent's. Whether this stays is an open decision in plan.md.
+An agent never writes the playbook, identity, a skill or a tool, not even by restoring an earlier version, and never another agent's working memory. Where Mira wrote what a channel means by hand, her words stand: an agent's write, restore or revert over them is refused.
 
 ### Reading the past
 
@@ -184,7 +178,7 @@ An agent reading `identity` as it was sees it as agents always do: the birthdate
 | `cortex_restore` | `cortex restore <node> <version>` | Brings a node back to an earlier version, as a new change |
 | `cortex_revert` | `cortex revert <change>` | Undoes one change: the node goes back to what it was just before. Refused if the node has changed again since; restore a version instead. Reverting the change that made a node removes it |
 
-Neither rewrites a line of the journal; what they replace is kept. From an agent, both are proposals Mira accepts. Identity and the playbook are restored only by Mira.
+Neither rewrites a line of the journal; what they replace is kept. Both are changes at once, from Mira or an agent. Identity, the playbook, skills and tools are restored and reverted only by Mira, and an agent restores only its own working memory.
 
 ### Sessions and dead ends
 
@@ -194,7 +188,7 @@ Nothing is captured on an agent's behalf. When it finishes a task, or gives it u
 {
   "summary": "Retitled the walk photos by place",
   "outcome": "done",
-  "made": ["p8c1e2a4b9f03", "m3x9-0a1b2c3d4e5f"],
+  "made": ["m3x1-4f2a9c0b7d11", "m3x9-0a1b2c3d4e5f"],
   "project": "/home/mira/walks",
   "deadEnds": [
     { "tried": "Titling photos by date", "why": "Mira finds them by place", "check": "ls photos/walks | head" }
@@ -202,7 +196,7 @@ Nothing is captured on an agent's behalf. When it finishes a task, or gives it u
 }
 ```
 
-`made` groups the proposals and changes of that task. Each dead end gets an ID, and stays open until a later session lists it in `resolved`. `cortex_start` lists the open ones, and when a Claude Code or Codex session starts in `/home/mira/walks`, the hook shows those recorded there, so the next agent does not try dating the photos again. `check` is a command a person or agent can run to see whether the dead end still holds; cortex never runs it.
+`made` groups the changes the agent made in that task, by the IDs its writes returned. Each dead end gets an ID, and stays open until a later session lists it in `resolved`. `cortex_start` lists the open ones, and when a Claude Code or Codex session starts in `/home/mira/walks`, the hook shows those recorded there, so the next agent does not try dating the photos again. `check` is a command a person or agent can run to see whether the dead end still holds; cortex never runs it.
 
 ### The hooks
 
@@ -219,7 +213,6 @@ The hooks keep their own checkpoints (start, ask, distill) in `.cortex/hooks.jso
 
 - **Staleness:** marking a memory out of date when a block it pins changes.
 - **Settlement rules per kind,** beyond the playbook's guidance.
-- **One `cortex_propose`** for every kind of proposal, in place of the separate tools.
 - **The `~/Brain` layout,** with the cortex inside the brain folder.
 - **The ohm-ux timeline reading the journal,** described below.
 - **Sync to ohm,** which stays optional.
@@ -228,7 +221,7 @@ The hooks keep their own checkpoints (start, ask, distill) in `.cortex/hooks.jso
 
 ohm's editor is planned to show the journal to the person. This is how the wireframe draws it; cortex itself has no screens.
 
-- **A timeline,** vertical, like the source control timeline in VS Code: one line per change, newest first, each with an icon saying whether you made it or an agent did, and which. Opening a line shows its details: the node, what changed, why, the proposal and decision behind it, and two actions, **Revert this change** and **Restore this version**. Both make a new change; the line opened stays as it was.
+- **A timeline,** vertical, like the source control timeline in VS Code: one line per change, newest first, each with an icon saying whether you made it or an agent did, and which. Opening a line shows its details: the node, what changed, why, its evidence, and two actions, **Revert this change** and **Restore this version**. Both make a new change; the line opened stays as it was.
 - **A versions card** on each page: its earlier versions, with who made each and when, and the saves that fall among them.
 - **A connections card** on each block: the graph around it, the part of the channel tree it sits in, and its connections, grey for evidence and green for what the cortex inferred.
 - **Connecting** is pulling a line from a block's dot to another block. That is the person making a connection; an agent's suggestion becomes one only this way.

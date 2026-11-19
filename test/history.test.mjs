@@ -20,21 +20,14 @@ const refused = code => problem => problem.code === code || JSON.parse(problem.m
 // A cortex opened on a given day, so the journal's times are known.
 const on = (dir, actor, day) => openCortex(dir, { actor, now: () => new Date(`${day}T12:00:00.000Z`) });
 const tools = (dir, actor, day) => createTools(on(dir, actor, day));
-// The person accepts what is waiting, on a given day.
-const accept = async (dir, day) => {
-  const person = on(dir, 'member', day);
-  for (const item of await person.proposals()) if (item.node !== 'identity') await person.accept(item.id);
-};
 const memory = body => ({ name: 'likes-short-titles', description: 'Titles of four words or fewer', kind: 'preference', stated: true, body });
 
 // Three days: Claude Code writes a memory, Codex rewrites it, the person confirms a birthdate. A save in between.
 async function threeDays() {
   const dir = await fresh();
   const one = await on(dir, 'claude-code', '2026-11-01').write(memory('Short titles.'));
-  await accept(dir, '2026-11-01');
   await tools(dir, 'claude-code', '2026-11-01').call('cortex_save', { name: 'before-codex', note: 'Before Codex took over the titles' });
   const two = await on(dir, 'codex', '2026-11-02').write(memory('Short titles, no colons.'), { replaces: one.version });
-  await accept(dir, '2026-11-02');
   const person = on(dir, 'member', '2026-11-03');
   await person.proposeIdentity({ field: 'birthdate', value: '1990-04-02', source: { kind: 'person', quote: 'born 2 April 1990' } });
   await person.confirmIdentity('birthdate');
@@ -51,9 +44,9 @@ test('cortex_history lists changes, filtered by node, since a seq or a date, and
     ['memory/likes-short-titles', 'update', 'codex'],
     ['identity', 'update', 'member'],
   ]);
-  // An agent's change points at its proposal and the person's decision.
-  assert.ok(all.changes[0].proposal && all.changes[0].decision);
-  assert.equal(all.changes[2].actor.name, 'member', 'the person proposed it, and confirmed it');
+  // An agent's change is its own, made at once; a confirmed identity fact is the person's change.
+  assert.equal(all.changes[0].actor.kind, 'agent');
+  assert.deepEqual([all.changes[2].actor.kind, all.changes[2].proposedBy], ['human', 'member'], 'the person proposed it, and confirmed it');
   assert.deepEqual(all.saves.map(save => [save.name, save.note]), [['before-codex', 'Before Codex took over the titles']]);
   assert.deepEqual((await call({ node: 'memory/likes-short-titles' })).changes.map(line => [line.before, line.after]), [[null, one.version], [one.version, two.version]]);
   assert.equal((await call({ node: 'memory/' })).changes.length, 2, 'a folder ending in / takes every node in it');
@@ -142,8 +135,7 @@ test('restoring is a new change: what it replaces is kept, and no line is rewrit
   const codex = tools(dir, 'codex', '2026-11-06');
   await assert.rejects(codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: one.version, version: 'cstale' }), refused('Changed'));
   const done = await codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: one.version, version: two.version, reason: 'The person wants colons back' });
-  assert.deepEqual([done.restored, done.version, done.waiting], [one.version, one.version, true]);
-  await accept(dir, '2026-11-06');
+  assert.deepEqual([done.restored, done.version, typeof done.change], [one.version, one.version, 'string']);
   const after = await journal();
   assert.ok(after.startsWith(before), 'every earlier line is as it was');
   const line = JSON.parse(after.trim().split('\n').at(-1));
@@ -155,17 +147,17 @@ test('restoring is a new change: what it replaces is kept, and no line is rewrit
 
   // A removed memory comes back the same way.
   await cortex.remove('likes-short-titles', { replaces: one.version });
-  await accept(dir, '2026-11-06');
   await codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: two.version });
-  await accept(dir, '2026-11-06');
   assert.match(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /likes-short-titles/);
   await assert.rejects(codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: 'cnothing', version: two.version }), refused('NotFound'));
 
-  // An agent never restores identity, the playbook, or another agent's working memory.
+  // An agent never restores identity, the playbook, a skill, a tool, or another agent's working memory.
   const identity = (await codex.call('cortex_history', { node: 'identity' })).changes[0];
   await assert.rejects(codex.call('cortex_restore', { node: 'identity', to: identity.before }), refused('PersonOnly'));
   await assert.rejects(codex.call('cortex_restore', { node: 'playbook', to: 'cx' }), refused('PersonOnly'));
   await assert.rejects(codex.call('cortex_restore', { node: 'working/claude-code', to: 'cx' }), refused('PersonOnly'));
+  await assert.rejects(codex.call('cortex_restore', { node: 'skill/file-a-source', to: 'cx' }), refused('PersonOnly'));
+  await assert.rejects(codex.call('cortex_restore', { node: 'tool/calendar', to: 'cx' }), refused('PersonOnly'));
   // The person does, from the command line.
   assert.match(execFileSync('node', [cli, 'restore', 'identity', identity.before, dir], { encoding: 'utf8' }), /is back to/);
   assert.equal((await cortex.identity()).fields.birthdate, undefined);

@@ -63,7 +63,7 @@ test('distilling records what was seen again, leaves what is open, and keeps wha
   assert.deepEqual([note.session, note.writtenBy], ['s1', 'claude-code']);
 });
 
-test('something noticed in two sessions becomes a memory in the third, once the person accepts it', async () => {
+test('something noticed in two sessions becomes a memory in the third, with nobody asked', async () => {
   const dir = await fresh();
   // Session one, in Claude Code: noticed, and seen again within the session.
   const claude = as(dir, 'claude-code');
@@ -88,15 +88,12 @@ test('something noticed in two sessions becomes a memory in the third, once the 
     notes: [{ id: 'titles-claude-1', outcome: 'short-titles' }, { id: 'titles-codex-2', outcome: 'short-titles' }],
   });
   assert.equal(settled.complete, true);
-  // The notes are settled; the memory waits for the person, as one proposal they read and accept.
-  await assert.rejects(openCortex(dir).read('short-titles'));
-  const person = openCortex(dir, { actor: 'member' });
-  const [proposal] = await person.proposals();
-  assert.deepEqual([proposal.node, proposal.actor.name, proposal.id], ['memory/short-titles', 'claude-code', settled.memories[0].proposed]);
-  await person.accept(proposal.id);
+  // The memory is written at once, as one change marked with the agent that settled it.
+  const [change] = (await openCortex(dir).history({ node: 'memory/short-titles' })).changes;
+  assert.deepEqual([change.actor.name, change.id], ['claude-code', settled.memories[0].change]);
   const { memory } = await openCortex(dir).read('short-titles');
   assert.deepEqual([memory.stated, memory.writtenBy, memory.seen.count], [false, 'claude-code', 2]);
-  assert.equal((await openCortex(dir).identityLog()).length, 0, 'no identity fact was asked about');
+  assert.equal((await openCortex(dir).identityLog()).length, 0, 'the person was not asked anything');
 });
 
 test('the person can read or clear any working memory, and a client can read them as resources', async () => {

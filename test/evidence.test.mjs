@@ -16,21 +16,11 @@ const fresh = async () => {
   return { base, dir, agent: openCortex(dir, { actor: 'claude-code' }) };
 };
 const refused = code => problem => problem.code === code || JSON.parse(problem.message).error === code;
-// The person accepts every proposal waiting, one at a time.
-const acceptAll = async dir => {
-  const person = openCortex(dir, { actor: 'member' });
-  for (;;) {
-    const next = (await person.proposals()).find(item => item.node !== 'identity' && !item.stale);
-    if (!next) return;
-    await person.accept(next.id);
-  }
-};
 const memory = { name: 'likes-short-titles', description: 'Titles of four words or fewer', kind: 'preference', stated: false, body: 'Short titles.' };
 
 test('a note cites what it was drawn from: a node at a version, or a session', async () => {
   const { dir, agent } = await fresh();
   const { version } = await agent.write(memory);
-  await acceptAll(dir);
   const evidence = [{ node: 'memory/likes-short-titles', version }, { session: 's1' }];
   await createTools(agent).call('cortex_note', { id: 'n1', note: 'Shortened a title again', session: 's2', evidence });
   const [note] = (await agent.listNotes()).notes;
@@ -55,11 +45,9 @@ test('evidence of the wrong shape is refused, and nothing is written', async () 
 test('what evidence cites must exist where cortex can look', async () => {
   const { base, dir, agent } = await fresh();
   const one = await agent.write(memory);
-  await acceptAll(dir);
   const two = await agent.write({ ...memory, body: 'Short titles, no colons.' }, { replaces: one.version });
-  await acceptAll(dir);
   const note = (id, evidence) => agent.addNote({ id, note: 'Seen', session: 's1', evidence });
-  // A version now, a kept one, or one a proposal carried.
+  // A version now, or a kept one.
   await note('now', [{ node: 'memory/likes-short-titles', version: two.version }]);
   await note('kept', [{ node: 'memory/likes-short-titles', version: one.version }]);
   await assert.rejects(note('never', [{ node: 'memory/likes-short-titles', version: 'cnever' }]), refused('NoEvidence'));
@@ -86,10 +74,9 @@ test('a memory keeps its evidence through a rewrite, and a distill that cites wh
   const tools = createTools(agent);
   const evidence = [{ session: 's1' }, { session: 's2' }];
   const saved = await tools.call('cortex_remember', { memory: { ...memory, evidence } });
-  assert.deepEqual((await agent.proposals()).find(item => item.id === saved.proposed).evidence, evidence, 'the proposal carries its evidence');
-  await acceptAll(dir);
+  const line = (await agent.history({ node: `memory/${memory.name}` })).changes.find(item => item.id === saved.change);
+  assert.deepEqual([line.actor.name, line.evidence], ['claude-code', evidence], 'the change carries its evidence');
   const rewritten = await tools.call('cortex_remember', { memory: { ...memory, body: 'Short titles, always.' }, version: saved.version });
-  await acceptAll(dir);
   assert.deepEqual((await agent.read(memory.name)).memory.evidence, evidence);
   assert.equal((await agent.read(memory.name)).version, rewritten.version);
 

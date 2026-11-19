@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { initCortex, openCortex } from '../src/folder.mjs';
+import { initCortex } from '../src/folder.mjs';
 import { cortexSessions, httpTransport, listen, makeToken } from '../src/http.mjs';
 
 // Every person and agent here is invented. Servers bind only to 127.0.0.1, on a free port.
@@ -133,11 +133,10 @@ test('two sessions keep separate agent names', async t => {
 });
 
 test('a cortex_forget confirmation stays in the session it was issued in', async t => {
-  const { dir, initialize, call } = await served(t);
+  const { initialize, call } = await served(t);
   const one = await initialize('ada-desk');
   const two = await initialize('ada-desk');
-  const proposed = await call(one.session, 'cortex_remember', { memory: { name: 'likes-tea', description: 'Drinks green tea', kind: 'preference', body: 'Green tea, no sugar.', stated: true } });
-  await openCortex(dir, { actor: 'member' }).accept(proposed.value.proposed);
+  await call(one.session, 'cortex_remember', { memory: { name: 'likes-tea', description: 'Drinks green tea', kind: 'preference', body: 'Green tea, no sugar.', stated: true } });
   const asked = await call(one.session, 'cortex_forget', { name: 'likes-tea' });
   assert.ok(asked.value.confirm);
   const elsewhere = await call(two.session, 'cortex_forget', { name: 'likes-tea', confirm: asked.value.confirm });
