@@ -85,7 +85,7 @@ export function useWorkspaceTools() {
     register({
       name: "workspace.graph",
       title: "Show graph",
-      description: "Shows the graph in the side panel, centred on a person, by handle or DID. With no center, centres on the owner. It draws what the personal repo includes and what the current audience can see. Returns the number of nodes and edges.",
+      description: "Shows the graph of blocks in the side panel: each block a node, each channel an area around its blocks, and links and connections between them. With a center (handle or DID), shows only the blocks that mention that person. It draws what the current audience can see. Returns the number of nodes and edges.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         type: "object",

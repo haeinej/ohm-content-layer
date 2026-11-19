@@ -61,7 +61,7 @@ const copy = (text: string) => {
 const TOOLS: { name: ToolName; title: string; does: string; reads: boolean }[] = [
   { name: "workspace.search", title: "Search", does: "Searches your vault and cortex", reads: true },
   { name: "workspace.open", title: "Open", does: "Opens a post, memory or skill", reads: true },
-  { name: "workspace.graph", title: "Show graph", does: "Shows the graph, centred on a person", reads: true },
+  { name: "workspace.graph", title: "Show graph", does: "Shows the graph of your blocks, or of those mentioning a person", reads: true },
   { name: "workspace.create", title: "New post", does: "Starts a private draft", reads: false },
   { name: "workspace.save-draft", title: "Save draft", does: "Saves the open draft as private", reads: false },
   { name: "history.list", title: "History", does: "Reads who changed what, and when", reads: true },
@@ -125,7 +125,7 @@ function Page({ tab }: { tab: SettingsTab }) {
     case "cortex":
       return <Section title="Memory">
         <Row title="Memories" note={`${cortex.filter(c => c.kind === "memory").length} kept`} />
-        <Row title="Notes waiting" note={`${cortex.filter(c => c.kind === "note").length} to settle`} action={<Button variant="secondary" disabled>Settle</Button>} />
+        <Row title="Observations waiting" note={`${cortex.filter(c => c.kind === "observation").length} to settle`} action={<Button variant="secondary" disabled>Settle</Button>} />
         <Row title="Skills" note={`${cortex.filter(c => c.kind === "skill").length} installed`} />
       </Section>
     case "appearance":

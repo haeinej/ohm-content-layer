@@ -1,7 +1,7 @@
 // Synthetic data for the wireframe. No real person, no real records.
 
 export type Visibility = "public" | "friends" | "private"
-export type Kind = "post" | "memory" | "note" | "skill" | "tool"
+export type Kind = "post" | "memory" | "observation" | "skill" | "tool"
 export type Platform = "own" | "bluesky" | "instagram" | "x"
 
 export type Doc = {
@@ -109,7 +109,7 @@ export const cortex: Doc[] = [
     body: "# Prefers private first\n\nInferred from three sessions. New things start private and are shared later." },
   { id: "c3", kind: "memory", title: "Photo captions are one line", slug: "photo-captions", label: "memories", about: ["photos/tokyo", "film-scans"], visibility: "private", updated: "2026-09-20",
     body: "# Photo captions are one line\n\nSeen in two sessions, project photos." },
-  { id: "c4", kind: "note", title: "Asked to rename 'journal'", slug: "rename-journal", label: "notes", sublabel: "waiting", about: ["writing/journal"], visibility: "private", updated: "2026-11-13",
+  { id: "c4", kind: "observation", title: "Asked to rename 'journal'", slug: "rename-journal", label: "observations", sublabel: "waiting", about: ["writing/journal"], visibility: "private", updated: "2026-11-13",
     body: "# Asked to rename 'journal'\n\nOne session. Might want 'diary'. Not settled." },
   { id: "c5", kind: "skill", title: "Suggest labels", slug: "suggest-labels", label: "skills", about: ["other", "projects"], visibility: "private", updated: "2026-10-30",
     body: "# Suggest labels\n\nOffer the plain default and ask." },
@@ -184,7 +184,7 @@ export const incoming = (doc: Doc) => posts.filter(p => p.id !== doc.id && outgo
 
 export type InboxItem = {
   id: string
-  kind: "mention" | "reply" | "friend" | "note"
+  kind: "mention" | "reply" | "friend" | "observation"
   from: string
   text: string
   at: string
@@ -197,7 +197,7 @@ export const inbox: InboxItem[] = [
   { id: "i1", kind: "reply", from: "june.example", text: "Writing everything twice is the only way I know.", at: "2026-11-14", ref: "p1", unread: true },
   { id: "i2", kind: "mention", from: "theo.example", text: "Mentioned you in “Owning nothing, kindly”.", at: "2026-11-13", unread: true },
   { id: "i3", kind: "friend", from: "sana.example", text: "Wants to be friends. Friends see posts you mark for friends.", at: "2026-11-12", unread: true },
-  { id: "i4", kind: "note", from: "cortex", text: "A note is waiting to settle: asked to rename “journal”.", at: "2026-11-13", ref: "c4", unread: false },
+  { id: "i4", kind: "observation", from: "cortex", text: "An observation is waiting to settle: asked to rename “journal”.", at: "2026-11-13", ref: "c4", unread: false },
   { id: "i5", kind: "reply", from: "sana.example", text: "Day two was the better light.", at: "2026-09-16", ref: "p6", unread: false },
 ]
 

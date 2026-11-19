@@ -15,7 +15,7 @@ import { open, openSettings, setSearchOpen, showGraph, useWorkspace } from "./st
 type Category = { scope: Exclude<SearchScope, "all">; label: string; icon: LucideIcon; has: (h: SearchHit) => boolean }
 const CATEGORIES: Category[] = [
   { scope: "vault", label: "Vault", icon: FileTextIcon, has: h => h.kind === "post" },
-  { scope: "cortex", label: "Cortex", icon: BrainIcon, has: h => ["memory", "note", "skill", "tool"].includes(h.kind) },
+  { scope: "cortex", label: "Cortex", icon: BrainIcon, has: h => ["memory", "observation", "skill", "tool"].includes(h.kind) },
   { scope: "people", label: "People", icon: UserIcon, has: h => h.kind === "person" },
   { scope: "settings", label: "Settings", icon: SettingsIcon, has: h => h.kind === "setting" },
 ]

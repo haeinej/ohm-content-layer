@@ -36,38 +36,27 @@ The rack sits on the page itself. The side panel and the main panel are separate
 
 ## The graph
 
-The graph lives in the side panel, in the personal repo. It is one person's knowledge graph, centred on them:
+The graph lives in the side panel, in the personal repo. It shows your blocks and how they connect, and nothing else: what agents learn about you stays in the cortex, and is not drawn here.
 
-```
-you ── cortex (memories, notes, skills, tools) ── channels ── channels inside them ── blocks ── sources and entities
-```
+- **Nodes are blocks, and only blocks.** A dot's size is how connected the block is.
+- **Channels are a dimension, not nodes.** Each channel is a soft area drawn around its blocks; a channel inside another is a dashed area inside it. Every block is pulled toward the channels it is in, so a block in two channels settles where their areas meet.
+- **Edges are only yours.** A link written in a block's text (`[[slug]]`) is grey. A connection you made between whole blocks is forest, and hovering it shows why you made it. One line per pair of blocks.
+- **Thickness is strength:** one for each way two blocks are joined (a link, a connection) and one for each channel they share.
 
-| Layer | Nodes | Joined by |
-| --- | --- | --- |
-| 0 | You (forest, pinned at the centre) | none |
-| 1 · cortex | Memories, notes, skills and tools, spread evenly close to you | you hold them |
-| 2 | Top-level channels | you hold them |
-| 3 | Channels inside a channel | `contains` |
-| 4 | Blocks. A block can be in any number of channels | `contains` |
-| 5 | Sources a block was captured from, and entities (people) it mentions | `from`, `mentions` |
+How it looks and behaves, as Obsidian's graph view does:
 
-Edges come in two families, and the difference is the point:
-
-- **Evidence**, grey: what the content itself shows. A channel contains a block, a block links to another with `[[slug]]`, mentions `@someone`, or was captured from a source. Anyone can check it and it is rebuilt from the content. No model draws evidence.
-- **Inference**, light green: what the cortex concluded. A model never draws an edge between two blocks; it writes a memory, note, skill or tool, and that node points at the channels and blocks it was drawn from. Remove the inference and the evidence is untouched. Where both join the same pair, evidence wins.
-
-How it looks and behaves, as Obsidian's graph view does (from the screen recordings):
-
-- **Look:** dots sized by how connected they are, coloured by what they are, from ohm's palette only: you in forest, the cortex in light green, channels in ink, channels inside them a step lighter, blocks grey, sources faint, and entities hollow. Edges are thin solid lines with no dashes: evidence grey, inference light green. A small key names the colours.
-- **Motion:** a force layout (d3-force) with soft springs, moderate friction and very slow cooling, so nodes drift and settle over seconds like soft rubber, never snapping or stopping short. A soft radial force keeps each layer at its distance, and a gentle pull toward each top-level channel's own direction gives every branch its own sector, while links still tug across.
-- **Hover** rings the node and lights its edges in forest, and fades everything else over ohm's open duration.
-- **Drag** pins a node under the pointer, and its neighbours follow on soft springs. Release it and they ease back.
-- **Pan and zoom** (d3-zoom). Names of you and the channels always show. Names of blocks and the cortex fade in as you zoom, and for the hovered node's neighbours.
+- **Look:** from ohm's palette only. Blocks grey, the open or lit block forest; channel areas a faint ink wash, with a soft outline (dashed for a channel inside another). Red is never used.
+- **Motion:** a force layout (d3-force) with soft springs, moderate friction and very slow cooling, so nodes drift and settle over seconds like soft rubber. Top-level channels each get their own direction; channels inside them sit close by; links still tug across.
+- **Hover** rings the block, lights its edges in forest and its channels' names, and fades everything else over ohm's open duration.
+- **Drag** pins a block under the pointer, and its neighbours follow on soft springs. Release it and they ease back.
+- **Pan and zoom** (d3-zoom). Top-level channel names always show; names of channels inside them and of blocks fade in as you zoom, and for the hovered block. Where areas overlap, a name that would sit on another is left out.
 - **Fit:** the graph stays fitted to the panel as the panel resizes and the layout settles, until you pan or zoom yourself.
-- **Popover:** turns links between blocks, entities mentioned and sources on or off, and lays the graph out again.
-- **Clicking:** a block or cortex item opens it in the main panel. Clicking an entity re-centres on them, showing the blocks that mention them; "Back to me" returns.
-- **What it draws:** the repository's scope (all, cortex or vault) and the audience. The cortex is only ever yours.
-- **Code:** built in `src/graph/model.ts` (nodes, layers and edges) and `src/workspace/GraphView.tsx` (forces, interaction, drawing).
+- **Popover:** turns links in the text, connections and channel areas on or off, and lays the graph out again.
+- **Clicking** a block (or focusing it and pressing Enter) opens it in the main panel.
+- **Centred on someone else** (from search or an inbox mention): only your blocks that mention them; "Back to me" returns.
+- **What it draws:** the vault's blocks the current audience can see, through the repository's filters. With only the cortex in scope, it is empty.
+- **Code:** built in `src/graph/model.ts` (blocks, channels, edges and their strength) and `src/workspace/GraphView.tsx` (forces, areas, interaction, drawing).
+- **Private blocks** (see ohm-vault's `plans/encryption.md`): their channels and connections are inside the encrypted files, so this graph is built on the device from decrypted blocks, never by the server.
 
 ## The page editor
 
