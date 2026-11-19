@@ -1,0 +1,225 @@
+/* ohm design tokens: the single source for color, type, space, shape, depth and motion.
+   DESIGN.md explains every token; change DESIGN.md first, then this file.
+   Only this file (and the brand asset files beside it) may contain raw color or size values. */
+
+@font-face {
+  font-family: "Coconat";
+  src: url("./fonts/coconat-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Light by default. data-theme="dark" or "system" on any element changes it below. */
+  color-scheme: light;
+
+  /* ---- type: families ---- */
+  --ohm-font-serif: "Coconat", Georgia, "Times New Roman", serif;
+  --ohm-font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ohm-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- type: five roles, compact (app) context ---- */
+  --ohm-type-h1-size: clamp(32px, 6.96cqi, 48px);
+  --ohm-type-h1-leading: 1.1667;
+  --ohm-type-h1-tracking: -0.03em;
+  --ohm-type-h2-size: 24px;
+  --ohm-type-h2-leading: 32px;
+  --ohm-type-h2-tracking: -0.02em;
+  --ohm-type-h3-size: 14px;
+  --ohm-type-h3-leading: 20px;
+  --ohm-type-h3-tracking: -0.02em;
+  --ohm-type-h3-weight: 600;
+  --ohm-type-body-size: 14px;
+  --ohm-type-body-leading: 20px;
+  --ohm-type-body-tracking: -0.01em;
+  --ohm-type-control-weight: 500;
+  --ohm-type-small-size: 12px;
+  --ohm-type-small-leading: 16px;
+  --ohm-type-small-tracking: 0;
+  --ohm-input-size: 16px;
+  --ohm-input-leading: 24px;
+
+  /* ---- type: interface titles, outside the five roles (Helvetica 600; wordmark Coconat 400) ---- */
+  --ohm-type-title-size: 17px;
+  --ohm-type-title-leading: 24px;
+  --ohm-type-title-tracking: -0.01em;
+  --ohm-type-page-title-size: 20px;
+  --ohm-type-page-title-leading: 28px;
+  --ohm-type-page-title-tracking: -0.01em;
+  --ohm-type-title-weight: 600;
+  --ohm-type-wordmark-size: 43.2px;
+  --ohm-type-wordmark-tracking: -0.065em;
+
+  /* ---- color: one green, forest (DESIGN.md). It fills in both schemes; on black,
+     green text, marks and the focus ring turn ink, because forest can't be seen there. ---- */
+  --ohm-forest: #013220;
+  --ohm-ebony: #250e0e;
+  --ohm-accent: #013220;
+  --ohm-accent-hover: #00261a;
+  --ohm-accent-fill: #013220;
+  --ohm-on-accent: #fff;
+  --ohm-leaf: light-dark(#013220, #ededed);
+  --ohm-agent: light-dark(#013220, #ededed);
+  --ohm-signal: light-dark(#013220, #ededed);
+  --ohm-selection: light-dark(rgb(1 50 32 / .14), rgb(1 50 32 / .9));
+  --ohm-bubble-self: light-dark(#ebefed, #013220);
+  --ohm-on-signal: light-dark(#fff, #000);
+
+  /* ---- color: one neutral set ---- */
+  --ohm-paper: light-dark(#fff, #000);
+  --ohm-menu: light-dark(#fafafa, #111);
+  --ohm-wash: light-dark(#f5f5f5, #171717);
+  --ohm-line: light-dark(#e5e5e5, #262626);
+  --ohm-muted: light-dark(#6b6b6b, #a1a1a1);
+  --ohm-ink: light-dark(#242424, #ededed);
+  /* Two signal colours, the same in both schemes so they read the same everywhere:
+     a light green for what is live, done or positive, and a red for what destroys or failed. */
+  --ohm-green-light: #7bd389;
+  --ohm-red: #e5484d;
+  --ohm-danger: var(--ohm-red);
+  --ohm-focus: light-dark(#013220, #ededed);
+  --ohm-overlay: light-dark(rgb(0 0 0 / .2), rgb(0 0 0 / .45));
+
+  /* ---- color: surfaces and states, one job each (DESIGN.md) ---- */
+  --ohm-panel: light-dark(#fff, #0b0b0b);
+  /* Cards and panels: in dark, a raised tone, so an elevated surface is lighter than the page. */
+  --ohm-card: light-dark(#fff, #121212);
+  --ohm-raised: light-dark(#fff, #191919);
+  --ohm-paper-light: #fff;
+  /* Floating surfaces (menus, popovers, selects): frosted in light, solid and still in dark. */
+  --ohm-popover: light-dark(rgb(255 255 255 / .86), #161616);
+  --ohm-glass: var(--ohm-frost-thin);
+  --ohm-glass-strong: var(--ohm-frost);
+  --ohm-scrim: rgb(0 0 0 / .45);
+
+  /* ---- color: editorial (website only) ---- */
+  --ohm-paper-editorial: #fafaf9;
+  --ohm-ink-editorial: #363633;
+
+  /* ---- space ---- */
+  --ohm-space-1: 4px;
+  --ohm-space-2: 8px;
+  --ohm-space-3: 12px;
+  --ohm-space-4: 16px;
+  --ohm-space-6: 24px;
+  --ohm-space-8: 32px;
+  --ohm-space-12: 48px;
+  --ohm-space-16: 64px;
+
+  /* ---- size ---- */
+  --ohm-height-xs: 24px;
+  --ohm-height-sm: 32px;
+  --ohm-height-md: 40px;
+  --ohm-height-lg: 48px;
+  --ohm-touch-min: 44px;
+  --ohm-icon-size: 18px;
+  --ohm-icon-size-xs: 14px;
+  --ohm-icon-size-sm: 16px;
+  --ohm-icon-size-lg: 20px;
+  --ohm-icon-size-xl: 24px;
+  --ohm-icon-stroke: 2;
+
+  /* ---- shape: corners grow with the surface ---- */
+  --ohm-radius-pill: 999px;
+  --ohm-radius-chip: 8px;
+  --ohm-radius-item: 12px;
+  --ohm-radius-row: 14px;
+  --ohm-radius-field: 16px;
+  --ohm-radius-card: 24px;
+  --ohm-radius-panel: 24px;
+  --ohm-radius-sheet: 28px;
+
+  /* ---- depth: shade. Light only: dark mode has no shadows and no edges; a surface there is set
+     apart by its raised tone alone. One light source above; each step sits closer to the eye.
+     Every step is two shadows: a tight contact shadow and a soft ambient one. ---- */
+  --ohm-shade-1: 0 1px 2px light-dark(rgb(0 0 0 / .06), transparent);
+  --ohm-shade-2: 0 1px 2px light-dark(rgb(0 0 0 / .04), transparent), 0 4px 12px -2px light-dark(rgb(0 0 0 / .08), transparent);
+  --ohm-shade-3: 0 2px 6px -1px light-dark(rgb(0 0 0 / .06), transparent), 0 12px 32px -8px light-dark(rgb(0 0 0 / .14), transparent);
+  --ohm-shade-4: 0 4px 10px -2px light-dark(rgb(0 0 0 / .06), transparent), 0 24px 56px -12px light-dark(rgb(0 0 0 / .18), transparent);
+  --ohm-shade-5: 0 8px 20px -4px light-dark(rgb(0 0 0 / .08), transparent), 0 40px 96px -16px light-dark(rgb(0 0 0 / .26), transparent);
+  /* No edges: surfaces are set apart by shade in light and by tone in dark. --ohm-edge stays
+     for components that reference it, and draws nothing. The catch-light is for glass only. */
+  --ohm-edge: inset 0 0 0 1px transparent;
+  /* The line between a sidebar and the page: none. The sidebar's tone sets it apart. */
+  --ohm-sidebar-line: transparent;
+  --ohm-highlight: inset 0 1px 0 light-dark(rgb(255 255 255 / .8), rgb(255 255 255 / .07));
+  /* Kept for components that reference it; no catch-light in either scheme. */
+  --ohm-lift: inset 0 1px 0 transparent;
+
+  /* ---- depth: frost. Translucent fills over a blurred, saturated backdrop. ---- */
+  --ohm-frost-thin: light-dark(rgb(255 255 255 / .5), rgb(36 36 36 / .42));
+  --ohm-frost: light-dark(rgb(255 255 255 / .72), rgb(24 24 24 / .8));
+  --ohm-frost-thick: light-dark(rgb(255 255 255 / .88), rgb(22 22 22 / .92));
+  --ohm-frost-tint: light-dark(rgb(1 50 32 / .08), rgb(1 50 32 / .34));
+  --ohm-frost-blur-thin: blur(12px) saturate(1.4);
+  --ohm-frost-blur: blur(24px) saturate(1.6);
+  --ohm-frost-blur-thick: blur(40px) saturate(1.8);
+
+  /* ---- depth: names by job, kept for components that use them ---- */
+  --ohm-popup-shadow: var(--ohm-shade-3);
+  --ohm-float: var(--ohm-frost-thick);
+  --ohm-float-blur: var(--ohm-frost-blur);
+  --ohm-float-shadow: var(--ohm-shade-3);
+  --ohm-float-shadow-focus: var(--ohm-shade-4);
+  --ohm-panel-shadow: var(--ohm-shade-4);
+  --ohm-window-shadow: var(--ohm-shade-5);
+
+  /* ---- motion ---- */
+  --ohm-duration-press: 130ms;
+  --ohm-duration-state: 180ms;
+  --ohm-duration-open: 240ms;
+  --ohm-duration-close: 160ms;
+  --ohm-duration-expand: 300ms;
+  --ohm-ease-out: cubic-bezier(.23, 1, .32, 1);
+  --ohm-ease-morph: cubic-bezier(.32, .72, 0, 1);
+  --ohm-press-scale: .97;
+  --ohm-atmosphere-drift: 18s;
+  --ohm-atmosphere-grain-opacity: .08;
+}
+
+/* Appearance: light by default. Set data-theme on <html> or on any element to scope it. */
+[data-theme="light"] { color-scheme: light; }
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="system"] { color-scheme: light dark; }
+
+@media (max-width: 760px) {
+  :root { --ohm-type-wordmark-size: 38px; }
+}
+
+/* Reading context: long text and conversation. Same five roles, larger. */
+[data-reading="chat"],
+[data-reading="article"] {
+  --ohm-type-h1-size: 24px;
+  --ohm-type-h1-leading: 32px;
+  --ohm-type-h1-tracking: -0.02em;
+  --ohm-type-h2-size: 20px;
+  --ohm-type-h2-leading: 26px;
+  --ohm-type-h2-tracking: -0.01em;
+  --ohm-type-h3-size: 16px;
+  --ohm-type-h3-leading: 24px;
+  --ohm-type-body-size: 16px;
+  --ohm-type-body-leading: 24px;
+  --ohm-type-body-tracking: -0.011em;
+  --ohm-type-small-size: 13px;
+  --ohm-type-small-leading: 18px;
+}
+
+/* Touch: every control is a 44 px target (DESIGN.md). */
+@media (pointer: coarse) {
+  :root {
+    --ohm-height-xs: var(--ohm-touch-min);
+    --ohm-height-sm: var(--ohm-touch-min);
+    --ohm-height-md: var(--ohm-touch-min);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ohm-duration-press: 1ms;
+    --ohm-duration-state: 1ms;
+    --ohm-duration-open: 1ms;
+    --ohm-duration-close: 1ms;
+    --ohm-duration-expand: 1ms;
+  }
+}

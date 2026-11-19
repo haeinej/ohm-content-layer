@@ -8,12 +8,13 @@ ohmmmm.alice.example.com/
 └── cortex/    identity, memory, skills, tools: what an agent knows about you
 ```
 
-This repository holds the software for both, and the thin layer that joins them.
+This repository holds the vault, the cortex, and the app that brings them together.
 
 | Folder | What it is |
 | --- | --- |
 | [`vault/`](vault/README.md) | The vault: blocks, channels, entities and sources as Markdown files; the `ohm` command; the vault service (Cloudflare Worker and D1); publishing to your PDS as `com.ohmmmm.post`; the Claude Code plugin |
 | [`cortex/`](cortex/README.md) | The cortex: a folder an agent keeps about the person it works for; the `cortex` command, its MCP server and hooks |
+| [`app/`](app/README.md) | The workspace app for exploring and editing a synthetic example home |
 | [`home/`](home/home.mjs) | Naming, finding and making a home, `ohmmmm.<handle>` |
 | [`contract/`](contract/vault-reader.mjs) | The vault reader contract: the one way cortex reads a vault |
 | [`docs/words.md`](docs/words.md) | One word list for every part |
@@ -59,17 +60,18 @@ To use it from Claude Code, add this repository as a plugin marketplace; the plu
 ## Develop
 
 ```sh
-npm ci --prefix vault && npm ci --prefix vault/service
-npm test            # the home and install checks, then the vault, then the cortex
+npm ci --prefix vault && npm ci --prefix vault/service && npm ci --prefix app
+npm test            # home, vault and cortex tests, followed by app typecheck and build
+npm --prefix app run dev  # open http://localhost:5190
 ```
 
-Read [AGENTS.md](AGENTS.md) first, then the part you are changing: [vault/AGENTS.md](vault/AGENTS.md) or [cortex/AGENTS.md](cortex/AGENTS.md).
+Read [AGENTS.md](AGENTS.md) first, then the guide for [vault](vault/AGENTS.md), [cortex](cortex/AGENTS.md) or [app](app/AGENTS.md).
 
 ## Where this came from
 
-This repository joins two that were separate, each with its full history (`git log --follow vault/…`, `git log --follow cortex/…`): `haeinej/ohm-vault` (this repository, renamed `haeinej/ohmmmm` on 19 November 2026), now `vault/`, and `haeinej/ohm-cortex`, now `cortex/` (archived).
+This repository joins three projects with their full histories. The original `haeinej/ohm-vault` was renamed `haeinej/ohmmmm` and now lives in `vault/`. The archived `haeinej/ohm-cortex` lives in `cortex/`. The workspace from `haeinej/ohm-ux` lives in `app/`. Use `git log --follow -- app/src/App.tsx` to trace a file into its original repository.
 
 ## Status
 
 - Built and tested locally: the home, the shared contract, the vault and its service, the friends layer, the private store, and the cortex.
-- Not yet: the private store is not deployed and its migration is not applied; it has not run together with the account app; the editor ([ohm-ux](https://github.com/haeinej/ohm-ux)) still runs on sample data.
+- The [app](app/) still runs on sample data. The private store awaits deployment, migration and integration with the account app.
