@@ -63,7 +63,12 @@ What I used for the board review. Joins on `account_id`, not `user_id`, because 
 
 ### Why cache info is not in the frontmatter
 
-What a person reads and edits goes in the file: `origin`, `channels`, `kind`, `title`. What only a machine needs — size, mtime, content hash, CID, `fetchedAt`, whether Drive has the bytes locally — goes in `.vault/index.sqlite`. Writing it into the file would change every block on every scan, which turns every sync into a conflict and every git diff into noise. `vault inspect <block>` (and the MCP `vault_read` tool) shows both together, so the information is never hidden, only kept where it does not churn.
+Decided 19 November 2026: one hidden index.
+
+What a person reads and edits goes in the file: `origin`, `channels`, `kind`, `title`. What only a machine needs — size, mtime, content hash, CID, `fetchedAt`, whether Drive has the bytes locally — goes in `.vault/index.sqlite`, one database for every block.
+
+- **For:** a file changes only when you change it, and the folder holds only what you wrote. Writing cache data into files would rewrite every block on every scan, turning every sync into a conflict and every git diff into noise. If the index is deleted or corrupted, a rescan rebuilds it and nothing is lost.
+- **Against:** opening a note does not show its cache info. It is shown instead by `vault inspect <block>`, by the MCP `vault_read` tool, and in the editor's side panel next to the open block.
 
 The one exception is a source: `_sources/<id>/source.json` is machine-written anyway, so its snapshot record (`hash`, `cid`, `retain`, `capturedAt`) lives there, as in `personal-brain.md`.
 
@@ -125,7 +130,7 @@ Google Drive through the desktop mount needs no API key and no OAuth. A Drive AP
 | `com.ohmmmm.vault.source` | new | `_sources/<id>/source.json` |
 | `com.ohmmmm.vault.entity` | new | `_entities/` |
 
-These replace the `com.ohmmmm.brain.*` names in `personal-brain.md`. The files are Markdown; the lexicons describe the frontmatter, so one validator serves the folder, the MCP tools and the service.
+These replace the `com.ohmmmm.brain.*` names in `personal-brain.md` (namespace decided 19 November 2026). The files are Markdown; the lexicons describe the frontmatter, so one validator serves the folder, the MCP tools and the service.
 
 ## Steps
 
