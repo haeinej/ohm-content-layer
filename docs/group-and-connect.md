@@ -1,4 +1,4 @@
-# Group and connect blocks
+# Group and connect posts
 
 Each essay, photograph, or project has one post record, filed under one label. A sublabel groups posts inside a label. A curated group can also be an ordinary post with a title and an ordered list of links, so the same essay can sit in its sublabel and in a second group about independence. Each view links to the same record. [Forms, labels, and sublabels](labels.md)
 
@@ -16,11 +16,11 @@ For example, a site could present these sections.
 /projects/
 ```
 
-The labels and groups organize the site. A published block has its own stable record key, so moving it between groups does not change what a link points to.
+The labels and groups organize the site. A published post has its own stable record key, so moving it between groups does not change what a link points to.
 
-## Connect a block
+## Connect a post
 
-A block can say what it came from: an earlier block of yours, or a page on the web. There is one kind of connection. A reply, a follow-up, a response to an article, and the next part of a thread are each a block connected to what came before it.
+A post can say what it came from: an earlier post of yours, or a page on the web. There is one kind of connection. A reply, a follow-up, a response to an article, and the next part of a thread are each a post connected to what came before it.
 
 ```sh
 npm run publish:post -- \
@@ -66,7 +66,7 @@ Put the quoted passage in a Markdown blockquote and link to the source underneat
 [trap of independency](at://did:web:pds.example.com/com.ohmmmm.post/trap-of-independency)
 ```
 
-That keeps the selected words in your block and gives the reader a link to the source.
+That keeps the selected words in your post and gives the reader a link to the source.
 
 ## Address a record
 
