@@ -313,11 +313,14 @@ export const nodeKey = node => node.type === 'channel'
 // Every file of a vault read together: the nodes, every channel including the folders with no
 // _channel.md, and what could not be read, by path.
 //   files: [{ path, text }]
-export function readVault(files) {
+//   nodes: nodes made elsewhere, such as the blocks the indexer makes for files in a read-only root,
+//          each with its own `problems` list (may be empty)
+export function readVault(files, { nodes = [] } = {}) {
   const blocks = [], entities = [], sources = [], problems = [];
   const channels = new Map();
-  for (const { path, text: content } of files) {
-    const read = readNode(path, content);
+  const reads = [...files.map(({ path, text: content }) => [path, readNode(path, content)]),
+    ...nodes.map(({ problems: said = [], ...node }) => [node.path, { node, problems: said }])];
+  for (const [path, read] of reads) {
     if (!read) continue;
     if (read.problems.length) problems.push({ path, problems: read.problems });
     if (!read.node) continue;

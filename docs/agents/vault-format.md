@@ -6,7 +6,7 @@ Human guide: [docs/vault-format.md](../vault-format.md). Design and what comes n
 
 [vault/node.mjs](../../vault/node.mjs) reads and writes a vault folder as four kinds of nodes (block, channel, entity, source) and derives evidence edges from their content. It is pure: callers pass `{ path, text }` pairs and write what they get back. It does no I/O, indexing, sync or publishing, and it holds no inference: agent conclusions live in ohm-cortex, which refers to blocks by ID.
 
-**Implemented and unit-tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)). **Not built:** sync roots (`.vault/config.json`), `.vault/index.sqlite`, the cortex vault contract, the MCP tools and service storage for non-post blocks. The service, `syncFolder` and publishing still handle posts only.
+**Implemented and tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)); read-only roots and the index ([test/indexer.test.mjs](../../test/indexer.test.mjs), real temporary folders and node:sqlite). **Not built:** two-way roots, the cortex vault contract, the MCP tools, and service storage for non-post blocks. The service, `syncFolder` and publishing still handle posts only.
 
 ## Schemas
 
@@ -39,6 +39,39 @@ Human guide: [docs/vault-format.md](../vault-format.md). Design and what comes n
   - Fenced code and inline code spans are skipped, and so are e-mail addresses.
   - `[[x]]` resolves against block slug, path, file name and title, then entity slug, name and aliases.
 
+## Roots and the index
+
+[vault/roots.mjs](../../vault/roots.mjs): `readConfig(json, { vault, home }) -> { roots, problems }` for `.vault/config.json` (`CONFIG`).
+- Each root has `name`, an absolute `path` (`~/` expanded), `mode`, `channel` (default: the name), `include` and `exclude` globs (`globTest`), and `retain` (default `reference` for a Drive path, otherwise `text`).
+- The canonical root is the vault folder itself, named `vault` (`CANONICAL`). It is implicit, and that name is reserved.
+- `mode` is `read` only. `two-way` is refused with a message saying it is not built.
+- A root may not be the vault itself, be inside it, or contain it. A bad entry is dropped with a problem; the other entries still apply.
+
+[vault/indexer.mjs](../../vault/indexer.mjs). Node only (fs, `node:sqlite` passed in as `DatabaseSync`).
+- `openIndex(vault, { DatabaseSync })` opens `.vault/index.sqlite` (`INDEX`).
+  - A different `INDEX_VERSION` drops every table and recreates the schema.
+  - An unreadable file is renamed `index.sqlite.damaged-<ms>` and recreated.
+  - The index is derived data only and never the sole copy of anything.
+- `scan({ vault, db, home })` walks the vault (excluding `.`-prefixed entries and `node_modules`, never following symlinks) and each root (by its `takes(relative)`).
+  - **Stamps:** a file is re-read only when its stamp `ino:size:mtimeMs:ctimeMs` changes.
+  - **Reading:** `reference` roots are never opened (`hash` null). Other files are read and addressed with `blobCid` (CIDv1 raw SHA-256). A `full` root's bytes are copied to `.vault/cache/<cid>` atomically.
+  - **Kept text:** in the vault, only `.md` text. In a `text` or `full` root, any `TEXT_ENDINGS` file.
+  - **Moves:** a file is moved when it vanishes from one path and appears at another in the same root with the same hash, or the same inode and size.
+  - **Unavailable roots:** an unreadable root keeps its rows and adds a problem. A root removed from the configuration has its rows deleted.
+  - **One transaction:** nodes, edges, terms and problems are rebuilt from the `files` table in the same transaction.
+  - **Report:** `{ roots[{name,path,files,available}], added, changed, removed, moved, unchanged, opened, cached, problems[{root,path,problems}], nodes, edges }`.
+- How root files become nodes:
+  - A root's `.md` with kept text is read through `readNode` at `<channel>/<relative>`, and given `origin` = its absolute path when it has none.
+  - Any other root file becomes a block. Its `kind` is `code` for `CODE_ENDINGS`, `media` for image, video and audio, and `file` otherwise. Its `slug` is `<name>-<ending>`, its `title` is the file name, and its `origin` is the absolute path.
+  - Keys follow `nodeKey`, so a block without an ID is `block:<path>` (the virtual path for root files).
+- `inspect(db, ref)` looks a node up by key, then slug (blocks first), then path or file. It returns `{ key, node, root, origin{where,kind}, file{root,path,abs,size,mtime,hash,cached,seen}, out[], in[] }`.
+- `search(db, query, { limit })`: `words()` lowercases, splits on non-letters and digits, and splits Korean, Japanese and Chinese runs into character bigrams. Results are ranked by the number of distinct matched terms, then summed weight (title, slug, aliases and tags weigh 2; body and a root's text 1). This does not use FTS5, because Node 22.12's SQLite lacks it.
+- `summary(db)` gives counts by table and by root, plus the last scan time.
+
+Tables: `meta`, `files(root,path,…)`, `nodes(key,…,node JSON)`, `edges`, `terms`, `problems`. Never write to them outside `scan`.
+
+CLI: [scripts/vault.mjs](../../scripts/vault.mjs), run as `ohm vault init|index|status|inspect REF|search WORDS [--vault DIR] [--limit N]`. It defaults to `OHM_VAULT_FOLDER`, then the current folder. It prints JSON and exits 1 with a sentence on failure. Without `node:sqlite` it re-runs itself with `--experimental-sqlite`. It makes no network calls.
+
 ## Use
 
 ```js
@@ -50,7 +83,7 @@ const { path, text } = nodeFile({ ...vault.blocks[0], channels: ['reading'] });
 
 ## Verification
 
-From the repository root: `node --test test/node.test.mjs`, then `npm test` for the whole suite (the post-file tests prove nothing about posts changed).
+From the repository root: `node --test test/node.test.mjs`, `node --experimental-sqlite --test test/indexer.test.mjs`, then `npm test` for the whole suite (the post-file tests prove nothing about posts changed). Not verified: a real Google Drive mount; the reference-only path is tested with an unreadable file instead.
 
 ## Maintenance
 

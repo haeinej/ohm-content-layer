@@ -101,24 +101,21 @@ So: write SQL or code inside a block as a fence. When the code is its own file (
 
 ## Sync roots: local paths and Drive
 
-`.vault/config.json` names the places the vault reads from. Each root is a folder on this machine.
+`.vault/config.json` names the other places the vault reads from. Each root is a folder on this machine. The vault's own folder is always the canonical root, named `vault`, and is not listed: the service, when used, is a mirror of it, not the other way round.
 
 ```json
 {
   "roots": [
-    { "name": "main",     "path": "~/Vault",                                                  "mode": "canonical" },
-    { "name": "obsidian", "path": "~/Documents/Obsidian/Notes",                               "mode": "two-way",  "channel": "notes" },
-    { "name": "drive",    "path": "~/Library/CloudStorage/GoogleDrive-<account>/My Drive/Research", "mode": "read", "retain": "reference", "channel": "research" },
-    { "name": "queries",  "path": "~/work/queries", "include": ["*.sql", "*.md"],             "mode": "read", "retain": "full" }
+    { "name": "drive",   "path": "~/Library/CloudStorage/GoogleDrive-<account>/My Drive/Research", "channel": "research" },
+    { "name": "queries", "path": "~/work/queries", "include": ["*.sql", "*.md"], "retain": "full" }
   ]
 }
 ```
 
-- **`canonical`**: the vault itself. The service, when used, is a mirror of it, not the other way round.
-- **`two-way`**: today's `syncFolder` rules: `id` property, version hashes, conflicts left beside the file, never deletes on its own.
-- **`read`**: the vault indexes the files and makes a block for each, with `origin` set to its path. It never writes there.
-- **`retain`**: `reference` (path and hash only), `text` (extracted text cached), `full` (bytes cached in `.vault/cache`). Drive defaults to `reference`, because Google Drive for desktop keeps files online-only and reading one downloads it.
-- **Change detection** is cortex's approach: a stat stamp (`ino:size:mtime`) first, a SHA-256 only when the stamp moved. A moved file with the same hash keeps its block.
+- **`mode`**: `read` (the default and, for now, the only one). The vault indexes the files and makes a block for each, with `origin` set to its path. It never writes there.
+- **`two-way`** (planned, refused until built): today's `syncFolder` rules, with an `id` property, version hashes, conflicts left beside the file and nothing deleted on its own, for a folder such as an Obsidian vault.
+- **`retain`**: `reference` (path, size and dates only; the file is never opened, so it has no hash), `text` (its words kept for search), `full` (its bytes cached in `.vault/cache/<cid>`). Drive defaults to `reference`, because Google Drive for desktop keeps files online-only and reading one downloads it.
+- **Change detection** is cortex's approach: a stat stamp (`ino:size:mtime:ctime`) first, a content address only when the stamp moved. A file that moves keeps being recognised, by the same hash or the same inode and size.
 
 Google Drive through the desktop mount needs no API key and no OAuth. A Drive API connector (by file ID, for machines without the mount) can come later as another root kind.
 
@@ -138,7 +135,7 @@ These replace the `com.ohmmmm.brain.*` names in `personal-brain.md` (namespace d
 
 1. ~~Rename to ohm-vault, remove the cortex MVP and the zombies.~~ Done.
 2. ~~Lexicons for block, channel, source, entity, and the folder format.~~ Done: `lexicons/com/ohmmmm/vault/`, `vault/node.mjs`, [human guide](../docs/vault-format.md), [agent reference](../docs/agents/vault-format.md). Posts read as `kind: post` blocks with the same IDs, through the unchanged post code.
-3. `.vault/config.json` roots and the indexer (`index.sqlite`: nodes, evidence edges, FTS, stats).
+3. ~~`.vault/config.json` roots and the indexer.~~ Done: read-only roots (`vault/roots.mjs`), `.vault/index.sqlite` (`vault/indexer.mjs`), `ohm vault init|index|status|inspect|search`. The vault folder is the implicit canonical root and is not listed; `two-way` roots are refused until built. A `reference` root is never opened, so it has no hash. Search uses a word table, not FTS5 (absent from Node 22.12's SQLite).
 4. Implement cortex's vault contract over the index, so `cortex vault connect ~/Vault` works unchanged.
 5. Local MCP: `vault_search`, `vault_read`, `vault_neighbors`, `vault_capture`, `vault_collect`.
 6. ohm-ux graph reads the index instead of sample data.
