@@ -1,5 +1,6 @@
 // The vault contract: what cortex needs from a vault, so any vault can sit beside a cortex. Cortex
-// only reads through it. Saving content is the vault's own job, done by the agent through the
+// only reads through it. The contract itself (the operations and what each gives) is kept once, in
+// ../../contract/vault-reader.mjs, for both cortex and the vault's own reader. Saving content is the vault's own job, done by the agent through the
 // vault's own API on the person's say-so.
 //
 // A vault holds blocks: one unit of thought each, and a published one is a post. Blocks are
@@ -24,17 +25,15 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { contractProblems, OPTIONAL, REQUIRED } from '../../contract/vault-reader.mjs';
 import { Refused, splitFront } from './core.mjs';
 
-export const OPERATIONS = ['shape', 'read', 'exists', 'changes', 'profile'];
-// Operations a vault may leave out. Cortex does without what they would answer.
-export const OPTIONAL = ['search'];
+export const OPERATIONS = REQUIRED;
+export { OPTIONAL };
 
 export function checkVault(vault) {
-  const missing = OPERATIONS.filter(operation => typeof vault?.[operation] !== 'function');
-  if (missing.length) throw new Refused('InvalidVault', `A vault answers ${OPERATIONS.join(', ')}. This one is missing ${missing.join(', ')}`);
-  const wrong = OPTIONAL.filter(operation => vault[operation] !== undefined && typeof vault[operation] !== 'function');
-  if (wrong.length) throw new Refused('InvalidVault', `${wrong.join(', ')} is an operation; leave it out if this vault does not answer it`);
+  const [problem] = contractProblems(vault);
+  if (problem) throw new Refused('InvalidVault', problem);
   return vault;
 }
 
@@ -218,8 +217,9 @@ export function moduleVault({ module, path }) {
 }
 
 // Which vault a cortex reads is set by the person, in .cortex/vault.json: a folder of Markdown
-// files, which this file reads itself, or a folder with the module that reads it, such as ohm-vault's
-// { kind: 'module', module: '/…/ohm-vault/vault/cortex.mjs', path: '/…/Vault' }.
+// files, which this file reads itself, or a folder with the module that reads it, such as the vault's
+// own { kind: 'module', module: '/…/ohmmmm/vault/vault/cortex.mjs', path: '/…/ohmmmm.alice/vault' }.
+// A cortex in a home (ohmmmm.<handle>/cortex) with nothing set reads the home's vault that way.
 export function vaultFrom(config) {
   if (!config) return null;
   if (config.kind === 'folder' && typeof config.path === 'string' && config.path) return folderVault(config.path);

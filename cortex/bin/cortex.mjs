@@ -24,6 +24,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { Refused } from '../src/core.mjs';
+import { defaultCortex } from '../../home/home.mjs';
 import { runHook, SNIPPETS } from '../src/adapter.mjs';
 import { agentName, initCortex, openCortex } from '../src/folder.mjs';
 import { createServer, serve } from '../src/protocol.mjs';
@@ -35,7 +36,9 @@ import { cortexStatus } from '../src/status.mjs';
 
 const template = fileURLToPath(new URL('../template', import.meta.url));
 const [command, ...rest] = process.argv.slice(2);
-const folder = given => resolve(given ?? process.env.CORTEX_DIR ?? join(homedir(), 'cortex'));
+// A cortex is the one named, then CORTEX_DIR, then the cortex of the home this runs in
+// (ohmmmm.<handle>/cortex), then ~/cortex.
+const folder = given => resolve(given ?? process.env.CORTEX_DIR ?? defaultCortex() ?? join(homedir(), 'cortex'));
 // Takes `--flag value` out of the arguments, and returns the value.
 const take = flag => {
   const at = rest.indexOf(flag);

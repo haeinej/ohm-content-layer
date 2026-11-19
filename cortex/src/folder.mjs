@@ -9,6 +9,7 @@
 // they do not want. What needs trust is the person's alone: an identity fact is proposed with
 // evidence and set only when the person confirms it, a skill is used only once the person approves
 // it, and a tool is only ever asked for: the person adds it and switches it on.
+import { homeVaultFor } from '../../home/home.mjs';
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
@@ -201,6 +202,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     if (config) {
       try { parsed = JSON.parse(config); } catch { throw new Refused('InvalidVault', '.cortex/vault.json cannot be read. Connect the vault again with cortex vault connect'); }
     }
+    // In a home (ohmmmm.<handle>/cortex), the sibling vault, unless the person named another.
+    parsed ??= homeVaultFor(dir);
     openedVault = parsed ? vaultFrom(parsed) : null;
     return openedVault;
   }

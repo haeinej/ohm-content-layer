@@ -1,4 +1,4 @@
-// This vault as ohm-cortex reads a vault: the contract in ohm-cortex's src/vault.mjs.
+// This vault as cortex reads a vault: the vault reader contract, ../../contract/vault-reader.mjs.
 //
 //   shape()          { blocks, channels: [{ channel, blocks }], problems? }
 //   read(id)         { id, title, channel, body } or null
@@ -18,8 +18,8 @@
 // What it adds: only blocks are blocks (not _channel.md, entities or sources), and the blocks of
 // read-only roots are included.
 //
-// Cortex loads it by the path the person gave: `cortex vault connect ~/Vault --module <this file>`,
-// which calls openVault({ path }).
+// Cortex loads it by itself for the vault in the same home (ohmmmm.<handle>/vault), or by the path
+// the person gave: `cortex vault connect ~/Vault --module <this file>`, which calls openVault({ path }).
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -27,8 +27,10 @@ import { join, resolve } from 'node:path';
 import { ending, rootBlocks, stampOf, walk, words } from './indexer.mjs';
 import { readVault } from './node.mjs';
 import { CONFIG, readConfig } from './roots.mjs';
+import { ALL } from '../../contract/vault-reader.mjs';
 
-export const OPERATIONS = ['shape', 'read', 'exists', 'changes', 'profile', 'search'];
+// Every operation of the contract (../../contract/vault-reader.mjs), the optional search included.
+export const OPERATIONS = ALL;
 const hashOf = text => createHash('sha256').update(text).digest('hex').slice(0, 16);
 // The files of the vault folder that hold nodes: Markdown, and each source's source.json.
 const nodeFile = path => /\.md$/i.test(path) || /^_sources\/[^/]+\/source\.json$/.test(path);

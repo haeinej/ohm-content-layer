@@ -13,13 +13,15 @@
 //   vault hook   [--vault DIR] [--agent NAME] an agent's PostToolUse hook: reads the hook's JSON on
 //                                            standard input and journals a write inside the vault
 //
-// --vault defaults to OHM_VAULT_FOLDER, then the current folder. REF is a slug, a path in the vault,
+// --vault defaults to OHM_VAULT_FOLDER, then the vault of the home this runs in
+// (ohmmmm.<handle>/vault, ../../home/home.mjs), then the current folder. REF is a slug, a path in the vault,
 // or a node key such as block:3mzocqfoc22if.
 import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { defaultVault } from '../../home/home.mjs';
 
 const ACTIONS = ['init', 'add', 'index', 'status', 'inspect', 'search', 'hook'];
 const { values, positionals } = parseArgs({
@@ -33,7 +35,7 @@ const { values, positionals } = parseArgs({
 // The command line arrives with "vault" first when ohm runs this file.
 const [action, ...rest] = positionals[0] === 'vault' ? positionals.slice(1) : positionals;
 const expand = path => (path === '~' ? homedir() : path.startsWith('~/') ? `${homedir()}${path.slice(1)}` : path);
-const vault = resolve(expand(values.vault || process.env.OHM_VAULT_FOLDER || '.'));
+const vault = resolve(expand(values.vault || process.env.OHM_VAULT_FOLDER || defaultVault() || '.'));
 const print = value => console.log(JSON.stringify(value, null, 2));
 
 // A hook runs after every file an agent writes, so it is quick, needs no database, and never fails

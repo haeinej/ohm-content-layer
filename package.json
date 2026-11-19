@@ -1,0 +1,13 @@
+{
+  "name": "ohmmmm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A person's home, ohmmmm.<handle>: their vault (blocks and channels) and their cortex (what an agent knows about them), side by side, under one contract.",
+  "bin": { "ohmmmm": "bin/ohmmmm.mjs" },
+  "scripts": {
+    "test": "npm run test:home && npm --prefix vault test && npm --prefix cortex test",
+    "test:home": "node --experimental-sqlite --no-warnings=ExperimentalWarning --test test/*.test.mjs"
+  },
+  "engines": { "node": ">=22.13" }
+}

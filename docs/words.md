@@ -1,0 +1,34 @@
+# Words
+
+One list for the vault, the cortex and the account app. When a part needs a word, it uses the one here; when two parts named one thing differently, the name kept is the one here.
+
+## The home
+
+- **Home:** a person's folder `ohmmmm.<handle>`, holding `vault/` and `cortex/`.
+- **Handle:** the person's AT Protocol handle, which names the home. The DID is in the cortex's identity, not in folder names.
+
+## In the vault
+
+- **Block:** one unit of thought, a file `{ path, text }` whose ID is its `id` property, a 13-character TID. A published block is a **post** (`com.ohmmmm.post`).
+- **Channel:** an ordered collection of blocks; a block can be in many. Named by its path, such as `essays` or `notes/reading`.
+- **Entity**, **source:** a person, place or thing a block is about; where a block came from.
+- **Connection:** a link the content shows: a channel contains a block, a block links to, embeds or mentions something, a block is from a source. Cortex calls the same thing **evidence** when it reads it; the vault draws it, a model never does.
+- **Node:** any file the vault reads as a thing: a block, a channel, an entity or a source (node keys such as `block:<id>`).
+- **Visibility:** `public`, `friends` or `private`, on each block; it chooses the **layer**, and so the store.
+- **Friends layer**, **private layer:** blocks readable by the vault service and shared with chosen DIDs; blocks the service stores only as ciphertext.
+- **Journal** (`.vault/journal.jsonl`), **index** (`.vault/index.sqlite`), **roots** (`.vault/config.json`).
+
+## In the cortex
+
+- **Identity**, **memory**, **skill**, **tool**, **playbook**, **working** memory: the cortex's own files.
+- **Inference:** what the cortex concludes, kept as cortex nodes pointing at what they were drawn from. Never a connection in the vault.
+- **Node:** any block, and any file of the cortex.
+- **Journal** (`.cortex/journal.jsonl`): the cortex's own, apart from the vault's.
+
+## Between them
+
+- **Vault reader contract:** `shape`, `read`, `exists`, `changes`, `profile`, and optionally `search` ([contract/vault-reader.mjs](../contract/vault-reader.mjs)). The vault's own reader is `vault/vault/cortex.mjs`.
+
+## Keys (account app)
+
+- **Master key**, **file key**, **wrapped copy**, **recovery code**, **unlock passkey** (not the PDS passkey, which only signs in), **device link**, **rotation**, **generation**, **history**. See ohm-onboarding `docs/keys.md`.
