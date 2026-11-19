@@ -29,7 +29,7 @@ export function MainPanel() {
         // Viewing as someone else never shows what they couldn't see.
         <Empty className="flex-1">
           <EmptyHeader>
-            <EmptyTitle>{audience === "friends" ? "Friends" : "Anyone"} can't see this page</EmptyTitle>
+            <EmptyTitle>{audience === "friends" ? "Friends" : "Anyone"} can't see this item</EmptyTitle>
             <EmptyDescription>“{titleOf(doc)}” is for {isBlock(doc) && doc.visibility === "friends" ? "friends" : "you only"}.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent className="flex-row justify-center">
@@ -53,11 +53,11 @@ export function MainPanel() {
           onDrop={e => { e.preventDefault(); void openDropped(e.dataTransfer) }}>
           <EmptyHeader>
             <EmptyTitle>Nothing open</EmptyTitle>
-            <EmptyDescription>Open a page from your repository, drop one here, search, or start one.</EmptyDescription>
+            <EmptyDescription>Open something from your home, drop a block here, or start a block.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent className="flex-row justify-center">
             <Button variant="ghost" onClick={() => setSearchOpen(true)}>Search</Button>
-            <Button onClick={() => createDraft()}>New page</Button>
+            <Button onClick={() => createDraft()}>New block</Button>
           </EmptyContent>
         </Empty>
       )}

@@ -169,7 +169,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
         if (was.kind === "channel") {
           const { path, published } = moveChannel(was.path, t.channel)
           if (path !== was.path) window.dispatchEvent(new CustomEvent("ohm:folder-renamed", { detail: { from: was.path, to: path } }))
-          notify({ message: `Moved ${shown(was.path.split("/").at(-1)!)} to ${t.channel ? shown(t.channel) : "the top"}${published ? `. ${published} published ${published === 1 ? "page gets" : "pages get"} the new address when you publish` : ""}`, tone: "info" })
+          notify({ message: `Moved ${shown(was.path.split("/").at(-1)!)} to ${t.channel ? shown(t.channel) : "the top"}${published ? `. ${published} ${published === 1 ? "post gets" : "posts get"} a new address when you publish` : ""}`, tone: "info" })
           return
         }
         const id = was.id || e.dataTransfer?.getData(DOC_DRAG) || ""
@@ -234,7 +234,7 @@ function PrimeRow({ prime, open: isOpen, onOpen, locked, onExpandAll, allOpen, o
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-56"
             onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase())) e.preventDefault() }}>
-            {onNew && <DropdownMenuItem onClick={() => run("n")}>New page<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>}
+            {onNew && <DropdownMenuItem onClick={() => run("n")}>New block<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>}
             {onNewChannel && <DropdownMenuItem onClick={() => run("c")}>New channel<DropdownMenuShortcut>C</DropdownMenuShortcut></DropdownMenuItem>}
             <DropdownMenuItem onClick={() => run("e")}>{allOpen ? "Collapse all" : "Expand all"}<DropdownMenuShortcut>E</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuItem onClick={() => run("o")}>Show only {prime}<DropdownMenuShortcut>O</DropdownMenuShortcut></DropdownMenuItem>
@@ -335,11 +335,11 @@ function RepoPanel() {
         </DropdownMenu>
       }
       actions={<>
-        {/* The eye: click shows who each page is for; hover chooses who you are looking as. */}
+        {/* The eye toggles visibility marks and lets you preview another audience. */}
         <Popover>
           <PopoverTrigger openOnHover delay={150} closeDelay={200} render={
             <Button size="icon-sm" variant="ghost" className={cn(toggle, audience !== "private" && "text-primary dark:text-(--ohm-green-light)")}
-              aria-label="Show who each page is for" aria-pressed={showVisibility} onClick={() => setShowVisibility(!showVisibility)} />
+              aria-label="Show visibility marks" aria-pressed={showVisibility} onClick={() => setShowVisibility(!showVisibility)} />
           }>
             <Icon icon={showVisibility ? EyeIcon : EyeOffIcon} size="sm" />
           </PopoverTrigger>
