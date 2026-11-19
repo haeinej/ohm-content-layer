@@ -11,6 +11,7 @@ This page is the whole list. It is written from the same tables the service and 
 | Capability | What it is for | Requests | Where |
 | --- | --- | --- | --- |
 | **Posts** | Read and change the posts in a vault, one at a time. Every change names the version it replaces, so two edits never overwrite each other unseen. | `listPosts`, `getPost`, `putPost`, `deletePost` | [posts.mjs](src/capabilities/posts.mjs) |
+| **Friends** | The friends layer: friends-only blocks, kept readable so the friends a member chose can read them, and the friend list that says who they are. A friend reads friends-only posts and blocks alike. Private blocks are never kept here. | `listBlocks`, `getBlock`, `putBlock`, `deleteBlock`, `listFriends`, `addFriend`, `removeFriend`, `listShared`, `getShared` | [friends.mjs](src/capabilities/friends.mjs) |
 | **Structure** | The shape of a vault: its labels, the sublabels inside them, and a line for each post. Enough to draw it or decide where something belongs, without reading any post in full. | `getTree` | [structure.mjs](src/capabilities/structure.mjs) |
 | **Search** | Find posts by the words in them, at every visibility. A title counts for more than a label, and a label for more than the body. | `searchPosts` | [search.mjs](src/capabilities/search.mjs) |
 | **Mirror** | Bring what the member has already published on their PDS into the vault. It only reads the PDS, and it never changes a post the member has since changed in the vault. | `importPublished` | [mirror.mjs](src/capabilities/mirror.mjs) |
@@ -34,7 +35,7 @@ Who may ask is one of four things, and each request says which:
 | The member | Such a token from their own PDS, as the command line and an agent's tools send; or their ohm session, as the editor sends, which is worth exactly the one account it was connected to |
 | The member, signed in to ohm | Their ohm session only. A request that changes something must also come from ohm's own pages |
 
-A member's posts are served to that member and nobody else. Who is asking is settled before the store is looked at.
+A member's posts and blocks are served to that member. Their friends-only posts and blocks are also served to the DIDs on their friend list, and to nobody else. Who is asking is settled before any store is looked at. Private blocks are never kept by the service in readable form.
 
 The editor sends `X-Ohm-Did` for the member it displays. If the authenticated account differs, the service refuses with `409 AccountChanged` before running the request. This optional precondition binds stale tabs to their displayed member; it cannot select an account or replace authentication.
 
@@ -85,6 +86,109 @@ Removes one post, for good.
 | Who may ask | The member |
 | Takes | `id`: the post's ID<br>`replaces`: the version being removed |
 | Gives | `id`, `removed` |
+
+## Friends
+
+The friends layer: friends-only blocks, kept readable so the friends a member chose can read them, and the friend list that says who they are. A friend reads friends-only posts and blocks alike. Private blocks are never kept here.
+
+### `com.ohmmmm.vault.listBlocks`
+
+Every friends-only block that is not a post, with the version it is at. With `since`, a point an earlier list returned, only what changed after it, removals included.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | `since`: optional: the `cursor` of an earlier list |
+| Gives | `blocks` (id, version, path, kind, title), `cursor`, and `more` when there is another page |
+
+### `com.ohmmmm.vault.getBlock`
+
+One friends-only block, as the file it is in the member's folder, and its version.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | `id`: the block's ID |
+| Gives | `block` (id, path, text), `version` |
+
+### `com.ohmmmm.vault.putBlock`
+
+Saves one friends-only block, as its file: its path in the folder and its text, which must say `visibility: friends`. A private or public block, or a post, is refused. `replaces` is the version being replaced and is left out for a new block. Sent twice, it ends the same as sent once. From then on the friends on the list can read it.
+
+| | |
+| --- | --- |
+| Reads or changes | Changes (`POST`) |
+| Who may ask | The member |
+| Takes | `block`: `id`, `path` and `text`<br>`replaces`: optional: the version it replaces |
+| Gives | `id`, `version`, and `unchanged` when nothing differed |
+
+### `com.ohmmmm.vault.deleteBlock`
+
+Removes one friends-only block from this layer, for good. Friends can no longer read it.
+
+| | |
+| --- | --- |
+| Reads or changes | Changes (`POST`) |
+| Who may ask | The member |
+| Takes | `id`: the block's ID<br>`replaces`: the version being removed |
+| Gives | `id`, `removed` |
+
+### `com.ohmmmm.vault.listFriends`
+
+Who may read the member's friends layer.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | Nothing |
+| Gives | `friends` (did, added) |
+
+### `com.ohmmmm.vault.addFriend`
+
+Lets one more DID read the member's friends layer: every friends-only post and block, now and later. Only the member, signed in to ohm, can add a friend; an agent cannot.
+
+| | |
+| --- | --- |
+| Reads or changes | Changes (`POST`) |
+| Who may ask | The member, signed in to ohm |
+| Takes | `did`: the friend's DID |
+| Gives | `did`, and `unchanged` when they were a friend already |
+
+### `com.ohmmmm.vault.removeFriend`
+
+Stops one DID reading the member's friends layer. What they read before cannot be taken back.
+
+| | |
+| --- | --- |
+| Reads or changes | Changes (`POST`) |
+| Who may ask | The member |
+| Takes | `did`: the friend's DID |
+| Gives | `did`, `removed`, and `unchanged` when they were not a friend |
+
+### `com.ohmmmm.vault.listShared`
+
+What another member shares with the asker: their friends-only blocks and posts, when the asker is on their friend list. To anyone else it answers NotFound, whether or not anything is there.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | Whoever holds a token from a PDS |
+| Takes | `owner`: the DID whose friends layer to read |
+| Gives | `owner`, `blocks` (id, version, path, kind, title) |
+
+### `com.ohmmmm.vault.getShared`
+
+One friends-only block or post another member shares with the asker, as its file.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | Whoever holds a token from a PDS |
+| Takes | `owner`: the DID whose friends layer to read<br>`id`: the block's or post's ID |
+| Gives | `block` (id, path, text), `version` |
 
 ## Structure
 
@@ -254,10 +358,12 @@ A refusal is JSON with an `error`, which is one of the names below, and a `messa
 | `WrongMethod` | 405 | The request is the other of GET and POST |
 | `InvalidRequest` | 400 | The request is not JSON, or something it says is not what that request takes |
 | `InvalidPost` | 400 | The post is not one the vault can hold. The message lists every reason |
+| `InvalidBlock` | 400 | The block is not one the friends layer can hold: it is private or public, a post, or its file has problems. The message lists every reason |
 | `InvalidCursor` | 400 | `since` is not a value an earlier list returned |
-| `NotFound` | 404 | There is no such post or saved version |
-| `Changed` | 409 | The post has changed since the version the request names. The answer carries the current version |
+| `NotFound` | 404 | There is no such post, block or saved version, or nothing there is shared with the asker |
+| `Changed` | 409 | The post or block has changed since the version the request names. The answer carries the current version |
 | `SlugTaken` | 409 | Another post in the vault already has that slug |
+| `PathTaken` | 409 | Another block in the friends layer is already at that path |
 | `TooLarge` | 413 | The post is more than 600 KB of text, or a file it places is empty or larger than 25 MB |
 | `FileUnreachable` | 502 | A file a post places could not be fetched from where the post says it is |
 | `AccountNotFound` | 404 | No AT Protocol account answers to that handle or DID |
@@ -295,6 +401,15 @@ These requests have no MCP tool. They serve the editor, command line, adapters o
 | Request | Capability | Why it has no tool |
 | --- | --- | --- |
 | `listPosts` | Posts | It is for keeping a copy in step: every post's version, and what changed since. The tools read the structure instead |
+| `listBlocks` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `getBlock` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `putBlock` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `deleteBlock` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `listFriends` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `addFriend` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `removeFriend` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `listShared` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `getShared` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
 | `exportFiles` | Export | The command line and the editor write the vault out. An agent reads posts one at a time |
 | `get` | Account | It rides on an ohm session, which an agent does not have |
 | `connect` | Account | It rides on an ohm session, which an agent does not have |

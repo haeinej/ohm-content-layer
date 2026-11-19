@@ -154,7 +154,7 @@ As understood when this was written, AT Protocol's proposals for private data ("
 ## Steps
 
 1. ~~`visibility` on blocks in place of `intent`, read and written by `vault/node.mjs`, with private as the default.~~ Done. A file with `visibility`, no `kind` and nothing only a block has is still read as a post file, so existing post files do not change; post sync reads files with the post reader and is unaffected.
-2. Generalise the friends store from posts to vault files, with the friend list by DID and access checks.
+2. ~~Generalise the friends store from posts to vault files, with the friend list by DID and access checks.~~ Done on the service: `blocks` and `friends` tables (`service/migrations/0002_friends_layer.sql`), the Friends requests, friends-only posts readable by friends through the same requests. Friends-only posts stay in `posts`; other blocks are kept as files. Adding a friend is session-only. Not yet used by the editor or sync, and the migration is not applied to the deployed database.
 3. Keys: setup (master key, recovery phrase, first passkey), unlock with OAuth and the passkey's PRF, recovery with the phrase, the wrapped copies on the server, file keys.
 4. The private store: the ciphertext format, opaque IDs, and compare-and-swap on ciphertext versions.
 5. `ohm vault sync` between both stores and the local folder, with confirmation before anything leaves the private layer.

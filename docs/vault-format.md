@@ -164,6 +164,17 @@ The hook notes each file the agent writes inside the vault, and the next `vault 
 
 `vault inspect` shows a file's history from the journal, following it through its moves.
 
+## Sharing with friends
+
+A block marked `visibility: friends` is meant for the friends you choose. The vault service keeps those blocks readable, so it can show them to those friends on any device without anyone needing your keys. It keeps nothing private in readable form: a private block is refused, and stays in your folder until the encrypted store is built.
+
+- **Your friends-only blocks** are kept on the service as the files they are in your folder: the path and the text. Your friends-only posts were already kept there, and count as part of the same layer.
+- **Your friend list** says who may read them, by DID. Only you, signed in to ohm, can add a friend; an agent cannot. You or your tools can remove one.
+- **A friend** reads what you share, both blocks and posts, with a token from their own PDS. Someone not on your list gets the same answer as if there were nothing there, so asking reveals nothing. A friend has to be let in to the ohm service, as every member is.
+- **Removing a friend** stops them reading from then on. What they already read cannot be taken back.
+
+This is the service side only. Nothing in the editor or the folder sync uses it yet, and an existing service database needs the migration `service/migrations/0002_friends_layer.sql` first. The requests are listed in the [service reference](../service/CAPABILITIES.md) under Friends.
+
 ## Using the vault from ohm-cortex
 
 ohm-cortex keeps what agents learn about you, and reads your vault to find what that learning rests on. It asks a vault a few questions: what channels there are, one block, whether blocks still exist, what changed since last time, and a search. Connect cortex to the vault with this vault's own reader:

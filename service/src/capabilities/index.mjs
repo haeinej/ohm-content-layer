@@ -10,6 +10,7 @@
 //   ohm     an ohm session only
 import account from './account.mjs';
 import exporting from './export.mjs';
+import friends from './friends.mjs';
 import identity from './identity.mjs';
 import mirror from './mirror.mjs';
 import posts from './posts.mjs';
@@ -17,7 +18,7 @@ import publish from './publish.mjs';
 import search from './search.mjs';
 import structure from './structure.mjs';
 
-export const CAPABILITIES = [posts, structure, search, mirror, publish, exporting, account, identity];
+export const CAPABILITIES = [posts, friends, structure, search, mirror, publish, exporting, account, identity];
 
 // Every request by its name, with the capability it belongs to.
 export const REQUESTS = Object.fromEntries(CAPABILITIES.flatMap(capability =>

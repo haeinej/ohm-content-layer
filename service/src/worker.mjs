@@ -2,11 +2,13 @@
 // one capability to a file in ./capabilities/; this file only routes. For each request it settles
 // who is asking, in the way that request says it must be settled, and hands over to the request.
 //
-// A member's posts are served to that member and nobody else. Nothing here publishes anything:
+// A member's posts and blocks are served to that member, and their friends-only ones also to the
+// friends they chose. Nobody else is served anything. Nothing here publishes anything:
 // saving a post, whatever it says about who may see it, changes only this copy.
 import { REQUESTS } from './capabilities/index.mjs';
 import { admitMember, createIdentity } from './identity.mjs';
 import { fromOurPages, links, ohmUser } from './ohm.mjs';
+import { blockStore } from './blocks.mjs';
 import { postStore, Refused } from './store.mjs';
 
 const HEADERS = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
@@ -83,6 +85,7 @@ export function createService({ whoIs, get = fetch } = {}) {
       const answer = await asked.run({
         name, request, url, env, get, identify, linked, link, did, user,
         posts: postStore(env.DB),
+        blocks: blockStore(env.DB),
         body: () => sent(request),
       });
       // Nearly every answer is JSON. A request that hands over a file answers with the file itself.

@@ -18,7 +18,7 @@ const ASKS = {
   ohm: ['The member, signed in to ohm', 'Their ohm session only. A request that changes something must also come from ohm\'s own pages'],
 };
 const FILES = Object.fromEntries(Object.entries({
-  Posts: 'posts', Structure: 'structure', Search: 'search', Mirror: 'mirror', Publish: 'publish', Export: 'export', Account: 'account', Identity: 'identity',
+  Posts: 'posts', Friends: 'friends', Structure: 'structure', Search: 'search', Mirror: 'mirror', Publish: 'publish', Export: 'export', Account: 'account', Identity: 'identity',
 }).map(([name, file]) => [name, `src/capabilities/${file}.mjs`]));
 
 // Every way the service says no. The same words go to a person in the editor and to an agent.
@@ -36,10 +36,12 @@ export const REFUSALS = {
   WrongMethod: [405, 'The request is the other of GET and POST'],
   InvalidRequest: [400, 'The request is not JSON, or something it says is not what that request takes'],
   InvalidPost: [400, 'The post is not one the vault can hold. The message lists every reason'],
+  InvalidBlock: [400, 'The block is not one the friends layer can hold: it is private or public, a post, or its file has problems. The message lists every reason'],
   InvalidCursor: [400, '`since` is not a value an earlier list returned'],
-  NotFound: [404, 'There is no such post or saved version'],
-  Changed: [409, 'The post has changed since the version the request names. The answer carries the current version'],
+  NotFound: [404, 'There is no such post, block or saved version, or nothing there is shared with the asker'],
+  Changed: [409, 'The post or block has changed since the version the request names. The answer carries the current version'],
   SlugTaken: [409, 'Another post in the vault already has that slug'],
+  PathTaken: [409, 'Another block in the friends layer is already at that path'],
   TooLarge: [413, 'The post is more than 600 KB of text, or a file it places is empty or larger than 25 MB'],
   FileUnreachable: [502, 'A file a post places could not be fetched from where the post says it is'],
   AccountNotFound: [404, 'No AT Protocol account answers to that handle or DID'],
@@ -82,7 +84,7 @@ export function capabilitiesPage() {
     '| --- | --- |',
     ...Object.values(ASKS).map(([who, how]) => `| ${cell(who)} | ${cell(how)} |`),
     '',
-    'A member\'s posts are served to that member and nobody else. Who is asking is settled before the store is looked at.',
+    'A member\'s posts and blocks are served to that member. Their friends-only posts and blocks are also served to the DIDs on their friend list, and to nobody else. Who is asking is settled before any store is looked at. Private blocks are never kept by the service in readable form.',
     '',
     'The editor sends `X-Ohm-Did` for the member it displays. If the authenticated account differs, the service refuses with `409 AccountChanged` before running the request. This optional precondition binds stale tabs to their displayed member; it cannot select an account or replace authentication.',
     '',
@@ -141,6 +143,7 @@ export function capabilitiesPage() {
 const NO_TOOL = {
   'com.ohmmmm.vault.listPosts': 'It is for keeping a copy in step: every post\'s version, and what changed since. The tools read the structure instead',
   Export: 'The command line and the editor write the vault out. An agent reads posts one at a time',
+  Friends: 'Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor',
   Account: 'It rides on an ohm session, which an agent does not have',
   Identity: 'It is part of signing in',
 };

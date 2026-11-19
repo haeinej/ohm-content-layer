@@ -6,7 +6,7 @@ Human guide: [docs/vault-format.md](../vault-format.md). Design and what comes n
 
 [vault/node.mjs](../../vault/node.mjs) reads and writes a vault folder as four kinds of nodes (block, channel, entity, source) and derives evidence edges from their content. It is pure: callers pass `{ path, text }` pairs and write what they get back. It does no I/O, indexing, sync or publishing, and it holds no inference: agent conclusions live in ohm-cortex, which refers to blocks by ID.
 
-**Implemented and tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)); read-only roots and the index ([test/indexer.test.mjs](../../test/indexer.test.mjs), real temporary folders and node:sqlite). Provenance and the cortex contract are tested in [test/provenance.test.mjs](../../test/provenance.test.mjs). **Not built:** two-way roots, the MCP tools, and service storage for non-post blocks. The service, `syncFolder` and publishing still handle posts only.
+**Implemented and tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)); read-only roots and the index ([test/indexer.test.mjs](../../test/indexer.test.mjs), real temporary folders and node:sqlite). Provenance and the cortex contract are tested in [test/provenance.test.mjs](../../test/provenance.test.mjs); the friends layer in [test/friends.test.mjs](../../test/friends.test.mjs), with real signed tokens through the service router. **Not built:** two-way roots, the MCP tools, and service storage for non-post blocks. The service, `syncFolder` and publishing still handle posts only.
 
 ## Schemas
 
@@ -122,6 +122,22 @@ How `scan` writes the journal: after walking, and **before** the index transacti
   - `vaultFrom` accepts `{ kind: 'module', module: <absolute file>, path: <absolute folder> }`, and `moduleVault` imports the file on first use and checks the vault it returns with `checkVault`.
   - The CLI form is `cortex vault connect <folder> [dir] --module <file>`.
 - Verified end to end: on a vault holding `writing/_channel.md`, one essay and `_entities/person/ada.md`, cortex's folder reader reported 4 channels and counted the channel file and the entity as blocks. This reader reported 2 channels and the single block, and created no `.vault/`.
+
+## Friends layer (service)
+
+[service/src/blocks.mjs](../../service/src/blocks.mjs), capability [Friends](../../service/src/capabilities/friends.mjs), tables `blocks` and `friends` ([schema.sql](../../service/schema.sql); existing databases need [migrations/0002_friends_layer.sql](../../service/migrations/0002_friends_layer.sql), not applied automatically).
+- `friendsBlock({ id, path, text })` accepts only a non-post block whose `readNode` result has `visibility: 'friends'` and no problems.
+  - It refuses (`InvalidBlock`) private and public blocks, post files, paths that are not block files, extra keys, a non-TID `id`, and a file whose `id` property differs from `id`.
+  - Text over 600 KB is `TooLarge`.
+- `blockStore(db)`:
+  - `list`, `read`, `write` and `remove` mirror the post store: CAS on `replaces` inside the SQL statement, `Changed` with `current`, removals kept as version-null rows for `since`. A path taken by another block is `PathTaken`. Versions are `recordVersion({ path, text })`.
+  - Friends: `friends`, `addFriend` (DID regex, not self) and `removeFriend`.
+  - What a friend reads: `shared(owner, reader)` and `readShared(owner, reader, id)`. These return friends-only blocks plus friends-only posts (as `postFile` output), and only when `reader` is on `owner`'s list and is not `owner`. Otherwise they answer `NotFound`, identical whether or not the owner exists or has anything.
+- Requests:
+  - `listBlocks`, `getBlock`, `putBlock`, `deleteBlock`, `listFriends` and `removeFriend` are `member`.
+  - `addFriend` is `ohm` (session only), so no token-holding agent can widen access.
+  - `listShared` and `getShared` are `token`. The token path runs `admitMember`, so a friend must be admitted by `MEMBERS`.
+- Not built: the editor and `ohm vault sync` using these requests, MCP tools, channel-level groups, and moving private posts out of D1 (step 8 of the plan).
 
 ## Use
 
