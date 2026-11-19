@@ -161,6 +161,9 @@ test('an agent never writes over what only the person may change, by revert or r
   await agent.proposeSkill({ text: '---\nname: file-a-receipt\ndescription: How receipts are filed\n---\nFile by month.\n' });
   const approved = await person.approveSkill('file-a-receipt');
   await assert.rejects(codex.call('cortex_revert', { change: approved.change }), refused('PersonOnly'));
+  // A skill is kept whole, so the person reads it back as it was as JSON.
+  const seq = (await journal(dir)).find(line => line.id === approved.change).seq;
+  assert.match(execFileSync('node', [cli, 'as-of', 'skill/file-a-receipt', String(seq), dir], { encoding: 'utf8' }), /"text": "---\\nname: file-a-receipt[\s\S]*File by month/);
   await person.revert({ change: approved.change });
   await assert.rejects(agent.getSkill('file-a-receipt'), refused('NotFound'));
 });

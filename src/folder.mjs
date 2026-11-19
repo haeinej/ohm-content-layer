@@ -271,7 +271,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return { content, found };
     };
     const version = content => cortexVersion({ channel: { meaning: content.meaning ?? '', conventions: content.conventions ?? '' } });
-    const write = async (content, by = actor) => {
+    const write = async content => {
       const vault = await theVault();
       if (!vault) throw new Refused('NoVault', 'No vault is connected to this cortex');
       const shape = await vault.shape();
@@ -282,9 +282,9 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       written.set(channel, next);
       await put(at('vault.md'), writeMap(shape, written));
       // An agent's words are logged as its own, so it may rewrite them, and the person's stand.
-      if (actorOf(by).kind !== 'human') {
+      if (!person) {
         await mkdir(dirname(meaningsLog), { recursive: true });
-        for (const field of ['meaning', 'conventions']) if (next[field] !== was[field] && next[field]) await appendFile(meaningsLog, `${JSON.stringify({ channel, field, text: next[field], by, when: now().toISOString() })}\n`);
+        for (const field of ['meaning', 'conventions']) if (next[field] !== was[field] && next[field]) await appendFile(meaningsLog, `${JSON.stringify({ channel, field, text: next[field], by: actor, when: now().toISOString() })}\n`);
       }
     };
     // What the person wrote by hand stands: an agent may not write over it, by restoring either.
@@ -306,7 +306,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         return { content, version: await version(content) };
       },
       version, write,
-      remove: by => write({ meaning: '', conventions: '' }, by),
+      remove: () => write({ meaning: '', conventions: '' }),
     };
   }
   function nodeOf(node) {
@@ -378,10 +378,10 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
   }
 
   // Writes a node: what it replaces is kept, then the new content, or nothing to remove it.
-  async function apply(spec, content, by = actor) {
+  async function apply(spec, content) {
     const live = await spec.live();
     if (live) await keep(...spec.kept, encode(spec, live.content), live.version);
-    if (content === null) await spec.remove(by); else await spec.write(content, by);
+    if (content === null) await spec.remove(); else await spec.write(content);
     return (await spec.live())?.version ?? null;
   }
 

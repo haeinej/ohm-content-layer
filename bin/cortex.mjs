@@ -144,7 +144,7 @@ try {
     if (json) console.log(JSON.stringify(found, null, 2));
     else {
       const lines = [
-        ...found.changes.map(line => ({ seq: line.seq, text: `${line.seq}  ${line.at}  ${line.actor.name}  ${line.op} ${line.node}  ${line.before ?? '(none)'} -> ${line.after ?? '(none)'}${line.reason ? `  ${line.reason}` : ''}` })),
+        ...found.changes.map(line => ({ seq: line.seq, text: `${line.seq}  ${line.at}  ${line.actor.name}${line.proposedBy ? ` (proposed by ${line.proposedBy})` : ''}  ${line.op} ${line.node}  ${line.before ?? '(none)'} -> ${line.after ?? '(none)'}${line.reason ? `  ${line.reason}` : ''}` })),
         ...found.saves.map(line => ({ seq: line.seq, text: `${line.seq}  ${line.at}  ${line.actor.name}  save ${line.name}  ${line.note}` })),
       ].sort((a, b) => a.seq - b.seq);
       console.log(lines.length ? lines.map(line => line.text).join('\n') : 'Nothing has changed.');
@@ -152,6 +152,8 @@ try {
   } else if (command === 'as-of' && rest[0] && rest[1]) {
     const found = await openCortex(folder(rest[2]), { actor: 'member' }).asOf({ node: rest[0], at: rest[1] });
     if (found.text !== undefined) process.stdout.write(found.text);
+    // A skill or a channel's words are kept whole, as an object, and are shown as JSON.
+    else if (found.content !== undefined) console.log(JSON.stringify(found.content, null, 2));
     else console.log(found.exists === false ? `${rest[0]} did not exist then.` : `${rest[0]} was version ${found.version} then, and that version was not kept.`);
   } else if (command === 'save' && rest[0] && rest[1]) {
     const done = await openCortex(folder(rest[2]), { actor: 'member' }).save({ name: rest[0], note: rest[1] });
