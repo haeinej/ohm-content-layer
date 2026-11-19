@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { createServiceSource } from "../src/data/service-source"
 import { blockOf, moveVisibility, type BlockRef } from "../src/data/source"
 import { newNodeId } from "../../vault/vault/node.mjs"
 
@@ -28,4 +29,39 @@ test("a Friends block with an envelope-only TID keeps it inside the private copy
   }, from, { layer: "private", opaqueId }, "friends-version")
   assert.deepEqual(operations, ["save", "delete"])
   assert.equal(result.cleanupPending, false)
+})
+
+test("unlocking preserves a Friends search match on its channel path", async () => {
+  const did = "did:web:reader.example.test"
+  const id = newNodeId()
+  let unlocked = false
+  const source = createServiceSource({
+    origin: "https://workspace.example.test", did,
+    privateSession: {
+      unlocked: () => unlocked ? { did, master: "fixture-keyring" } : null,
+      keys: {
+        async openFile() { throw new Error("No sealed fixture files") },
+        async sealFile() { throw new Error("Search is read-only") },
+        vaultPrivateFiles: () => ({
+          list: async () => [],
+          get: async () => null,
+          replace: async () => { throw new Error("Search is read-only") },
+        }),
+      },
+    },
+    fetch: async input => {
+      const url = new URL(String(input))
+      const method = url.pathname.split(".").at(-1)
+      const post = { id, slug: "alder", title: "Alder", label: "reading", sublabel: "journals", visibility: "friends", passage: "A seed." }
+      if (method === "searchPosts" && !unlocked) return Response.json({ posts: url.searchParams.get("visibility") === "friends" ? [post] : [] })
+      if (method === "getTree") return Response.json({ labels: [{ label: "reading", posts: [], sublabels: [{ sublabel: "journals", posts: [post] }] }] })
+      if (method === "listBlocks") return Response.json({ blocks: [], cursor: "1" })
+      if (method === "getPost") return Response.json({ post: { ...post, body: "A seed." }, version: "v1" })
+      throw new Error(`Unexpected fixture call ${method}`)
+    },
+  })
+  for (const state of [false, true]) {
+    unlocked = state
+    assert.deepEqual((await source.search({ query: "journals" })).map(hit => hit.id), [id])
+  }
 })
