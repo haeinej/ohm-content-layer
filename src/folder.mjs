@@ -10,7 +10,7 @@ import { sectionOf, vaultFrom } from './vault.mjs';
 import { checkWords, gone, parseMap, writeMap } from './vaultmap.mjs';
 import { createHash } from 'node:crypto';
 import { actorOf, openJournal, order, PEOPLE } from './journal.mjs';
-import { cleanMemory, cortexVersion, InvalidMemory, KINDS, memoryFile, memoryVersion, NAME, readMemoryFile, Refused, splitFront, writeFront } from './core.mjs';
+import { cleanMemory, cortexVersion, evidenceProblem, InvalidMemory, KINDS, memoryFile, memoryVersion, NAME, readMemoryFile, Refused, splitFront, writeFront } from './core.mjs';
 
 const bytes = text => new TextEncoder().encode(text).length;
 const missing = problem => problem?.code === 'ENOENT' || problem?.code === 'ENOTDIR';
@@ -30,11 +30,12 @@ async function put(path, content) {
 }
 
 // What makes a note a note. Checked before anything is written, so a batch is refused whole.
-function checkNote({ id, note, session, project } = {}) {
+function checkNote({ id, note, session, project, evidence } = {}) {
   if (typeof id !== 'string' || !id || id.length > 200) throw new Refused('InvalidRequest', 'A note has an ID made where it was seen, at most 200 characters');
   if (typeof note !== 'string' || !note.trim() || [...note].length > 500 || /[\r\n]/.test(note)) throw new Refused('InvalidRequest', `A note is one line, at most 500 characters${typeof id === 'string' ? ` (${id})` : ''}`);
   if (typeof session !== 'string' || !session || session.length > 200) throw new Refused('InvalidRequest', 'A note names the session it was seen in');
   if (project !== undefined && (typeof project !== 'string' || project.length > 2000)) throw new Refused('InvalidRequest', 'project is text, at most 2,000 characters');
+  if (evidence !== undefined && evidenceProblem(evidence)) throw new Refused('InvalidRequest', evidenceProblem(evidence));
 }
 
 // Names that mean the person, or the signed-in account. An agent never writes under one of them.
@@ -299,6 +300,34 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     return file ? readFile(at('.cortex', 'history', ...spec.kept, file), 'utf8') : null;
   }
 
+  // What cited evidence points at must be there where cortex can look. A node of the cortex must
+  // hold that version now, have it kept, or have had it in the journal. Any other node is a block in
+  // the vault, and must still be in the vault when one is connected; the contract has no versions,
+  // so its version is not checked. Traces are not recorded yet, and sessions are named by the
+  // agent, so neither can be looked up.
+  async function checkCited(evidence) {
+    if (evidence === undefined) return;
+    let lines;
+    const blocks = [];
+    for (const { node, version } of evidence.filter(pointer => pointer.node !== undefined)) {
+      let spec;
+      try { spec = nodeOf(node); } catch (problem) {
+        if (!(problem instanceof Refused) || problem.code !== 'NotFound') throw problem;
+        blocks.push(node);
+        continue;
+      }
+      if (await textAt(spec, version) !== null) continue;
+      lines ??= await journal.read();
+      if (!lines.some(line => line.type === 'change' && line.node === node && (line.before === version || line.after === version))) throw new Refused('NoEvidence', `The cortex has no version ${version} of ${node}`);
+    }
+    if (!blocks.length) return;
+    const vault = await theVault();
+    if (!vault) return;
+    const where = await vault.exists(blocks);
+    const missing = blocks.filter(id => !where[id]?.exists);
+    if (missing.length) throw new Refused('NoEvidence', `The vault has no ${missing.join(', ')}`);
+  }
+
   // A point in the journal: a stamp's name, a date or a time, or a seq. A date with no time means
   // the end of that day, in UTC.
   const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -440,9 +469,10 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         if (ids.has(item.id)) throw new Refused('InvalidRequest', `Two notes have the ID ${item.id}`);
         ids.add(item.id);
         if (kept.has(item.id) && kept.get(item.id).text !== item.note) throw new Refused('Changed', `Another note already has the ID ${item.id}`);
+        await checkCited(item.evidence);
       }
       const recorded = [];
-      for (const item of seen) recorded.push(await cortex.addNote({ id: item.id, note: item.note, session, ...(item.project ? { project: item.project } : {}) }));
+      for (const item of seen) recorded.push(await cortex.addNote({ id: item.id, note: item.note, session, ...(item.project ? { project: item.project } : {}), ...(item.evidence ? { evidence: item.evidence } : {}) }));
       const left = await putWorking(working, held?.version ?? null, { keepEarlier: true });
       // The model does not know the client's session ID, so a distill is recorded by agent, time and
       // the version of working memory it left. The stop hook asks whether the working memory it sees
@@ -721,6 +751,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         const kept = await notes();
         if (memory.notes.some(id => !kept.has(id))) throw new Refused('InvalidMemory', 'A source note must be one recorded in this cortex');
       }
+      await checkCited(memory.evidence);
       const version = await memoryVersion(memory);
       if (live?.version === version) return { name: memory.name, version, unchanged: true };
       if (live && replaces === null) throw new Refused('NameTaken', 'A memory already has this name. Read it and name its version to replace it.', { name: memory.name, current: live.version });
@@ -763,14 +794,15 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     },
 
     // `source` says where a note came from: the agent that noticed it, or a host reporting a change.
-    async addNote({ id, note, session, project, source } = {}) {
-      checkNote({ id, note, session, project });
+    async addNote({ id, note, session, project, source, evidence } = {}) {
+      checkNote({ id, note, session, project, evidence });
       const before = (await notes()).get(id);
       if (before) {
         if (before.text !== note) throw new Refused('Changed', 'Another note already has this ID');
         return { id, unchanged: true };
       }
-      await recordNote({ id, text: note, session, project, source: source ?? actor });
+      await checkCited(evidence);
+      await recordNote({ id, text: note, session, project, source: source ?? actor, evidence });
       return { id };
     },
 

@@ -20,11 +20,15 @@ const text = { type: 'string' };
 const name = { type: 'string', pattern: '^[a-z]+(?:-[a-z]+)*$', maxLength: 100 };
 const version = { type: 'string', minLength: 1, description: 'The version you read. A save is refused if the item has changed since.' };
 const object = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
+const evidence = { type: 'array', minItems: 1, maxItems: 20,
+  description: 'What this was drawn from. Each pointer is one of: {node, version}, a file of the cortex as cortex_history names it, or a block in the vault, at the version you read; {trace}; {session}. What you cite must exist.',
+  items: object({ node: text, version: text, trace: text, session: text }) };
 const memory = object({
   name, description: { type: 'string', maxLength: 200 }, kind: { type: 'string', enum: ['person', 'preference', 'project', 'reference'] },
   body: text, stated: { type: 'boolean', description: 'true only for what the person said in so many words' }, always: { type: 'boolean' }, from: text, project: text,
   notes: { type: 'array', items: text, maxItems: 100, uniqueItems: true },
   posts: { type: 'array', items: text, minItems: 1, maxItems: 20, uniqueItems: true, description: 'IDs of the vault posts this memory points at. Point at a post; never copy what it says.' },
+  evidence,
 }, ['name', 'description', 'kind', 'body', 'stated']);
 const change = object({ memory, version }, ['memory']);
 
@@ -42,19 +46,19 @@ export const TOOLS = [
   { name: 'cortex_distill', description: 'End a session. Read every agent\'s working memory together (cortex_start gives them), record as notes what you judge was seen in more than one session or by more than one agent, and leave your own working memory as what is still open for next time. The working memory it replaces is kept.',
     inputSchema: object({
       session: { type: 'string', description: 'The session being distilled' },
-      notes: { type: 'array', maxItems: 50, items: object({ id: { type: 'string', description: 'Made once, reused on retry' }, note: { type: 'string', maxLength: 500 }, project: text }, ['id', 'note']) },
+      notes: { type: 'array', maxItems: 50, items: object({ id: { type: 'string', description: 'Made once, reused on retry' }, note: { type: 'string', maxLength: 500 }, project: text, evidence }, ['id', 'note']) },
       working: { type: 'string', description: 'Your working memory for next time, in full. Empty to clear it' },
       version,
     }, ['session', 'working']) },
   { name: 'cortex_describe_section', description: 'Write what a vault section means and how posts there are filed, one line each, from what you see in the vault and what the person says. No need to ask. If the person has written it themselves, theirs stands and this is refused: suggest a change to them instead.',
     inputSchema: object({ section: { type: 'string', description: 'A section as cortex_start lists it: label, or label/sublabel' }, meaning: text, conventions: text }, ['section']) },
-  { name: 'cortex_note', description: 'Record in one line something you noticed about the person. It changes no memory. Make the ID once and reuse it if you retry; name the real session.',
-    inputSchema: object({ id: { type: 'string', maxLength: 200 }, note: { type: 'string', maxLength: 500 }, session: { type: 'string', maxLength: 200 }, project: text }, ['id', 'note', 'session']) },
+  { name: 'cortex_note', description: 'Record in one line something you noticed about the person. It changes no memory. Make the ID once and reuse it if you retry; name the real session. Cite what you saw it in as evidence when you can.',
+    inputSchema: object({ id: { type: 'string', maxLength: 200 }, note: { type: 'string', maxLength: 500 }, session: { type: 'string', maxLength: 200 }, project: text, evidence }, ['id', 'note', 'session']) },
   { name: 'cortex_settle', description: 'Without arguments, read the notes waiting and the ones kept from earlier sessions. Otherwise give every note an outcome: kept (seen once, not a memory yet), dropped, or the name of the memory it went into; and give the memories you rewrote in changes, each with the version you read. Returns the notes still waiting.',
     inputSchema: object({ changes: { type: 'array', items: change, maxItems: 100 }, notes: { type: 'array', minItems: 1, maxItems: 100, items: object({ id: text, outcome: { type: 'string', description: 'kept, dropped, or a memory name' } }, ['id', 'outcome']) } }) },
   { name: 'cortex_recall', description: 'Read one memory in full by name, or find memories by words. A named read gives its version; ask for history to see earlier versions, or name a version to read one back.',
     inputSchema: object({ name, query: text, limit: { type: 'integer', minimum: 1, maximum: 50 }, history: { type: 'boolean' }, version }), annotations: { readOnlyHint: true } },
-  { name: 'cortex_remember', description: 'Save a whole memory at once, with no review. To change an existing memory, read it first and pass its version. Leaving notes or posts out keeps the ones it had.',
+  { name: 'cortex_remember', description: 'Save a whole memory at once, with no review. To change an existing memory, read it first and pass its version. Leaving notes, posts or evidence out keeps the ones it had.',
     inputSchema: change },
   { name: 'cortex_forget', description: 'Remove a memory, in two calls. The first returns the memory and a confirm value: show the memory to the person, and call again with confirm only if they agree.',
     inputSchema: object({ name, confirm: text }, ['name']), annotations: { destructiveHint: true } },
@@ -113,6 +117,7 @@ export function createTools(cortex) {
         if (given.notes === undefined && held.memory.notes !== undefined) given.notes = [...held.memory.notes];
         if (given.from === undefined && held.memory.from !== undefined) given.from = held.memory.from;
         if (given.posts === undefined && held.memory.posts !== undefined) given.posts = [...held.memory.posts];
+        if (given.evidence === undefined && held.memory.evidence !== undefined) given.evidence = held.memory.evidence.map(pointer => ({ ...pointer }));
       }
       return { done: true, ...await cortex.write(given, { replaces: version ?? null }) };
     },
