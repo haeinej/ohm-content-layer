@@ -1,0 +1,91 @@
+/* The page's text, in ohm's type and colour. Only tokens; no raw values. */
+.ohm-prose {
+  outline: none;
+  color: var(--ohm-ink);
+  font-size: var(--ohm-type-body-size);
+  line-height: 1.7;
+  caret-color: var(--ohm-ink);
+}
+.ohm-prose > * + * { margin-top: .35em; }
+.ohm-prose p { margin: 0; min-height: 1.7em; }
+.ohm-prose h1, .ohm-prose h2, .ohm-prose h3 { font-family: inherit; font-weight: 600; letter-spacing: -.01em; margin: 1.2em 0 .2em; }
+.ohm-prose h1 { font-size: var(--ohm-type-h2-size); line-height: var(--ohm-type-h2-leading); }
+.ohm-prose h2 { font-size: var(--ohm-type-title-size); line-height: var(--ohm-type-title-leading); }
+.ohm-prose h3 { font-size: var(--ohm-type-h3-size); line-height: var(--ohm-type-h3-leading); }
+.ohm-prose > :first-child { margin-top: 0; }
+.ohm-prose ul, .ohm-prose ol { padding-inline-start: 1.4em; }
+.ohm-prose ul { list-style: disc; }
+.ohm-prose ol { list-style: decimal; }
+.ohm-prose li::marker { color: var(--ohm-muted); }
+.ohm-prose ul[data-type="taskList"] { list-style: none; padding-inline-start: .1em; }
+.ohm-prose ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: .55em; }
+.ohm-prose ul[data-type="taskList"] li > label { margin-top: .3em; user-select: none; }
+.ohm-prose ul[data-type="taskList"] li > label input { accent-color: var(--ohm-forest); width: 1em; height: 1em; }
+.ohm-prose ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--ohm-muted); text-decoration: line-through; }
+.ohm-prose blockquote { border-inline-start: 2px solid var(--ohm-line); padding-inline-start: 1em; color: var(--ohm-muted); }
+.ohm-prose code { font-family: var(--ohm-font-mono, ui-monospace, monospace); font-size: .9em; background: var(--ohm-wash); border-radius: var(--ohm-radius-chip); padding: .1em .35em; }
+.ohm-prose pre { background: var(--ohm-wash); border-radius: var(--ohm-radius-item); padding: .9em 1em; overflow-x: auto; }
+.ohm-prose pre code { background: none; padding: 0; }
+.ohm-prose hr { border: 0; border-top: 1px solid var(--ohm-line); margin: 1.4em 0; }
+.ohm-prose img { max-width: 100%; border-radius: var(--ohm-radius-item); margin: .5em 0; }
+.ohm-prose img.ProseMirror-selectednode { outline: 2px solid var(--ohm-forest); outline-offset: 2px; }
+.ohm-prose mark { background: color-mix(in oklab, var(--ohm-green-light) 35%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
+.ohm-prose a { color: var(--ohm-forest); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Tables: quiet lines that group cells, a toned header row. */
+.ohm-prose table { border-collapse: collapse; width: 100%; margin: 1.2em 0; table-layout: fixed; font-size: var(--ohm-type-body-size); }
+.ohm-prose th, .ohm-prose td { border: 1px solid var(--ohm-line); padding: .45em .7em; vertical-align: top; text-align: start; }
+.ohm-prose th { background: var(--ohm-wash); font-weight: 500; color: var(--ohm-muted); }
+.ohm-prose th p, .ohm-prose td p { min-height: 1.5em; }
+.ohm-prose td, .ohm-prose th { position: relative; transition: box-shadow var(--ohm-duration-state) var(--ohm-ease-out), background-color var(--ohm-duration-state) var(--ohm-ease-out); }
+.ohm-prose .is-active-cell { box-shadow: inset 0 0 0 1.5px var(--ohm-forest); }
+.ohm-prose .selectedCell { background: color-mix(in oklab, var(--ohm-forest) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ohm-forest) 45%, transparent); }
+.ohm-prose .selectedCell::after { content: none; }
+:root[data-theme="dark"] .ohm-prose .is-active-cell { box-shadow: inset 0 0 0 1.5px var(--ohm-green-light); }
+:root[data-theme="dark"] .ohm-prose .selectedCell { background: color-mix(in oklab, var(--ohm-green-light) 14%, transparent); }
+.ohm-prose .tableWrapper { overflow-x: auto; }
+
+/* Placeholder on the empty line the caret is on. */
+.ohm-prose .is-empty::before, .ohm-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: inline-start; height: 0; pointer-events: none;
+  color: color-mix(in oklab, var(--ohm-muted) 75%, transparent);
+}
+
+/* Selection: a soft forest tint. */
+.ohm-prose ::selection { background: color-mix(in oklab, var(--ohm-forest) 22%, transparent); }
+:root[data-theme="dark"] .ohm-prose ::selection { background: color-mix(in oklab, var(--ohm-green-light) 28%, transparent); }
+
+/* [[links]]: a chunk of green text, the linked page's title; the raw [[slug]] is hidden until the
+   caret is in it. Hover shows the page (LinkPreview) and shades it green in the tree. */
+.ohm-prose .ohm-link {
+  color: var(--ohm-forest);
+  background: color-mix(in oklab, var(--ohm-green-light) 22%, transparent);
+  border-radius: var(--ohm-radius-chip);
+  padding: .05em .3em;
+  margin: 0 .05em;
+  cursor: pointer;
+  transition: background-color var(--ohm-duration-state) var(--ohm-ease-out);
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.ohm-prose .ohm-link:hover, .ohm-prose .ohm-link.is-hovered { background: color-mix(in oklab, var(--ohm-green-light) 40%, transparent); }
+.ohm-prose .ohm-link.is-raw { cursor: text; font-family: var(--ohm-font-mono, ui-monospace, monospace); font-size: .92em; }
+.ohm-prose .ohm-link.is-missing { color: var(--ohm-muted); background: var(--ohm-wash); text-decoration: line-through dotted; }
+.ohm-prose .ohm-link-source { font-size: 0; letter-spacing: 0; }
+:root[data-theme="dark"] .ohm-prose .ohm-link { color: var(--ohm-green-light); background: color-mix(in oklab, var(--ohm-green-light) 14%, transparent); }
+:root[data-theme="dark"] .ohm-prose .ohm-link:hover { background: color-mix(in oklab, var(--ohm-green-light) 26%, transparent); }
+
+/* @mentions read as links; ⌘-click follows them while editing. */
+.ohm-prose .ohm-ref { color: var(--ohm-forest); text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--ohm-forest) 35%, transparent); text-underline-offset: 3px; cursor: pointer; }
+:root[data-theme="dark"] .ohm-prose .ohm-ref, :root[data-theme="dark"] .ohm-prose a { color: var(--ohm-green-light); }
+
+/* Dragging a block: the drop line is forest. */
+.ProseMirror-dropcursor, .prosemirror-dropcursor-block { background: var(--ohm-forest) !important; }
+.ohm-prose .ProseMirror-selectednode:not(img) { border-radius: var(--ohm-radius-item); box-shadow: 0 0 0 2px color-mix(in oklab, var(--ohm-forest) 30%, transparent); }
+
+@media (prefers-reduced-motion: reduce) { .ohm-prose * { transition: none !important; animation: none !important; } }
+
+/* Column resizing: a forest line on the edge being dragged. */
+.ohm-prose .column-resize-handle { position: absolute; top: 0; bottom: -1px; right: -2px; width: 3px; background: var(--ohm-forest); pointer-events: none; border-radius: 2px; }
+:root[data-theme="dark"] .ohm-prose .column-resize-handle { background: var(--ohm-green-light); }
+.ohm-prose.resize-cursor, .resize-cursor .ohm-prose { cursor: col-resize; }
