@@ -122,10 +122,10 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
   }, [rev]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** One letter, one action. Returns whether it did something. */
-  function run(k: string, id: string): boolean {
-    const folder = folderPath(id)
+  function run(k: string, rowId: string): boolean {
+    const folder = folderPath(rowId)
     if (folder) {
-      if (k === "r") { setRenaming(id); setMenuOpen(false); return true }
+      if (k === "r") { setRenaming(rowId); setMenuOpen(false); return true }
       if (k === "c" && !folder.includes("/")) { setMenuOpen(false); startChannel(folder); return true }
       if (k === "d") {
         setMenuOpen(false)
@@ -140,7 +140,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
       }
       return false
     }
-    id = docIdOf(id)
+    const id = docIdOf(rowId)
     const doc = byId(id)
     if (!doc) return false
     const post = isBlock(doc)
@@ -148,7 +148,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     switch (k) {
       case "p": togglePin(id); done(marks.pinned.has(id) ? `Pinned “${titleOf(doc)}”` : `Unpinned “${titleOf(doc)}”`); break
       case "u": toggleUnread(id); break
-      case "r": if (!post) return false; setRenaming(id); break
+      case "r": if (!post) return false; setRenaming(rowId); break
       case "a": if (!post) return false; toggleArchive(id); done(marks.archived.has(id) ? `Archived “${titleOf(doc)}”` : `Restored “${titleOf(doc)}”`); break
       case "d": if (!post) return false; requestDelete(id); break
       default: return false
@@ -201,7 +201,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
             <Icon icon={EllipsisIcon} size="sm" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-60"
-            onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase(), doc.id)) e.preventDefault() }}>
+            onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase(), row.id)) e.preventDefault() }}>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>Open in</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-48">
@@ -213,7 +213,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => run("p", doc.id)}>{marks.pinned.has(doc.id) ? "Unpin" : "Pin"}<DropdownMenuShortcut>P</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuItem onClick={() => run("u", doc.id)}>{marks.unread.has(doc.id) ? "Mark as read" : "Mark as unread"}<DropdownMenuShortcut>U</DropdownMenuShortcut></DropdownMenuItem>
-            <DropdownMenuItem disabled={!post} onClick={() => run("r", doc.id)}>Rename<DropdownMenuShortcut>R</DropdownMenuShortcut></DropdownMenuItem>
+            <DropdownMenuItem disabled={!post} onClick={() => run("r", row.id)}>Rename<DropdownMenuShortcut>R</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger disabled={!post}>Channels</DropdownMenuSubTrigger>
@@ -260,7 +260,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
       <div className="absolute inset-x-0 z-20 flex items-center" style={{ top: row.top, height: row.height, paddingInlineStart: row.textLeft - 7 }}>
         {folderPath(renaming)
           ? <InlineRenameFolder path={folderPath(renaming)!} className="me-1 h-7 flex-1 text-body" onDone={() => setRenaming(null)} />
-          : <InlineRename id={renaming} className="me-1 h-7 flex-1 text-body" onDone={() => setRenaming(null)} />}
+          : <InlineRename id={docIdOf(renaming)} className="me-1 h-7 flex-1 text-body" onDone={() => setRenaming(null)} />}
       </div>
     )}
   </>
