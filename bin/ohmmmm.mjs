@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-// A person's home, ohmmmm.<handle>, with their vault and cortex inside (home/home.mjs).
+// The one command `npx github:haeinej/ohm-vault <command>` runs (npx picks the command named after
+// the package). It keeps a person's home itself and hands everything else on:
 //
-//   ohmmmm init <handle> [parent]   make ohmmmm.<handle> in parent (default: your home folder), with
-//                                   vault/ set up as a vault and cortex/ started for that handle
-//   ohmmmm where [folder]           the home a folder is in, and its vault and cortex
+//   init <handle> [parent]   make ohmmmm.<handle> in parent (default: your home folder), with vault/
+//                            set up as a vault and cortex/ started for that handle
+//   where [folder]           the home a folder is in, and its vault and cortex
+//   cortex <command> …       the cortex's command (cortex/bin/cortex.mjs)
+//   anything else            the vault's command, `ohm` (vault/bin/ohm.mjs): `vault index`, `publish`…
 //
-// The vault and the cortex keep their own commands: `ohm vault …` (vault/bin/ohm.mjs) and
-// `cortex …` (cortex/bin/cortex.mjs). Run inside a home, both find their folder by themselves.
+// Run inside a home, the vault and the cortex find their folders by themselves (home/home.mjs).
+import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -29,18 +32,34 @@ export async function initHome(parent, handle) {
   return layout;
 }
 
+const VAULT_COMMAND = fileURLToPath(new URL('../vault/bin/ohm.mjs', import.meta.url));
+const CORTEX_COMMAND = fileURLToPath(new URL('../cortex/bin/cortex.mjs', import.meta.url));
+
+// Which program runs a command line, and with what.
+export function route(args) {
+  const [command, ...rest] = args;
+  if (command === 'init' || command === 'where') return { home: command, rest };
+  if (command === 'cortex') return { program: CORTEX_COMMAND, args: rest };
+  return { program: VAULT_COMMAND, args };
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [command, ...rest] = process.argv.slice(2);
+  const routed = route(process.argv.slice(2));
+  if (routed.program) {
+    const ran = spawnSync(process.execPath, [routed.program, ...routed.args], { stdio: 'inherit' });
+    process.exit(ran.status ?? 1);
+  }
+  const rest = routed.rest;
   try {
-    if (command === 'init' && rest[0]) {
+    if (routed.home === 'init' && rest[0]) {
       const layout = await initHome(rest[1] ?? homedir(), rest[0]);
       console.log(JSON.stringify(layout, null, 2));
-    } else if (command === 'where') {
+    } else if (routed.home === 'where') {
       const layout = findHome(rest[0] ?? process.cwd());
-      if (!layout) { console.error('Not in a home. Make one with: ohmmmm init <handle>'); process.exitCode = 1; } else console.log(JSON.stringify(layout, null, 2));
+      if (!layout) { console.error('Not in a home. Make one with: init <handle>'); process.exitCode = 1; } else console.log(JSON.stringify(layout, null, 2));
     } else {
-      console.log('ohmmmm init <handle> [parent] | where [folder]');
-      if (command) process.exitCode = 1;
+      console.log('init <handle> [parent] | where [folder] | cortex <command> | any vault command');
+      process.exitCode = 1;
     }
   } catch (problem) {
     console.error(problem instanceof HomeProblem || problem?.code ? problem.message : problem);

@@ -24,6 +24,7 @@ One list for the vault, the cortex and the account app. When a part needs a word
 ## In the cortex
 
 - **Identity**, **memory**, **skill**, **tool**, **playbook**, **working** memory: the cortex's own files.
+- **Observation:** what an agent saw, waiting to be settled into a memory or dropped (`cortex_observe`). Formerly "note", which clashed with notes in a vault.
 - **Inference:** what the cortex concludes, kept as cortex nodes pointing at what they were drawn from. Never a connection in the vault.
 - **Node:** any block, and any file of the cortex.
 - **Journal** (`.cortex/journal.jsonl`): the cortex's own, apart from the vault's.

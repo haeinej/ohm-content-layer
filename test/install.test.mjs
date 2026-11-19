@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { route } from '../bin/ohmmmm.mjs';
 
 const json = path => JSON.parse(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'));
 
@@ -19,4 +20,15 @@ test('the plugin marketplace at the root points at the vault plugin', () => {
   assert.equal(plugin.source, './vault');
   assert.equal(json('vault/.claude-plugin/plugin.json').name, plugin.name);
   assert.ok(existsSync(new URL('../vault/.mcp.json', import.meta.url)) && existsSync(new URL('../vault/skills', import.meta.url)));
+});
+
+test('npx runs the command named after the package, which hands each command line to the right program', () => {
+  assert.equal(json('package.json').name, 'ohmmmm');
+  assert.ok(json('package.json').bin.ohmmmm);
+  assert.deepEqual(route(['init', 'alice.example.com']), { home: 'init', rest: ['alice.example.com'] });
+  assert.match(route(['cortex', 'status']).program, /cortex\/bin\/cortex\.mjs$/);
+  assert.deepEqual(route(['cortex', 'status']).args, ['status']);
+  assert.match(route(['vault', 'index']).program, /vault\/bin\/ohm\.mjs$/);
+  assert.deepEqual(route(['vault', 'index']).args, ['vault', 'index']);
+  assert.deepEqual(route([]).args, []);
 });

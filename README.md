@@ -1,43 +1,75 @@
 # ohmmmm
 
-A person's home in ohm: one folder, `ohmmmm.<handle>`, holding their **vault** and their **cortex** side by side.
+A personal knowledge home on AT Protocol. What a person thinks and keeps (their **vault**), and what an agent knows about them (their **cortex**), in one folder they own, read by any agent, and published only when they say so.
 
 ```
 ohmmmm.alice.example.com/
-├── vault/     blocks and channels: what the person thinks and keeps (canonical)
-└── cortex/    identity, memory, skills: what an agent knows about the person
+├── vault/     blocks and channels: what you think and keep. Canonical
+└── cortex/    identity, memory, skills, tools: what an agent knows about you
 ```
 
-- The **vault** is canonical. Blocks live there, in three layers chosen by each block's `visibility`: public (a `com.ohmmmm.post` on the PDS), friends (readable on the vault service) and private (end-to-end encrypted, keys only on the person's devices). Code and docs: [vault/](vault/README.md).
-- The **cortex** never holds what belongs in the vault. It reads the vault through one small, read-only contract, and keeps its own memories, which point at blocks by ID. Code and docs: [cortex/](cortex/README.md).
-- Sign-in, onboarding, grants and the private vault's keys are in the account app, [ohm-onboarding](https://github.com/haeinej/ohm-onboarding).
+This repository holds the software for both, and the thin layer that joins them.
 
-This repository joins what were two: `haeinej/ohm-vault` is in `vault/` and `haeinej/ohm-cortex` in `cortex/`, each with its history (`git log --follow vault/…`).
+| Folder | What it is |
+| --- | --- |
+| [`vault/`](vault/README.md) | The vault: blocks, channels, entities and sources as Markdown files; the `ohm` command; the vault service (Cloudflare Worker and D1); publishing to your PDS as `com.ohmmmm.post`; the Claude Code plugin |
+| [`cortex/`](cortex/README.md) | The cortex: a folder an agent keeps about the person it works for; the `cortex` command, its MCP server and hooks |
+| [`home/`](home/home.mjs) | Naming, finding and making a home, `ohmmmm.<handle>` |
+| [`contract/`](contract/vault-reader.mjs) | The vault reader contract: the one way cortex reads a vault |
+| [`docs/words.md`](docs/words.md) | One word list for every part |
+
+Sign-in, onboarding, agent grants and the keys of the private layer are in the account app, [ohm-onboarding](https://github.com/haeinej/ohm-onboarding).
+
+## Three layers
+
+Each block's `visibility` decides where it is kept and who can read it ([vault/plans/encryption.md](vault/plans/encryption.md)):
+
+| Layer | Who reads it | Kept |
+| --- | --- | --- |
+| **Public** | Anyone | A `com.ohmmmm.post` on your PDS |
+| **Friends** | You, the friends you chose, and the vault service | The vault service, readable, checked by DID |
+| **Private** (the default) | Your devices only | The vault service, as ciphertext it cannot open |
+
+Private blocks are sealed on your device. The service keeps them as `{ id, ciphertext, version }`: changes to several files land together or not at all, every version is kept for restoring, the journal of changes is sealed too, and rotating your key re-wraps all of it. The keys stay on your devices; the account app keeps only copies wrapped by your unlock passkeys and your recovery code.
 
 ## Start a home
 
+Node 22.13 or newer.
+
 ```sh
-node bin/ohmmmm.mjs init alice.example.com        # makes ~/ohmmmm.alice.example.com
+npx github:haeinej/ohm-vault init alice.example.com   # makes ~/ohmmmm.alice.example.com
 cd ~/ohmmmm.alice.example.com
-node <this repo>/vault/bin/ohm.mjs vault index    # finds ./vault by itself
-node <this repo>/cortex/bin/cortex.mjs status     # finds ./cortex, and reads ./vault by itself
+npx github:haeinej/ohm-vault vault index               # the vault finds ./vault by itself
+npx github:haeinej/ohm-vault cortex status             # the cortex finds ./cortex, and reads ./vault
 ```
 
-Inside a home (or with `OHMMMM_HOME` set), `ohm vault …` uses the home's `vault/` and `cortex …` uses its `cortex/`. A cortex in a home reads the sibling vault through the vault's own reader unless `.cortex/vault.json` names another. Either folder still works on its own, as before.
+`npx github:haeinej/ohm-vault` runs `bin/ohmmmm.mjs`: `init` and `where` are its own, `cortex …` goes to the cortex, and every other command to the vault's `ohm` (`vault`, `publish`, `sync`, `mcp`…), so commands written for ohm-vault still work. From a checkout, use `node bin/ohmmmm.mjs`, or `node vault/bin/ohm.mjs` and `node cortex/bin/cortex.mjs` directly.
 
-## What is shared
+Inside a home, or with `OHMMMM_HOME` set, the vault and the cortex each find their own folder, and a cortex reads its sibling vault through the vault's reader unless `.cortex/vault.json` names another. Either folder still works on its own.
 
-| | Where | Used by |
-| --- | --- | --- |
-| The home: naming, finding, making | [home/home.mjs](home/home.mjs) | `bin/ohmmmm.mjs`, `ohm vault`, `cortex` |
-| The vault reader contract | [contract/vault-reader.mjs](contract/vault-reader.mjs) | cortex checks a vault against it; the vault's reader answers it |
-| The words | [docs/words.md](docs/words.md) | both |
+To use it from Claude Code, add this repository as a plugin marketplace; the plugin is the vault's ([vault/.claude-plugin/](vault/.claude-plugin/plugin.json)).
 
-## Tests
+## How the parts meet
+
+- **The vault is canonical.** Cortex never copies what a block says; its memories point at blocks by ID.
+- **Cortex only reads the vault**, through `shape`, `read`, `exists`, `changes`, `profile` and optionally `search` ([contract/vault-reader.mjs](contract/vault-reader.mjs)). Saving content is the vault's own job.
+- **History belongs to whoever owns what changed.** The vault keeps versions, the journal and daily autosaves for blocks and channels; cortex keeps its own pages' history.
+- **Evidence and inference stay apart.** What the content shows (a channel holds a block, a block links to another) is the vault's; what a model concludes is a cortex node pointing at that evidence.
+
+## Develop
 
 ```sh
 npm ci --prefix vault && npm ci --prefix vault/service
-npm test        # the home and contract, then vault, then cortex
+npm test            # the home and install checks, then the vault, then the cortex
 ```
 
-Node 22.13 or newer.
+Read [AGENTS.md](AGENTS.md) first, then the part you are changing: [vault/AGENTS.md](vault/AGENTS.md) or [cortex/AGENTS.md](cortex/AGENTS.md).
+
+## Where this came from
+
+This repository joins two that were separate, each with its full history (`git log --follow vault/…`, `git log --follow cortex/…`): `haeinej/ohm-vault`, now `vault/`, and `haeinej/ohm-cortex`, now `cortex/` (archived).
+
+## Status
+
+- Built and tested locally: the home, the shared contract, the vault and its service, the friends layer, the private store, and the cortex.
+- Not yet: the private store is not deployed and its migration is not applied; it has not run together with the account app; the editor ([ohm-ux](https://github.com/haeinej/ohm-ux)) still runs on sample data.
