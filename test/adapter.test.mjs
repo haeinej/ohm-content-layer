@@ -200,7 +200,7 @@ test('tracking is per session: another session\'s start, ask or distill never co
   assert.ok(asked(run('stop', dir, 'claude-code', claude.stop('c')).out));
 });
 
-test('session-start answers in full without .cortex/, and when the session log cannot be written', async () => {
+test('session-start answers in full without .cortex/, and when the journal cannot be written', async () => {
   const dir = await fresh();
   await rm(join(dir, '.cortex'), { recursive: true, force: true });
   const { status, out } = run('session-start', dir, 'claude-code', claude['session-start']('s1'));
@@ -213,10 +213,7 @@ test('session-start answers in full without .cortex/, and when the session log c
   const broken = run('session-start', dir, 'codex', codex['session-start']('s2'));
   assert.equal(broken.status, 0);
   assert.match(contextOf(broken.out), /## Identity/);
-  // A distill whose record cannot be written still saves, and does not throw.
-  const done = await distill(dir, 'codex', 'Left for next time.');
-  assert.equal(done.working.agent, 'codex');
-  assert.equal((await openCortex(dir, { actor: 'codex' }).working()).mine.text, 'Left for next time.');
+  assert.equal((await lines(dir)).length, 1, 'the second start could not be recorded, and the hook still answered');
 });
 
 test('prompt answers with nothing, without waiting for standard input', async () => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appendFile, cp, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -107,4 +107,75 @@ test('a cortex made before the journal keeps its notes, settlements and sessions
   assert.match(stop(), /cortex_distill/);
   assert.equal(stop(), '', 'asked once; the ask is in the journal');
   assert.equal((await journal(dir)).filter(line => line.type === 'session' && line.event === 'ask').length, 1);
+});
+
+test('every write to the cortex is a change line: node, op, versions before and after, and who', async () => {
+  const dir = await fresh();
+  const vault = join(dir, '..', 'vault');
+  await mkdir(join(vault, 'essays'), { recursive: true });
+  await writeFile(join(vault, 'essays', 'one.md'), '---\nid: "p1"\ntitle: "On slowness"\n---\nWalking is slow.\n');
+  const person = openCortex(dir, { actor: 'member' });
+  const agent = openCortex(dir, { actor: 'claude-code' });
+  const changes = async () => (await journal(dir)).filter(line => line.type === 'change');
+  const last = async () => (await changes()).at(-1);
+
+  // Memory: create, update, the seen count when settled, remove.
+  const memory = { name: 'likes-short-titles', description: 'Titles of four words or fewer', kind: 'preference', stated: true, body: 'Short titles.' };
+  const one = await agent.write(memory);
+  assert.deepEqual(await last().then(line => [line.node, line.op, line.before, line.after, line.actor]), ['memory/likes-short-titles.md', 'create', null, one.version, { kind: 'agent', name: 'claude-code' }]);
+  const two = await agent.write({ ...memory, body: 'Short titles, no colons.' }, { replaces: one.version });
+  assert.deepEqual(await last().then(line => [line.op, line.before, line.after]), ['update', one.version, two.version]);
+  await agent.addNote({ id: 'n1', note: 'Cut a title short again', session: 's1' });
+  await agent.settle({ notes: [{ id: 'n1', outcome: 'likes-short-titles' }] });
+  const seen = await last();
+  const three = (await agent.read('likes-short-titles')).version;
+  assert.deepEqual([seen.op, seen.before, seen.after, seen.reason], ['update', two.version, three, 'seen again in 1 settled note']);
+  assert.equal((await agent.read('likes-short-titles', { version: two.version })).version, two.version, 'the version before the count is kept');
+  await agent.remove('likes-short-titles', { replaces: three });
+  assert.deepEqual(await last().then(line => [line.op, line.before, line.after]), ['remove', three, null]);
+
+  // Working memory: create, update, clear.
+  const w1 = await agent.writeWorking('Filing two notes.');
+  const w2 = await agent.writeWorking('Filing two notes. One done.', { replaces: w1.version });
+  await agent.writeWorking('', { replaces: w2.version });
+  assert.deepEqual((await changes()).slice(-3).map(line => [line.node, line.op, line.before, line.after]), [
+    ['.cortex/working/claude-code.md', 'create', null, w1.version],
+    ['.cortex/working/claude-code.md', 'update', w1.version, w2.version],
+    ['.cortex/working/claude-code.md', 'remove', w2.version, null],
+  ]);
+
+  // Identity, by the person.
+  await person.proposeIdentity({ field: 'city', value: 'Lisbon', source: { kind: 'person', quote: 'I live in Lisbon' } });
+  await person.confirmIdentity('city');
+  const identity = await last();
+  assert.deepEqual([identity.node, identity.op, identity.actor, identity.after], ['identity.md', 'update', { kind: 'human', name: 'member' }, (await person.identity()).version]);
+
+  // vault.md: written when the vault is connected, and when a channel is described.
+  await person.connectVault({ kind: 'folder', path: vault });
+  const map = await last();
+  assert.deepEqual([map.node, map.op, map.before], ['vault.md', 'create', null]);
+  await agent.describeSection({ section: 'essays', meaning: 'Finished essays, one idea each' });
+  const described = await last();
+  assert.deepEqual([described.node, described.op, described.before, described.actor.name], ['vault.md', 'update', map.after, 'claude-code']);
+  assert.match(described.reason, /essays/);
+
+  // Skill and tool proposals, and approving a skill.
+  const skill = '---\nname: file-a-receipt\ndescription: How receipts are filed\n---\nFile by month.\n';
+  const p1 = await agent.proposeSkill({ text: skill });
+  const p2 = await agent.proposeSkill({ text: `${skill}Keep the total.\n` });
+  assert.deepEqual((await changes()).slice(-2).map(line => [line.node, line.op, line.before, line.after]), [
+    ['.cortex/proposed/skills/file-a-receipt', 'create', null, p1.version],
+    ['.cortex/proposed/skills/file-a-receipt', 'update', p1.version, p2.version],
+  ]);
+  await person.approveSkill('file-a-receipt');
+  assert.deepEqual((await changes()).slice(-2).map(line => [line.node, line.op, line.actor.kind]), [['.cortex/proposed/skills/file-a-receipt', 'remove', 'human'], ['skills/file-a-receipt', 'create', 'human']]);
+  await agent.proposeTool({ name: 'calendar', description: 'Reads the calendar', inputs: 'A day', outputs: 'Events' });
+  assert.deepEqual(await last().then(line => [line.node, line.op]), ['.cortex/proposed/tools/calendar.md', 'create']);
+
+  // Each line's before is the after of the line before it for the same node.
+  const all = await changes();
+  for (const [index, line] of all.entries()) {
+    const previous = all.slice(0, index).filter(other => other.node === line.node).at(-1);
+    if (previous) assert.equal(line.before, previous.after, `${line.node} at ${line.seq}`);
+  }
 });

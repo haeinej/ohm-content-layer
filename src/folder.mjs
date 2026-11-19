@@ -68,6 +68,11 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     const stamp = now().toISOString().replace(/[:.]/g, '-');
     await put(at('.cortex', 'history', kind, name, `${stamp}_${version}.md`), content);
   }
+  // Every write to a file of the cortex is also a change line in the journal: the node (its path in
+  // the folder), what was done, its version before and after, who did it, and why when cortex knows.
+  // memory/MEMORY.md is not a node: it is generated from the memories, whose changes are recorded.
+  const logChange = (node, op, before, after, reason) => journal.append(actor, 'change', { node, op, before: before ?? null, after: after ?? null, ...(reason ? { reason } : {}) });
+  const fileVersion = content => cortexVersion({ file: content });
   const earlier = async (kind, name) => (await names(at('.cortex', 'history', kind, name)))
     .map(entry => entry.name).filter(file => file.endsWith('.md')).sort().reverse()
     .map(file => ({ file, version: file.slice(file.indexOf('_') + 1, -3), replacedAt: file.slice(0, file.indexOf('_')) }));
@@ -186,6 +191,13 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     openedVault = parsed ? vaultFrom(parsed) : null;
     return openedVault;
   }
+  // vault.md, rewritten whole. The text it replaces is kept.
+  async function putMap(content, next, reason) {
+    const before = content === null ? null : await fileVersion(content);
+    if (content !== null) await keep('vault-map', 'vault', content, before);
+    await put(at('vault.md'), next);
+    await logChange('vault.md', content === null ? 'create' : 'update', before, await fileVersion(next), reason);
+  }
   const short = value => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
   const meaningsLog = at('.cortex', 'vault-meanings.jsonl');
   async function agentWords() {
@@ -211,7 +223,9 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     const next = { ...properties };
     if (value === undefined) delete next[field]; else next[field] = value;
     if (content) await keep('identity', 'identity', content, version);
-    await put(at('identity.md'), writeIdentity(next, body));
+    const written = writeIdentity(next, body);
+    await put(at('identity.md'), written);
+    await logChange('identity.md', content ? 'update' : 'create', content ? version : null, (await readIdentity(written)).version);
   }
   async function waitingFor(ref) {
     const waiting = await cortex.identityProposals();
@@ -227,6 +241,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
   // Working memory: one file for each agent, named for it, so two agents never write over each other.
   const fileName = agent => String(agent).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'agent';
   const workingPath = agent => at('.cortex', 'working', `${fileName(agent)}.md`);
+  const workingNode = agent => `.cortex/working/${fileName(agent)}.md`;
   async function workingOf(agent) {
     const content = await text(workingPath(agent));
     if (content === null) return null;
@@ -244,10 +259,13 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       if (!held) return { agent: fileName(actor), version: null, unchanged: true };
       if (!keepEarlier) await keep('working', held.agent, held.text, held.version);
       await rm(workingPath(actor));
+      await logChange(workingNode(actor), 'remove', held.version, null);
       return { agent: fileName(actor), version: null, cleared: true };
     }
     await put(workingPath(actor), textGiven);
-    return { agent: fileName(actor), version: (await workingOf(actor)).version };
+    const { version } = await workingOf(actor);
+    await logChange(workingNode(actor), held ? 'update' : 'create', held?.version, version);
+    return { agent: fileName(actor), version };
   }
 
   const cortex = {
@@ -387,7 +405,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const known = new Set(shape.sections.map(item => item.section));
       const written = parseMap(content, known);
       const next = writeMap(shape, written);
-      if (next !== content) await put(at('vault.md'), next);
+      if (next !== content) await putMap(content, next, 'counts from the vault');
 
       const { memories } = await all();
       const pointing = id => memories.filter(({ memory }) => memory.posts?.includes(id)).map(({ memory }) => memory.name);
@@ -440,8 +458,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       if (!changes.length) return { section, unchanged: true };
       for (const [field, value] of changes) words[field] = value;
       written.set(section, words);
-      if (content) await keep('vault-map', 'vault', content, short(content));
-      await put(at('vault.md'), writeMap(shape, written));
+      await putMap(content, writeMap(shape, written), `${changes.map(([field]) => field).join(' and ')} of ${section}`);
       await mkdir(dirname(meaningsLog), { recursive: true });
       for (const [field, value] of changes) await appendFile(meaningsLog, `${JSON.stringify({ section, field, text: value, by: actor, when: now().toISOString() })}\n`);
       return { section, ...Object.fromEntries(changes) };
@@ -574,6 +591,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       if ((live?.version ?? null) !== replaces) throw changed('memory', live?.version ?? null);
       if (live) await keep('memory', memory.name, live.content, live.version);
       await put(memoryPath(memory.name), memoryFile(memory));
+      await logChange(`memory/${memory.name}.md`, live ? 'update' : 'create', live?.version, version);
       await reindex();
       return { name: memory.name, version };
     },
@@ -584,6 +602,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       if (live.version !== replaces) throw changed('memory', live.version);
       await keep('memory', name, live.content, live.version);
       await rm(memoryPath(name));
+      await logChange(`memory/${name}.md`, 'remove', live.version, null);
       await reindex();
       return { name, removed: true };
     },
@@ -650,7 +669,9 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       for (const [name, count] of targets) {
         const live = await held(name);
         const memory = { ...live.memory, seen: { count: (live.memory.seen?.count ?? 0) + count, last: when } };
+        await keep('memory', name, live.content, live.version);
         await put(memoryPath(name), memoryFile(memory));
+        await logChange(`memory/${name}.md`, 'update', live.version, await memoryVersion(memory), `seen again in ${count} settled note${count === 1 ? '' : 's'}`);
       }
       for (const item of outcomes) await journal.append(actor, 'decision', { note: item.id, outcome: item.outcome });
       const memories = [];
@@ -679,11 +700,15 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         if (!path || path.startsWith('..') || path.startsWith(sep) || path.split(sep).some(part => part.startsWith('.')) || path === 'SKILL.md' || typeof file.text !== 'string' || bytes(file.text) > 65536) throw new Refused('InvalidSkill', 'Each file beside a skill has a path inside its folder and text of at most 64 KB');
       }
       const root = at('.cortex', 'proposed', 'skills', properties.name);
+      const before = await skillAt(root);
+      if (before) await keep('proposed-skills', properties.name, before.skill.text, before.version);
       await rm(root, { recursive: true, force: true });
       await put(join(root, 'SKILL.md'), content);
       for (const file of files) await put(join(root, normalize(file.path)), file.text);
       await put(join(root, '.proposal.json'), JSON.stringify({ by: actor, when: now().toISOString() }));
-      return { name: properties.name, version: (await skillAt(root)).version, approved: false };
+      const { version } = await skillAt(root);
+      await logChange(`.cortex/proposed/skills/${properties.name}`, before ? 'update' : 'create', before?.version, version);
+      return { name: properties.name, version, approved: false };
     },
 
     // Only the person does this. No tool an agent is given reaches it.
@@ -697,6 +722,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       await rm(at('skills', name), { recursive: true, force: true });
       await mkdir(at('skills'), { recursive: true });
       await rename(root, at('skills', name));
+      await logChange(`.cortex/proposed/skills/${name}`, 'remove', proposed.version, null, `approved into skills/${name}`);
+      await logChange(`skills/${name}`, live ? 'update' : 'create', live?.version, (await skillAt(at('skills', name))).version, 'approved by the person');
       return { name, approved: true, version: proposed.version };
     },
 
@@ -709,7 +736,14 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw new Refused('InvalidRequest', `${field} is text, at most 2,000 characters`);
       }
       if (await text(at('tools', `${name}.md`)) !== null) throw new Refused('NameTaken', 'A tool already has this name');
-      await put(at('.cortex', 'proposed', 'tools', `${name}.md`), writeFront({ name, description, on: false, proposedBy: actor }, `## Takes\n\n${inputs}\n\n## Gives\n\n${outputs}\n`));
+      const path = at('.cortex', 'proposed', 'tools', `${name}.md`);
+      const held = await text(path);
+      const content = writeFront({ name, description, on: false, proposedBy: actor }, `## Takes\n\n${inputs}\n\n## Gives\n\n${outputs}\n`);
+      if (held === content) return { name, proposed: true, unchanged: true };
+      const before = held === null ? null : await fileVersion(held);
+      if (held !== null) await keep('proposed-tools', name, held, before);
+      await put(path, content);
+      await logChange(`.cortex/proposed/tools/${name}.md`, held === null ? 'create' : 'update', before, await fileVersion(content));
       return { name, proposed: true };
     },
   };
