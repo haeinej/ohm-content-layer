@@ -1,0 +1,42 @@
+{
+  "lexicon": 1,
+  "id": "com.ohmmmm.vault.channel",
+  "description": "An ordered collection of blocks and other channels, as on Are.na. A channel is a folder in the vault; its _channel.md file holds these properties, and its body is the channel's description. A folder with no _channel.md is still a channel, with no ID yet. A block is in its folder's channel and in every channel its channels property names.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "maxGraphemes": 300, "maxLength": 3000, "description": "The channel's name. Without one, its folder's name." },
+          "description": { "type": "string", "maxLength": 20000, "description": "Markdown: the body of _channel.md." },
+          "kind": {
+            "type": "string",
+            "description": "collection is the default. A concept channel is an idea you collect toward. An inbox takes new captures. An import channel holds what one connector brought in.",
+            "knownValues": ["collection", "concept", "inbox", "import"]
+          },
+          "order": {
+            "type": "array",
+            "maxLength": 10000,
+            "description": "The order of the channel's items, each a block's slug or a channel's path. Items not listed follow, newest first.",
+            "items": { "type": "string", "maxLength": 300 }
+          },
+          "site": {
+            "type": "ref",
+            "ref": "#site",
+            "description": "Set when the channel is a section of the author's public site."
+          }
+        }
+      }
+    },
+    "site": {
+      "type": "object",
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string", "maxGraphemes": 100, "maxLength": 1000 },
+        "sublabel": { "type": "string", "maxGraphemes": 100, "maxLength": 1000 }
+      }
+    }
+  }
+}

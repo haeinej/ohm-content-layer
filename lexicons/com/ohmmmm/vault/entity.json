@@ -1,0 +1,27 @@
+{
+  "lexicon": 1,
+  "id": "com.ohmmmm.vault.entity",
+  "description": "A person, work, place or organization that many blocks are about. Kept as _entities/<kind>/<slug>.md; its body is your notes on it. An idea is not an entity: it is a concept channel.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["kind", "name"],
+        "properties": {
+          "kind": { "type": "string", "knownValues": ["person", "work", "place", "org"] },
+          "name": { "type": "string", "maxGraphemes": 300, "maxLength": 3000 },
+          "aliases": {
+            "type": "array",
+            "maxLength": 64,
+            "description": "Other names and @handles a block may use for it.",
+            "items": { "type": "string", "maxLength": 300 }
+          },
+          "uri": { "type": "string", "maxLength": 2000, "description": "What identifies it outside: a DID, a Wikidata ID, an address." },
+          "body": { "type": "string", "maxLength": 262144 }
+        }
+      }
+    }
+  }
+}

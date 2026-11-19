@@ -29,6 +29,7 @@ are the outcomes the module boundaries and failure checks protect.
 | --- | --- | --- |
 | Commands and configuration | [bin](../bin/ohm.mjs), [scripts](../scripts/) | One command entry point finds the owner's configuration; individual commands keep their distinct write permissions. |
 | Post files, versions, folder sync or publication proposals | [vault](../vault/) | Shared transformations keep file identity and record identity consistent across the browser, CLI and agents. |
+| Blocks, channels, entities, sources and their connections | [vault folder format](vault-format.md), [node.mjs](../vault/node.mjs) | The vault's own format for thinking, Are.na style; posts are one kind of block, read by the post code. |
 | The member API or editor | [service](../service/README.md) | Authentication and durable member storage belong at the service boundary; the editor adds draft and navigation behavior. |
 | Agent tools | [mcp](../mcp/) | MCP composes the same service operations, including previews and confirmations, rather than inventing another data store. |
 | Public records and post addresses | [feed](../feed/), [labels](labels.md) | Public readers resolve the owner's records and their label-derived addresses. |

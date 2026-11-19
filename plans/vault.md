@@ -58,6 +58,8 @@ What I used for the board review. Joins on `account_id`, not `user_id`, because 
 
 - **`kind`**: `text` (your writing), `excerpt`, `link`, `media`, `file`, `code`, `post`. The same idea as Are.na's Text / Link / Image / Attachment, plus `code` and `excerpt`.
 - **`channels`**: every channel the block is in, besides its folder. Many-to-many, as on Are.na; the folder is only the first one, and gives the published address.
+- **`from`** and **`excerpt`**: the source a block was captured from, and the exact words kept from it.
+- A channel's `_channel.md` holds its `title`, `kind`, `order` and `site`; its body is the description.
 - **`origin`**: where the original lives when it is not this file. One of: a local path, a Google Drive path (`gdrive:My Drive/…` or the mounted path), a URL, an `at://` URI.
 - Links are `[[slug]]` / `[[slug|words]]`, mentions `@handle`, embeds `![[file]]`: the same syntax ohm-ux and Obsidian use.
 
@@ -134,8 +136,8 @@ These replace the `com.ohmmmm.brain.*` names in `personal-brain.md` (namespace d
 
 ## Steps
 
-1. Rename to ohm-vault, remove the cortex MVP and the zombies (separate change, no new behaviour).
-2. Lexicons for block, channel, source, entity; extend `vault/file.mjs` to read and write them. Today's posts read as `kind: post` blocks with the same IDs, labels as channels.
+1. ~~Rename to ohm-vault, remove the cortex MVP and the zombies.~~ Done.
+2. ~~Lexicons for block, channel, source, entity, and the folder format.~~ Done: `lexicons/com/ohmmmm/vault/`, `vault/node.mjs`, [human guide](../docs/vault-format.md), [agent reference](../docs/agents/vault-format.md). Posts read as `kind: post` blocks with the same IDs, through the unchanged post code.
 3. `.vault/config.json` roots and the indexer (`index.sqlite`: nodes, evidence edges, FTS, stats).
 4. Implement cortex's vault contract over the index, so `cortex vault connect ~/Vault` works unchanged.
 5. Local MCP: `vault_search`, `vault_read`, `vault_neighbors`, `vault_capture`, `vault_collect`.

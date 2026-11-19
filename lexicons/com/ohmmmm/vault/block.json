@@ -1,0 +1,70 @@
+{
+  "lexicon": 1,
+  "id": "com.ohmmmm.vault.block",
+  "description": "One unit of thought in a vault: something you wrote, a passage you kept, a link, a file, a piece of code, or a post. Kept as a Markdown file in the vault's folder and never written to a PDS; publishing makes a com.ohmmmm.post from it. The folder a block's file is in is its home channel. The file's name is its slug.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["body"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "What the block is. Read from the content when not given: one fenced code block is code, one embedded file is file or media, one address is link, otherwise text. A file with a visibility property is a post. Treat a kind you do not know as text.",
+            "knownValues": ["text", "excerpt", "link", "media", "file", "code", "post"]
+          },
+          "title": { "type": "string", "maxGraphemes": 300, "maxLength": 3000 },
+          "body": {
+            "type": "string",
+            "maxLength": 262144,
+            "description": "Markdown as Obsidian reads it: CommonMark with footnotes, fenced code in any language, [[slug]] and [[slug|words]] links, ![[file]] embeds, @handle mentions and #tags."
+          },
+          "channels": {
+            "type": "array",
+            "maxLength": 64,
+            "description": "Channels the block is in besides its home channel, each as a channel's path in the vault, such as writing/collisions.",
+            "items": { "type": "string", "maxLength": 300 }
+          },
+          "origin": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Where the original lives when it is not this file: a local path (absolute or starting ~/), a Google Drive path (gdrive:My Drive/...) or the Drive folder's mounted path, an HTTP(S) address, or an AT URI. Size, time and hash of the original are kept in the vault's index, not here."
+          },
+          "from": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "The ID of the source this block was captured from."
+          },
+          "excerpt": { "type": "ref", "ref": "#excerpt" },
+          "tags": { "type": "array", "maxLength": 64, "items": { "type": "string", "maxLength": 100 } },
+          "by": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Who made the block: me, or agent:<name>. An agent's block starts with status proposed."
+          },
+          "status": { "type": "string", "knownValues": ["proposed", "kept", "archived"] },
+          "intent": {
+            "type": "string",
+            "description": "Who the author means the block for when it is published. Not access control.",
+            "knownValues": ["private", "friends", "public"]
+          },
+          "created": { "type": "string", "format": "datetime" },
+          "updated": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "excerpt": {
+      "type": "object",
+      "description": "The exact words kept from a source, with the text around them, so the passage can be found again when the source's text is captured anew.",
+      "required": ["quote"],
+      "properties": {
+        "quote": { "type": "string", "maxLength": 20000 },
+        "prefix": { "type": "string", "maxLength": 200 },
+        "suffix": { "type": "string", "maxLength": 200 },
+        "position": { "type": "integer", "minimum": 0, "description": "Where the quote starts in the source's text, in characters." }
+      }
+    }
+  }
+}
