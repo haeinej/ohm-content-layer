@@ -11,7 +11,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: npm ci --prefix app
+      - run: npm --prefix app test
       - run: npm ci --prefix vault
       - run: npm ci --prefix vault/service
-      - run: npm ci --prefix app
       - run: npm test

@@ -58,11 +58,13 @@ the vault service and friends. Publication starts with `publishPlan`, which
 previews the changes. The member-facing confirmation and publishing flows can
 use these operations when connected.
 
-The app-only production build needs `npm ci --prefix app` followed by
-`npm --prefix app run build`. Vite resolves the shared vault renderer's Markdown
-packages from the app install. For all tests, install the vault and vault
-service dependencies as listed in the [root README](../../../README.md) and
-run `npm test`. The app typecheck includes test files. Adapter tests cover
+After `npm ci --prefix app`, run `npm --prefix app run build` and
+`npm --prefix app test` with only the app installed. Vite and the Node test
+resolver both use the app's Markdown packages when loading the shared vault
+renderer. CI runs the app tests before installing vault dependencies. For the
+whole repository suite, install the vault and vault service dependencies as
+listed in the [root README](../../../README.md) and run `npm test`. The app
+typecheck includes test files. Adapter tests cover
 the selected workspace, compare-and-set, XRPC routing and a synthetic keys
 fixture. Live sign-in, the account app's unlock screens, and publishing
 await app integration and live verification. Kept versions in the service
