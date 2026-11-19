@@ -223,7 +223,9 @@ function BlockMenu({ editor, block, updated, onClose }: { editor: Editor; block:
 export function PageEditor({ doc }: { doc: Doc }) {
   const { agentsAllowed, offered } = useWorkspace()
   const editable = isBlock(doc) && doc.visibility === "private"
-  const title = doc.title
+  const [titleDraft, setTitleDraft] = useState<string | null>(null)
+  // The vault trims the saved title. Keep spaces in the input while the saved title matches.
+  const title = editable && titleDraft?.trim() === doc.title ? titleDraft : doc.title
   const [plusOpen, setPlusOpen] = useState(false)
   const [iconOpen, setIconOpen] = useState(false)
   const [block, setBlock] = useState<{ node: PMNode; pos: number } | null>(null)
@@ -431,7 +433,12 @@ export function PageEditor({ doc }: { doc: Doc }) {
               </Popover>
             )}
             <textarea ref={titleRef} rows={1} value={title} readOnly={!editable} placeholder="Untitled block" aria-label="Title"
-              onChange={e => autosave(doc.id, { title: e.target.value })}
+              onChange={e => {
+                const next = e.target.value
+                setTitleDraft(next)
+                autosave(doc.id, { title: next })
+              }}
+              onBlur={() => setTitleDraft(null)}
               onKeyDown={e => {
                 if (e.key === "Enter" || (e.key === "ArrowDown" && e.currentTarget.selectionStart === title.length)) {
                   e.preventDefault()

@@ -70,7 +70,7 @@ Every block opens in the main panel in one block editor, built after the referen
 - **Dropping.**
   - **Images** dropped or pasted onto the block go in where they land. Image in the toolbar or `/` opens a file picker.
   - **Blocks and files:** dropping a `.md` or `.txt` file, or a block from the tree, opens it. A veil says what the drop will do.
-- **Title.** "Untitled block" until it has one; Enter moves into the block. Hover it to add an emoji icon.
+- **Title.** "Untitled block" until it has one. Type a title with spaces between words, then press Enter to move into the block. Hover the title to add an emoji icon.
 - **Writing.** The empty line says "Type / for commands or @ for mentions". `/` opens the insert menu at the caret, grouped (Generate, Create, Media, Basic) and filtered as you type, with arrows and Enter.
 - **Block handle.** Each block has a handle on hover. Drag it to move the block. Click it for its menu:
   - **Any block:** Insert below, Duplicate, Copy as Markdown, Delete.

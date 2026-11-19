@@ -38,7 +38,7 @@ npm --prefix app run dev   # http://localhost:5190
 
 ## Blocks, channels and history
 
-Choose **New block** to start a private draft. From a channel's menu, **New block here** uses that channel as the block's home. A block can appear in several channels, each with its own order. To name the block, choose **Rename** from any of its rows. A post is a published block.
+Choose **New block** to start a private draft. Type a title in the editor and press Enter to start writing. The title saves as you type, and you can also change it with **Rename** on any of the block's rows. From a channel's menu, **New block here** uses that channel as the block's home. A block can appear in several channels, each with its own order. A post is a published block.
 
 Choose **Home**, then **History**, to see sample changes by date or author. A block's clock opens its own vault versions. Cortex files have their own history. The connections card can show a sample cortex inference whose evidence cites a block version.
 
