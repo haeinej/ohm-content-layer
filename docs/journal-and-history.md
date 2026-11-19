@@ -1,15 +1,19 @@
-# Cortex, history and traces: one path
+# Cortex and history: one path
 
-Written 19 November 2026. A proposal, nothing here is built. It joins three things that are now separate: the cortex, version history, and agent traces. It goes with [the personal brain plan](https://github.com/haeinej/ohm-content-layer/blob/main/plans/personal-brain.md) in ohm-content-layer.
+Written 19 November 2026 as a proposal, and changed the same day as the owner decided its details. It joins what were separate: the cortex, version history, and what agents did. It goes with [the personal brain plan](https://github.com/haeinej/ohm-content-layer/blob/main/plans/personal-brain.md) in ohm-content-layer. Steps 2 and 3 of the order below are built in ohm-cortex, with evidence from step 4, every edit going through the person, and sessions with dead ends; see "Built" at the end. [The guide](guide.md) explains the result for people and agents.
 
-Two things here differ from decisions in [plan.md](plan.md), and need deciding before building:
+One thing here differs from an earlier decision in [plan.md](plan.md), and is now decided:
 
-- **plan.md: when something becomes a memory is judgement in the playbook, not a count in code.** The evidence counts below are proposed as playbook guidance; code would check only that evidence is cited and still exists.
-- **plan.md: cortex is not synced with ohm.** Sync below stays optional and off unless chosen.
+- **plan.md said memory needs no review.** Now every edit goes through the person: an agent proposes, and nothing in the folder changes until the person accepts. Working memory is the one exception, kept open in plan.md.
 
-## What exists today
+Two earlier decisions still hold:
 
-There are two cortexes. **ohm-cortex (B) is the cortex.** The one in ohm-content-layer (A) was the first MVP and will not be used; it is listed only so nothing in it is mistaken for current.
+- **When something becomes a memory is judgement in the playbook, not a count in code.** The evidence counts below are playbook guidance; code checks only that cited evidence is well formed and exists.
+- **Cortex is not synced with ohm.** Sync below stays optional and off unless chosen.
+
+## What existed
+
+There were two cortexes. **ohm-cortex (B) is the cortex.** The one in ohm-content-layer (A) was the first MVP and will not be used; it is listed only so nothing in it is mistaken for current.
 
 | | A · ohm-content-layer cortex | B · ohm-cortex (`~/development/cortex`) |
 | --- | --- | --- |
@@ -19,22 +23,20 @@ There are two cortexes. **ohm-cortex (B) is the cortex.** The one in ohm-content
 | Hooks | Designed in `plans/build-plan.md`, not built here | Built: `session-start`, `prompt` (empty), `stop` (asks to distill once per change), `session-end`. Not yet tried in a real session |
 | Status | B's plan says B replaces A's design, and that B does not sync with ohm | 97 tests, CI on Node 20 and 22 |
 
-So hooks exist, in ohm-cortex. A is retired.
+### Overlaps and gaps it found
 
-### Overlaps and gaps
+1. **The same rules were written twice,** in A and B, and had diverged.
+2. **There were too many ways to write memory.** B alone had nine, each writing the folder on its own.
+3. **There were five half-logs:** `.cortex/notes.jsonl`, `.cortex/sessions.jsonl`, `.cortex/history/`, A's version and turn tables, and the vault's `seq`. None recorded who changed what, or what was tried and dropped.
+4. **Evidence meant sessions, not things.** Nothing tied a memory to the blocks it was drawn from.
 
-1. **The same rules are written twice.** Memory format, versions and settlement are in `cortex/core.mjs` and `cortex/store.mjs` (A) and in `src/core.mjs` and `src/folder.mjs` (B). They have already diverged: A checks evidence on the server and has turns; B has working memory, distill and identity.
-2. **There are too many ways to write memory.** B alone has nine: `cortex_remember`, `cortex_working`, `cortex_note`, `cortex_distill`, `cortex_settle`, `cortex_describe_section`, `cortex_propose_identity`, `cortex_propose_skill`, `cortex_propose_tool`. The brain plan would add `brain_connect`, `brain_settle`, `brain_stamp` and `brain_trace`.
-3. **There are already five half-logs:** `.cortex/notes.jsonl` (notes and settlements), `.cortex/sessions.jsonl` (hook starts, asks and distills), `.cortex/history/` (earlier file versions), A's `cortex_memory_versions` and `cortex_turns`, and the vault's `seq`. Each is part of a trace. None records who changed a block, what an agent read, or what was tried and dropped.
-4. **Evidence means sessions, not things.** A memory cites notes, and notes cite sessions. Nothing ties a memory to the blocks it was drawn from, so nothing can say it is out of date.
-
-## The proposal
+## The design
 
 ### 1. One cortex: ohm-cortex
 
-Decided: ohm-cortex is the cortex, folder-first and standalone. The ohm-content-layer cortex (`cortex/`, `mcp/cortex-tools.mjs`, the `cortex_*` tables and `com.ohmmmm.cortex.*` requests, `skills/cortex/`) was the MVP and is retired: nothing new is built on it, and it can be removed once nothing reads it. Rules live in one place, ohm-cortex's `src/core.mjs`.
+Decided: ohm-cortex is the cortex, folder-first and standalone. The ohm-content-layer cortex was the MVP and is retired. Rules live in one place, ohm-cortex's `src/core.mjs`.
 
-The brain folder holds the cortex inside it:
+The brain folder would hold the cortex inside it (step 7, not built; B keeps `.cortex/` for now):
 
 ```
 ~/Brain/
@@ -49,91 +51,107 @@ The brain folder holds the cortex inside it:
 
 B's principle still holds: the cortex holds no content. It points at blocks by ID and version, and never copies them.
 
-### 2. One log: the journal
+### 2. Cortex files are nodes
 
-One append-only file replaces `notes.jsonl`, `sessions.jsonl`, turns, and the changes and traces from the brain plan. Each line has `seq`, `at`, `actor` (`{kind: human|agent, name}`), `session` and `type`:
+Every file of the cortex is a node in the journal, like a block: changes to it are recorded, and it has history, as-of, save, restore and revert. One naming:
+
+| Node | File |
+| --- | --- |
+| `identity` | `identity.md` |
+| `playbook` | `agents/AGENTS.md` (only the person changes it) |
+| `memory/<name>` | `memory/<name>.md` |
+| `working/<agent>` | `.cortex/working/<agent>.md` |
+| `skill/<name>` | `skills/<name>/`, SKILL.md and the files beside it |
+| `tool/<name>` | `tools/<name>.md` |
+| `channel/<path>` | What `vault.md` says a channel means and how blocks there are filed |
+
+`memory/MEMORY.md` and the headings and counts in `vault.md` follow other things and are rebuilt, so they are not nodes.
+
+### 3. One log: the journal
+
+One append-only file replaces `notes.jsonl`, `sessions.jsonl` and turns. Each line has `seq`, a unique `id`, `at`, `actor` (`{kind: human|agent, name}`), `session` when there is one, and `type`:
 
 | `type` | Written by | Holds | Was |
 | --- | --- | --- | --- |
-| `session` | Hooks (start and end), or the editor | Agent, goal, project, outcome, distilled or not | `sessions.jsonl` |
-| `change` | Every store write | Node, op, `before` and `after` versions, changed fields, reason | Nothing (only `history/`) |
-| `trace` | Hooks and the MCP server | `read` (node@version), `search` (query and results), `fetch` (url → source), `attempt` (tried, error) | Nothing |
-| `note` | The agent | One observation, with `evidence` | `notes.jsonl` |
-| `proposal` | The agent | Identity fact, skill, tool, connection or channel, with reason and evidence | Four separate proposal paths |
-| `decision` | The person, or settlement | Accepted, rejected, confirmed, approved, kept or dropped, and why | Settled lines, identity rejects |
-| `stamp` | The person or an agent | A name and a note at this `seq` | Nothing |
+| `proposal` | An agent | One edit, whole: node, op, the version it applies to, the content after, reason, evidence | Four separate proposal paths, and agents writing directly |
+| `decision` | The person, or settlement | A proposal accepted or rejected, by whom and why; or what became of a note | Settled lines, identity rejects |
+| `change` | The person's edit, or an accepted proposal | Node, op, `before` and `after` versions, reason; for an agent's, the proposal and decision | Nothing (only `history/`) |
+| `note` | An agent, or a host | One observation, with `evidence`. It changes no file, so it needs no acceptance | `notes.jsonl` |
+| `session` | An agent, when a task is done or given up | One line of what was done, the proposals and changes it made, and dead ends | `sessions.jsonl`, now only the hooks' checkpoints |
+| `save` | The person or an agent | A name and a note at this `seq`. It changes nothing | Nothing |
 
-- **History is the journal plus `history/`.** "As of a date" means replaying to that day. A stamp is a line. Autosave is not needed because every change is a line. Restore writes a new `change`.
-- **It merges cleanly.** Lines are append-only with IDs, so two machines join by union (B already marks `sessions.jsonl` `merge=union`). That makes sync to ohm, or to Git, a copy, not a merge.
-- **Privacy.** Traces hold what was read and asked. The journal stays private by default, and each type can be marked local-only, as ANVC does per field.
+- **History is the journal plus `history/`.** "As of a date" means replaying to that day. A save is a line. Restore and revert write a new change; nothing is rewritten.
+- **It merges cleanly.** Lines are append-only with IDs, so two machines join by union. That makes sync to ohm, or to Git, a copy, not a merge.
+- **Privacy.** The journal stays private, like the rest of the cortex.
 
-### 3. Capture: hooks first, the MCP server second
+### 4. Every edit goes through the person
 
-| Moment | Hook | Now | Adds |
-| --- | --- | --- | --- |
-| Session start | `SessionStart` | Playbook, identity, always memories, working memory | Opens a `session` line. Adds **stale inferences**, **recent rejections** and **attempts that failed** near this project |
-| Before a prompt | `UserPromptSubmit` | Empty | Later: memories fitted to the prompt |
-| After a tool call | `PostToolUse` (new) | n/a | A `trace` for brain and vault tool calls: what was read, searched or captured, with versions. Never the full output |
-| End of a turn | `Stop` | Asks to distill once per change | Unchanged |
-| Session end | `SessionEnd` | Records the end | Closes the `session` line |
+An agent never writes the folder. Each edit it makes is a `proposal` line holding the whole change. The person reads it and accepts or rejects it; that is a `decision` line. Only an accepted proposal makes a `change` line, and its actor is the agent that proposed it. A proposal whose `before` is no longer the node's version is stale: it cannot be accepted until the agent proposes it again. The person's own edits, from the command line, are changes at once.
 
-The MCP server writes the same traces for its own tools, so an agent without hooks, such as Muse or a web client, is still traced. The rule: **ohm records reads and changes itself; the agent supplies only judgement** (reasons, goals, summaries, notes).
+Working memory is the exception. Each agent rewrites its own all session, and the stop hook asks for a distill when it changed; if each rewrite waited for the person, the hooks could not follow it. It is still a change line, and an agent never writes another's.
 
-### 4. One way to write memory: three levels
+### 5. Capture: hooks, and the agent's own record
 
-This follows your point: evidence is concrete, the model infers between, and the cortex is the inference.
+| Moment | Hook | Does |
+| --- | --- | --- |
+| Session start | `SessionStart` | Playbook, identity, always memories, working memory, and the open dead ends near this folder |
+| Before a prompt | `UserPromptSubmit` | Nothing yet. Later: memories fitted to the prompt |
+| End of a turn | `Stop` | Asks to distill once per change of working memory |
+| Session end | `SessionEnd` | Records nothing |
+
+The hooks keep their checkpoints (start, ask, distill) in `.cortex/hooks.jsonl`, this machine's bookkeeping, not history. Nothing is captured on the agent's behalf. When it finishes a task, or gives it up, the agent writes a `session` line with `cortex_session`, like a commit message: what was done, the IDs of the proposals and changes it made, and dead ends, each with what was tried, why it was dropped, and a command that would show whether it still holds. A later session can mark a dead end resolved. Open dead ends are listed by `cortex_start`, and the session-start hook shows those near the folder it starts in. This is how [ANVC](https://github.com/yodering/anvc) keeps what was tried.
+
+### 6. One way to write memory: three levels
 
 | Level | What | Written by | Rule |
 | --- | --- | --- | --- |
-| **Evidence** | Content edges (contains, links, mentions, from) and the journal (changes, traces) | Nobody writes it on purpose: it comes from content and capture | Checkable and rebuildable |
-| **Working** | Each agent's scratch for this session and the threads left open | The agent, freely (B's `cortex_working`) | Never shown as knowledge |
-| **Inference** | Memories, skills, identity facts, and any claim relating blocks | The agent through notes and settlement; the person directly | Must cite evidence |
+| **Evidence** | Content edges (contains, links, mentions, from) and the journal (changes, sessions) | The person, through content; nobody writes it for them | Checkable and rebuildable |
+| **Working** | Each agent's scratch for this session and the threads left open | The agent, at once (`cortex_working`) | Never shown as knowledge |
+| **Inference** | Memories, skills, identity facts, and any claim relating blocks | The agent proposes through notes and settlement; the person accepts | Must cite evidence |
 
-Evidence on every note and memory becomes a list of pointers: `{ node, version }`, `{ trace }` or `{ session }`.
+Evidence on every note and memory is a list of pointers: `{ node, version }` or `{ session }`.
 
-- **Stated** (the person said it): cites the trace of the prompt where they said it. Becomes memory at once.
-- **Inferred about the person:** two or more sessions, as now.
+- **Stated** (the person said it): the session where they said it. Becomes a memory at once, once accepted.
+- **Inferred about the person:** two or more sessions.
 - **Inferred about knowledge**, such as "slowness ties the essays to the photos": two or more distinct blocks, each pinned to a version.
 - **A skill:** three sessions where the same method was used, cited by session.
-- **An identity fact:** the quote, through its trace.
+- **An identity fact:** the person's words, or the block and passage that state it.
 
-**Freshness:** when a `change` lands on a node a memory pins, that memory is stale. `cortex_start` lists stale memories so the agent re-reads the evidence and either confirms (a new version citing new versions) or rewrites.
+**Freshness (not built):** when a `change` lands on a node a memory pins, that memory is stale. `cortex_start` would list stale memories so the agent re-reads the evidence and proposes a confirmation or a rewrite.
 
-**Dead ends:** a `decision` that rejected something, or an `attempt` that failed, is surfaced at session start and when an agent touches the same node. A rejected pair is never proposed again unless the evidence changed since.
+**Dead ends:** what a session recorded as tried and dropped, and a rejected proposal, are what an agent should not try again unless something changed.
 
-### 5. Fewer tools
+### 7. Tools
 
-| Keep | Change | Remove or fold in |
+| Keep | Change | New |
 | --- | --- | --- |
-| `cortex_start` (adds stale, rejections, attempts) | `cortex_note` takes `evidence` | `cortex_propose_identity`, `cortex_propose_skill`, `cortex_propose_tool`, `brain_connect` → one **`cortex_propose`** with `kind` |
-| `cortex_working`, `cortex_distill` | `cortex_settle` checks evidence rules per kind | `brain_trace` (capture is automatic) |
-| `cortex_recall`, `cortex_remember` (stated only), `cortex_forget` | `cortex_describe_section` becomes describing a channel | `brain_settle` (decisions on proposals go through `cortex_settle`) |
-| `cortex_file_advice`, `cortex_skill` | | The MVP's turn requests |
-| New: `cortex_history` (node, since, actor), `cortex_as_of` (stamp or date), `cortex_stamp` | | |
+| `cortex_start` (adds what waits for the person, and dead ends) | `cortex_remember`, `cortex_forget`, `cortex_settle`, `cortex_describe_channel` (was `cortex_describe_section`), `cortex_propose_skill`, `cortex_propose_tool` now propose | `cortex_history`, `cortex_as_of`, `cortex_save` |
+| `cortex_working`, `cortex_distill` | `cortex_note` and memories take `evidence` | `cortex_restore`, `cortex_revert` (proposals from an agent) |
+| `cortex_recall`, `cortex_skill`, `cortex_file_advice`, `cortex_propose_identity` | | `cortex_session` |
 
-That is about twelve tools instead of eighteen, with one write path for every inference.
+Accepting and rejecting are the person's, from the command line: `cortex proposals`, `cortex accept`, `cortex reject`. No MCP tool does it, because no MCP client is known to be the person. One `cortex_propose` with `kind` (step 6) is still to do.
 
-### 6. How each cortex layer joins the graph
+### 8. How each cortex layer joins the graph
 
 | Node | Points at | Edge (inference) | Its evidence |
 | --- | --- | --- | --- |
 | Memory about knowledge | Blocks, channels, entities | `grounds` | Two or more pinned nodes |
 | Memory about the person | Sessions, blocks they wrote | `grounds` | Two or more sessions, or a stated quote |
-| Note | What it observed | `observes` | One session or trace |
+| Note | What it observed | `observes` | One session, or a node at a version |
 | Skill | Channels and blocks it was used on | `learned` | Three or more sessions |
 | Tool | What it reads and writes | `acts` | Its declaration (person-approved) |
 | Identity fact | You | `about` | A quote |
-| Session | What it changed and read | Shown from the journal, not stored as edges | The journal |
+| Session | What it proposed and changed | Shown from the journal, not stored as edges | The journal |
 
-This is what the ohm-ux graph now draws: grey evidence edges, green cortex edges.
+This is what the ohm-ux graph draws: grey evidence edges, green cortex edges.
 
 ## Order
 
 1. **Remove the MVP cortex** from ohm-content-layer, once the vault editor no longer reads it.
-2. **Journal in B:** write `session`, `note` and `decision` lines; read the old `notes.jsonl` and `sessions.jsonl` for compatibility.
-3. **`change` lines** from every store write, with actor; history views (`cortex_history`, `cortex_as_of`, `cortex_stamp`).
-4. **Evidence on notes and memories**, settlement rules per kind, staleness.
-5. **`PostToolUse` traces** and MCP-side traces; dead ends at session start.
+2. **Journal in B:** `note` and `decision` lines; read the old `notes.jsonl` and `sessions.jsonl` for compatibility. *Built.*
+3. **`change` lines** from every write, with actor; history views (`cortex_history`, `cortex_as_of`, `cortex_save`). *Built, with `cortex_restore` and `cortex_revert`, cortex files as nodes, proposals and decisions.*
+4. **Evidence on notes and memories**, settlement rules per kind, staleness. *Evidence built; settlement rules per kind and staleness not.*
+5. **Sessions and dead ends** from agents, shown at session start. *Built.*
 6. **One `cortex_propose`**; remove the separate proposal tools.
 7. **Brain folder layout**: the cortex inside `~/Brain`; the vault contract reads blocks and channels.
 8. **ohm-ux graph and timeline** read the journal.
@@ -142,5 +160,17 @@ This is what the ohm-ux graph now draws: grey evidence edges, green cortex edges
 ## To decide
 
 - **One folder** (`~/Brain` with `cortex/` inside) or two (B's `~/cortex` beside the brain)? Proposed: one.
-- **What `PostToolUse` keeps** from a tool call: proposed node IDs, versions and queries, never outputs.
-- **Where traces may go:** proposed local-only by default, synced to ohm only if you turn it on.
+- **Whether working memory stays the one direct write.** See plan.md's open decisions.
+
+## Built
+
+On 19 November 2026, in ohm-cortex, on the branch `journal-and-vocabulary`. [plan.md](plan.md) has the details and the decisions made while building.
+
+- **The journal** is `.cortex/journal.jsonl` with `proposal`, `decision`, `change`, `note`, `session` and `save` lines. Lines written as `stamp` before the rename read as saves. Identity proposals still live in `.cortex/identity.jsonl` too, and are mirrored as proposal lines; they are per field, so they are never stale.
+- **Proposals:** every agent edit except its own working memory. The person accepts or rejects with `cortex accept` or `cortex reject` (`confirm` and `approve` still work); the change names the proposal and decision.
+- **History views:** `cortex_history`, `cortex_as_of`, `cortex_save`, `cortex_restore` and `cortex_revert`, and the commands `history`, `as-of`, `save`, `restore` and `revert`.
+- **Sessions:** `cortex_session`; dead ends in `cortex_start` and at session start near the folder.
+- **Evidence** on notes, distilled notes and memories, checked for shape and existence; the counts in §6 are playbook guidance.
+- **Words:** blocks and channels, and `cortex_describe_channel`.
+
+Not built, for later: staleness and settlement rules per kind from step 4; one `cortex_propose` (step 6); the `~/Brain` layout (step 7); the ohm-ux timeline reading the journal (step 8); sync (step 9).
