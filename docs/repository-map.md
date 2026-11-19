@@ -7,7 +7,7 @@ change the editor or an agent tool without accidentally publishing a draft.
 
 This guide helps contributors find the right place to change something and
 recognize when the result is safe to use. For a first personal workspace, start
-with the [human product guide](../public/docs/quick-start.md). For exact ownership,
+with the [human product guide](https://github.com/haeinej/ohm-site/blob/main/docs/quick-start.md). For exact ownership,
 state transitions and checks, use the [agent repository guide](agents/repository-map.md).
 
 ## Follow the person's work
@@ -36,8 +36,8 @@ are the outcomes the module boundaries and failure checks protect.
 | The attached notes interface | [site](../site/) | These files are mounted as Worker assets; they are reached by HTTP routes rather than JavaScript imports. |
 | Scheduled copying from published sources | [mirror](mirror.md) | A configured source reader has its own budget, ownership checkpoints and recovery; it is different from bringing PDS posts into a private vault. |
 | A PDS deployment | [Cirrus](../cirrus/) | Its own package and build wrap the upstream PDS and its durable storage. Root CLI installation does not deploy it. |
-| Public product pages | [public site map](../public/home/README.md) | The live home Worker owns its pages, SEO, join flow and offline assets. |
-| Public documentation | [documentation source](../public/docs/build.py) | One authored source produces HTML, Markdown, the LLM reference and navigation so they agree. |
+| Public product pages | [public site map](https://github.com/haeinej/ohm-site/blob/main/home/README.md) | The live home Worker owns its pages, SEO, join flow and offline assets. |
+| Public documentation | [documentation source](https://github.com/haeinej/ohm-site/blob/main/docs/build.py) | One authored source produces HTML, Markdown, the LLM reference and navigation so they agree. |
 | Reusable agent methods | [skills](../skills/README.md) | Instructions guide agent behavior; they are not a runtime watcher or background service. |
 | Protocol contracts | [lexicons](../lexicons/), [schema layers](schema-layers.md) | Fixed shared schemas preserve compatibility; optional owner schemas describe only the owner's extra fields. |
 | Examples, tests or design rationale | [examples](../examples/), [tests](../test/), [plans](../plans/) | Examples preserve supported shapes, tests exercise failure boundaries, and plans explain intent without claiming it is implemented. |
@@ -65,11 +65,12 @@ package-install hooks do not download missing service dependencies for you.
 
 When returning to an installed checkout, use the [incremental maintenance commands](../README.md#work-on-this-repository) to reuse existing dependencies while respecting both lockfiles. The [Devin blueprint](../.devin/blueprint.yaml) keeps those commands in Git for review. A new checkout still needs both installs; Cirrus remains an optional component check described below.
 
-A small first change is a documentation correction. Edit the authored text in
-`public/docs/build.py`, then run:
+A small first change is a documentation correction. The public sites, ohmmmm.com and
+docs.ohmmmm.com, live in their own repository, [haeinej/ohm-site](https://github.com/haeinej/ohm-site),
+checked out beside this one. Edit the authored text in its `docs/build.py`, then run there:
 
 ```sh
-python3 public/docs/build.py
+npm run docs:build
 npm test
 npm run docs:dev
 ```
@@ -81,8 +82,8 @@ links and the existing header-free reading layout. Inspect the generated diff:
 the HTML, Markdown and LLM versions should tell the same story. If generation
 fails partway, fix its source and rerun before keeping any output.
 
-For public home work, use `npm run home:dev` on port 8790, then
-`npm run home:seo -- http://127.0.0.1:8790`. These commands are owned by the repository
+For public home work, use `npm run home:dev` on port 8790 in ohm-site, then
+`npm run home:seo -- http://127.0.0.1:8790`. These commands are owned by that repository
 and do not depend on a private editor launcher. Local tests and previews require
 no member password or production deployment.
 
@@ -131,5 +132,5 @@ Run checks for the behavior you changed, regenerate references from their source
 and use [document-work](../skills/document-work/README.md) to maintain both the
 human guide and the agent contract. A useful handoff explains the result and the
 remaining recovery boundary, with local checks separated from live verification.
-The [status guide](../public/docs/limits.md) is the product boundary: browser/cloud
+The [status guide](https://github.com/haeinej/ohm-site/blob/main/docs/limits.md) is the product boundary: browser/cloud
 folder sync and planned social flows must not be described as shipped merely because a plan or placeholder exists.

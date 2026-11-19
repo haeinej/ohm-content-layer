@@ -1,5 +1,0 @@
-wrangler.jsonc
-.assetsignore
-.wrangler
-.gitignore
-build.py

@@ -2,7 +2,7 @@
 
 This is the source-checkout maintenance reference for the [human repository guide](../repository-map.md).
 Use [AGENTS.md](../../AGENTS.md) for policy, [service capabilities](../../service/CAPABILITIES.md)
-for exact request metadata, and the [public agent guide](../../public/docs/agent-guide.md)
+for exact request metadata, and the [public agent guide](https://github.com/haeinej/ohm-site/blob/main/docs/agent-guide.md)
 for member-facing tool use. This map explains why paths are retained and where
 state transitions live; it does not replace those contracts. The packaged CLI
 intentionally excludes the backend, public-site source and Cirrus;
@@ -34,8 +34,8 @@ current ID-keyed paths.
 | Hosted member service | [worker](../../service/src/worker.mjs), [capability registry](../../service/src/capabilities/index.mjs), [schema](../../service/schema.sql) | Registry dispatch and D1 state, with browser assets under `service/public/vault/`; service dependencies have their own lock. |
 | Public feed / attached UI | [feed config](../../feed/wrangler.jsonc), [worker](../../feed/worker.mjs), [site](../../site/) | Wrangler mounts assets, cron and routes; absence of JS imports is not dead-code evidence. |
 | Scheduled source mirror | [mirror config](../../mirror/wrangler.jsonc), [sync](../../mirror/sync.mjs), [readers](../../mirror/sources.mjs) | Configured sources, write credentials, budget and KV checkpoints; explicit deployment/source approval is separate from a local build. |
-| Public home | [home config](../../public/home/wrangler.jsonc), [worker](../../public/home/src/worker.js), [site map](../../public/home/README.md) | Six canonical HTML routes plus join/static/alias handling. Home schema path resolves to the root Wrangler dependency. |
-| Public docs | [build.py](../../public/docs/build.py), [public ownership](../../public/README.md) | Edit generator, then regenerate HTML/Markdown/LLM/navigation. `.assetsignore` excludes generator/config from docs assets. |
+| Public home | [home config](https://github.com/haeinej/ohm-site/blob/main/home/wrangler.jsonc), [worker](https://github.com/haeinej/ohm-site/blob/main/home/src/worker.js), [site map](https://github.com/haeinej/ohm-site/blob/main/home/README.md) | Six canonical HTML routes plus join/static/alias handling. Home schema path resolves to the root Wrangler dependency. |
+| Public docs | [build.py](https://github.com/haeinej/ohm-site/blob/main/docs/build.py), [public ownership](https://github.com/haeinej/ohm-site/blob/main/README.md) | Edit generator, then regenerate HTML/Markdown/LLM/navigation. `.assetsignore` excludes generator/config from docs assets. |
 | Capability reference | [scripts/capabilities.mjs](../../scripts/capabilities.mjs) | `npm run capabilities` writes `service/CAPABILITIES.md` from executable registry/tool tables. |
 | PDS wrapper | [Cirrus entry](../../cirrus/src/index.ts), [config](../../cirrus/wrangler.jsonc), [package](../../cirrus/package.json) | Upstream PDS re-export is a Vite/Wrangler entry, with independent lock and durable-object migration history. |
 | Compatibility / examples / plans | [lexicons](../../lexicons/), [examples](../../examples/), [plans](../../plans/), [skills](../../skills/) | External records, namespace templates, round-trip fixtures and instruction/design consumers. Plans do not prove runtime feature completion. |
@@ -92,19 +92,19 @@ tests named below are local fixtures unless explicitly stated otherwise.
 
 | Flow | States, guards and recovery | Owner / verification |
 | --- | --- | --- |
-| Home canonicalization | HTTP/www/known alias -> permanent canonical redirect; known page -> metadata/assets; missing route -> real noindex404. | [home Worker](../../public/home/src/worker.js), [SEO tests](../../public/home/test/seo.test.mjs) |
-| Join submission/storage | Validate origin/body -> rate limit -> idempotent persistence or refusal. POST remains network-only and is not replayed by the service worker. | [home Worker](../../public/home/src/worker.js), [join tests](../../public/home/test/join.test.mjs) |
-| Join popup | Closed/open -> submitting -> success/error -> close/reopen. UI feedback is separate from server validation. | [join UI](../../public/home/public/join.js) |
-| Service-worker ownership | Register -> install/precache -> activate -> old-cache cleanup. Added/renamed/removed assets require updating cache ownership/version; ordinary edits follow existing refresh policy. | [service worker](../../public/home/public/sw.js), [site instructions](../../public/home/README.md) |
-| Navigation fetch race | Preload/network vs timeout -> cached page/root fallback. Timeout fallback is not proof of network availability. | [service worker](../../public/home/public/sw.js) |
-| Asset cache | Cached asset -> background refresh; fonts retain immutable policy. Every precached script, including join.js, has a reachable GET route. | [service worker](../../public/home/public/sw.js), [cache tests](../../public/home/test/sw.test.mjs) |
-| Responsive navigation | Desktop rail vs mobile menu checkbox -> open/closed -> selected route. Docs stay header-free with a normal-flow mobile control. | [docs source](../../public/docs/build.py), [docs CSS](../../public/docs/styles.css) |
-| Docs reader | Heading click/scroll -> queued active-section update -> stable linked heading. Preserve legacy `#architecture` and generated HTML/Markdown anchors. | [reader](../../public/docs/reader.js), [docs tests](../../test/docs.test.mjs) |
-| Landing rendering | WebGL available/unavailable -> active/paused/reduced-motion -> render or CSS fallback. Viewport and motion preference own animation work. | [landing](../../public/home/public/landing.js) |
-| Docs generation | Authored content -> parser modes -> generated outputs -> link/ID checks. A failed run can leave partial output; rerun from fixed source and inspect the full diff before committing. A diagram needs both a `FIGURES` drawing and a `FIGURE_TEXT` (or `SEQUENCES`) entry so the Markdown copy describes it; the sidebar's Source link comes from `REPOSITORY`. | [generator](../../public/docs/build.py), [docs tests](../../test/docs.test.mjs) |
+| Home canonicalization | HTTP/www/known alias -> permanent canonical redirect; known page -> metadata/assets; missing route -> real noindex404. | [home Worker](https://github.com/haeinej/ohm-site/blob/main/home/src/worker.js), [SEO tests](https://github.com/haeinej/ohm-site/blob/main/home/test/seo.test.mjs) |
+| Join submission/storage | Validate origin/body -> rate limit -> idempotent persistence or refusal. POST remains network-only and is not replayed by the service worker. | [home Worker](https://github.com/haeinej/ohm-site/blob/main/home/src/worker.js), [join tests](https://github.com/haeinej/ohm-site/blob/main/home/test/join.test.mjs) |
+| Join popup | Closed/open -> submitting -> success/error -> close/reopen. UI feedback is separate from server validation. | [join UI](https://github.com/haeinej/ohm-site/blob/main/home/public/join.js) |
+| Service-worker ownership | Register -> install/precache -> activate -> old-cache cleanup. Added/renamed/removed assets require updating cache ownership/version; ordinary edits follow existing refresh policy. | [service worker](https://github.com/haeinej/ohm-site/blob/main/home/public/sw.js), [site instructions](https://github.com/haeinej/ohm-site/blob/main/home/README.md) |
+| Navigation fetch race | Preload/network vs timeout -> cached page/root fallback. Timeout fallback is not proof of network availability. | [service worker](https://github.com/haeinej/ohm-site/blob/main/home/public/sw.js) |
+| Asset cache | Cached asset -> background refresh; fonts retain immutable policy. Every precached script, including join.js, has a reachable GET route. | [service worker](https://github.com/haeinej/ohm-site/blob/main/home/public/sw.js), [cache tests](https://github.com/haeinej/ohm-site/blob/main/home/test/sw.test.mjs) |
+| Responsive navigation | Desktop rail vs mobile menu checkbox -> open/closed -> selected route. Docs stay header-free with a normal-flow mobile control. | [docs source](https://github.com/haeinej/ohm-site/blob/main/docs/build.py), [docs CSS](https://github.com/haeinej/ohm-site/blob/main/docs/styles.css) |
+| Docs reader | Heading click/scroll -> queued active-section update -> stable linked heading. Preserve legacy `#architecture` and generated HTML/Markdown anchors. | [reader](https://github.com/haeinej/ohm-site/blob/main/docs/reader.js), [docs tests](../../test/docs.test.mjs) |
+| Landing rendering | WebGL available/unavailable -> active/paused/reduced-motion -> render or CSS fallback. Viewport and motion preference own animation work. | [landing](https://github.com/haeinej/ohm-site/blob/main/home/public/landing.js) |
+| Docs generation | Authored content -> parser modes -> generated outputs -> link/ID checks. A failed run can leave partial output; rerun from fixed source and inspect the full diff before committing. A diagram needs both a `FIGURES` drawing and a `FIGURE_TEXT` (or `SEQUENCES`) entry so the Markdown copy describes it; the sidebar's Source link comes from `REPOSITORY`. | [generator](https://github.com/haeinej/ohm-site/blob/main/docs/build.py), [docs tests](../../test/docs.test.mjs) |
 | Agent-led site/label workflow | Inspect original -> baseline copy -> proposed filing/migration -> owner approval -> verified change. Source is the rendering specification; no unapproved public writes. | [migration skill](../../skills/migrate-site/SKILL.md), [label skill](../../skills/suggest-labels/SKILL.md) |
 | Documentation completion | Coherent implementation -> establish final truth -> human/agent canonical updates -> regenerated navigation -> handoff with evidence/limits. Instructions add no automation runtime. | [document-work](../../skills/document-work/SKILL.md) |
-| Planned social/folder models | Design/proposal only for friends delivery, finding people and browser/cloud folder ownership. Keep planned states separate from implemented local CLI sync. | [network plan](../../plans/network-architecture.md), [status](../../public/docs/limits.md) |
+| Planned social/folder models | Design/proposal only for friends delivery, finding people and browser/cloud folder ownership. Keep planned states separate from implemented local CLI sync. | [network plan](../../plans/network-architecture.md), [status](https://github.com/haeinej/ohm-site/blob/main/docs/limits.md) |
 
 ## Verification and changes
 
@@ -114,7 +114,6 @@ From the repository root, with Node22+ and Python3:
 npm ci
 npm --prefix service ci
 npm run capabilities
-python3 public/docs/build.py
 npm test
 git diff --check
 ```
@@ -135,11 +134,11 @@ The minimal DOM and in-memory D1/IndexedDB/network fixtures are not Chrome, live
 OAuth, production D1/KV or proof of deployment. Do not relabel them as browser
 end-to-end evidence.
 
+The public sites (ohmmmm.com and docs.ohmmmm.com) are in [haeinej/ohm-site](https://github.com/haeinej/ohm-site), with their own tests and deploy checks (`npm run home:check`, `npm run docs:build`). Its docs read this repository's `service/CAPABILITIES.md` and check every request and vault tool against it, so after changing either, rebuild and test there too.
+
 For affected components, add:
 
 ```sh
-npm run home:check
-npm exec -- wrangler deploy --config public/docs/wrangler.jsonc --dry-run
 npm exec -- wrangler deploy --config feed/wrangler.jsonc --dry-run
 npm exec -- wrangler deploy --config mirror/wrangler.jsonc --dry-run
 pnpm --dir cirrus install --frozen-lockfile
