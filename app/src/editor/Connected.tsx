@@ -89,7 +89,7 @@ export function ConnectionList({ doc, editable, onOpen }: { doc: Doc; editable: 
 
       {!out.length && !into.length && (
         <p className="px-2 py-1 text-small text-muted-foreground">
-          Nothing connected yet.{editable ? " Select words and choose Connect, or connect the whole page." : ""}
+          Nothing connected yet.{editable ? " Select words and choose Connect, or connect the whole block." : ""}
         </p>
       )}
 

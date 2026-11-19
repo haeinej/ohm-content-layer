@@ -1,7 +1,7 @@
-// The page editor: a block editor in the manner of the reference recordings. The page's path on top
-// (drag it out to save it as Markdown, or onto a vault folder to file it), then the title, "/" for
+// The block editor: a block editor in the manner of the reference recordings. The block's path on top
+// (drag it out to save it as Markdown, or onto a vault channel to file it), then the title, "/" for
 // commands, a floating toolbar on selected text, a handle on each block with its menu, tables with
-// row and column handles, and images by dropping or pasting files. Private posts save as you type;
+// row and column handles, and images by dropping or pasting files. Private blocks save as you type;
 // others are read-only here, because changing what other people see asks first (AGENTS.md rule 11).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { EditorContent, useEditor, type Editor } from "@tiptap/react"
@@ -28,7 +28,7 @@ import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { byId, bySlug, channelRecords, channelsOf, posts, titleOf, type Doc } from "@/data/workspace-data"
+import { isBlock, locationOf, bySlug, channelRecords, channelsOf, blocks, titleOf, type Doc } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
@@ -49,7 +49,7 @@ import "./editor.css"
 /** Bodies written before the editor start with "# Title"; the title has its own field now. */
 const withoutTitle = (body: string, title: string) => body.replace(new RegExp(`^#\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n*`), "")
 
-/** The page as Markdown, with [[links]] kept as written: the serializer escapes their brackets (and a `|`). */
+/** The block as Markdown, with [[links]] kept as written: the serializer escapes their brackets (and a `|`). */
 const unescapeLinks = (md: string) =>
   md.replace(/\\?\[\\?\[([a-z0-9-]+)(?:\\?\|((?:[^\]\n\\]|\\.)+?))?\\?\]\\?\]/gi,
     (_, slug: string, words?: string) => (words ? `[[${slug}|${words.replace(/\\(.)/g, "$1")}]]` : `[[${slug}]]`))
@@ -79,26 +79,26 @@ function useAutoHeight(ref: React.RefObject<HTMLTextAreaElement | null>, value: 
   }, [ref, value])
 }
 
-/** Where a page lives: vault › label › sublabel › title, or cortex › folder › title. */
-const pathOf = (d: Doc) => [d.kind === "post" ? "vault" : "cortex", d.label, d.sublabel, titleOf(d)].filter(Boolean) as string[]
+/** Where a block lives: vault › home channel › title, or cortex › category › title. */
+const pathOf = (d: Doc) => [isBlock(d) ? "vault" : "cortex", ...locationOf(d).split("/"), titleOf(d)].filter(Boolean) as string[]
 
 /**
- * The page's path, in a pill. Click the page's name to rename it in place. Drag the pill out to save
- * the page as a .md file, or onto a vault folder in the side panel to file it there. The ⌄ beside it
- * opens the page's menu, as a session list has it: Open in, Rename, the file, Move, Archive, Delete.
+ * The block's path, in a pill. Click the block's name to rename it in place. Drag the pill out to save
+ * the block as a .md file, or onto a vault channel in the side panel to file it there. The ⌄ beside it
+ * opens the block's menu, as a session list has it: Open in, Rename, the file, Move, Archive, Delete.
  */
-function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown: () => string; onPickFile: () => void; onRenamed: (title: string) => void }) {
+function PathPill({ doc, markdown, onPickFile }: { doc: Doc; markdown: () => string; onPickFile: () => void }) {
   const path = pathOf(doc)
-  const post = doc.kind === "post"
+  const post = isBlock(doc)
   const [renaming, setRenaming] = useState(false)
   const [menu, setMenu] = useState(false)
-  const folders = useMemo(() => {
+  const destinations = useMemo(() => {
     const set = new Set<string>()
-    for (const p of posts) for (const c of channelsOf(p)) { set.add(c.split("/")[0]); set.add(c) }
+    for (const p of blocks) for (const c of channelsOf(p)) { set.add(c.split("/")[0]); set.add(c) }
     for (const c of channelRecords) set.add(c.path)
     return [...set].sort()
-  }, [doc.updated, doc.label, doc.sublabel, doc.channels]) // eslint-disable-line react-hooks/exhaustive-deps
-  const here = doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label
+  }, [doc.updated, doc.homeChannel, doc.channels]) // eslint-disable-line react-hooks/exhaustive-deps
+  const here = locationOf(doc)
   const md = () => `# ${titleOf(doc)}\n\n${markdown()}`
   const rename = () => { if (post) { setMenu(false); setRenaming(true) } }
   const key = (e: React.KeyboardEvent) => {
@@ -115,13 +115,13 @@ function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown
       <Icon icon={FileTextIcon} size="sm" className="flex-none" />
       <span className="flex min-w-0 items-center gap-1">
         {path.slice(0, -1).map((seg, i) => {
-          // Each folder in the path shows itself in the tree.
+          // Reveal the channel or cortex category in the tree.
           const prime = path[0] as "vault" | "cortex"
-          const folder = path.slice(1, i + 1).join("/")
+          const pathToReveal = path.slice(1, i + 1).join("/")
           return (
             <span key={i} className="flex min-w-0 flex-shrink items-center gap-1">
-              <button type="button" title={`Show ${seg} in the repository`}
-                onClick={() => (i === 0 ? revealFolder(prime, "") : revealFolder(prime, folder))}
+              <button type="button" title={`Show ${seg} in the home`}
+                onClick={() => (i === 0 ? revealFolder(prime, "") : revealFolder(prime, pathToReveal))}
                 className="truncate rounded-md px-0.5 transition-colors hover:bg-background hover:text-foreground">{seg}</button>
               <span aria-hidden className="text-muted-foreground/60">/</span>
             </span>
@@ -129,7 +129,7 @@ function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown
         })}
         {renaming ? (
           <InlineRename id={doc.id} className="h-7 w-48 text-small font-medium"
-            onDone={() => { setRenaming(false); onRenamed(byId(doc.id)?.title ?? doc.title) }} />
+            onDone={() => setRenaming(false)} />
         ) : (
           <button type="button" disabled={!post} onClick={rename} title={post ? "Rename" : undefined}
             className="max-w-48 flex-shrink-0 cursor-text truncate rounded-md px-1 py-0.5 font-medium text-foreground transition-colors hover:bg-background disabled:cursor-default disabled:hover:bg-transparent">
@@ -139,7 +139,7 @@ function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown
       </span>
       <DropdownMenu open={menu} onOpenChange={setMenu}>
         <DropdownMenuTrigger render={
-          <button type="button" aria-label="Page menu"
+          <button type="button" aria-label="Block menu"
             className="flex size-8 flex-none items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground aria-expanded:bg-background aria-expanded:text-foreground" />
         }>
           <Icon icon={ChevronDownIcon} size="sm" />
@@ -161,8 +161,8 @@ function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>Move to</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-72 w-52 overflow-y-auto">
-                {/* Moves the page from its first channel, the one its address comes from. */}
-                {folders.map(f => (
+                {/* Moves the block from its home channel, the one its address comes from. */}
+                {destinations.map(f => (
                   <DropdownMenuCheckboxItem key={f} checked={f === here} onCheckedChange={() => {
                     const { published } = moveBlock(doc.id, here, f)
                     notify({ message: `Moved to ${f.replace("/", " › ")}${published ? ". Its address changes when you next publish" : ""}`, tone: "info" })
@@ -222,8 +222,10 @@ function BlockMenu({ editor, block, updated, onClose }: { editor: Editor; block:
 
 export function PageEditor({ doc }: { doc: Doc }) {
   const { agentsAllowed, offered } = useWorkspace()
-  const editable = doc.kind === "post" && doc.visibility === "private"
-  const [title, setTitle] = useState(doc.title)
+  const editable = isBlock(doc) && doc.visibility === "private"
+  const [titleDraft, setTitleDraft] = useState<string | null>(null)
+  // The vault trims the saved title. Keep spaces in the input while the saved title matches.
+  const title = editable && titleDraft?.trim() === doc.title ? titleDraft : doc.title
   const [plusOpen, setPlusOpen] = useState(false)
   const [iconOpen, setIconOpen] = useState(false)
   const [block, setBlock] = useState<{ node: PMNode; pos: number } | null>(null)
@@ -265,8 +267,8 @@ export function PageEditor({ doc }: { doc: Doc }) {
     content: withoutTitle(doc.body, doc.title),
     contentType: "markdown",
     editorProps: {
-      attributes: { class: "ohm-prose", "aria-label": "Page" },
-      // Images dropped or pasted go into the page where they land; pages and text files open.
+      attributes: { class: "ohm-prose", "aria-label": "Block" },
+      // Images dropped or pasted go into the block where they land; blocks and text files open.
       handleDrop: (view, event) => {
         const dt = (event as DragEvent).dataTransfer
         if (!dt) return false
@@ -293,7 +295,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
     },
     onUpdate: ({ editor: e }) => {
       if (save.current) clearTimeout(save.current)
-      // Kept as text at once, so leaving the page can still save it after the editor is gone.
+      // Kept as text at once, so leaving the block can still save it after the editor is gone.
       unsaved.current = toMarkdown(e)
       save.current = setTimeout(flushBody, 400)
     },
@@ -311,7 +313,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
     return () => window.removeEventListener("ohm:pick-image", pick)
   }, [])
 
-  // The page's one primary action is saving, and it is also a tool while a private page is open.
+  // The block's one primary action is saving, and it is also a tool while a private block is open.
   const offer = editable && agentsAllowed && offered["workspace.save-draft"]
   useEffect(() => {
     if (!offer || !editor) return
@@ -319,7 +321,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
     registerStepTool<{ title?: string; body?: string }, ReturnType<typeof saveDraft>>({
       name: "workspace.save-draft",
       title: "Save draft",
-      description: "Saves the page open in the editor as private. It is never published. Fields left out keep what is on the page. The body is Markdown. Returns its id and slug.",
+      description: "Saves the block open in the editor as private. It is never published. Fields left out keep what is on the block. The body is Markdown. Returns its id and slug.",
       inputSchema: {
         type: "object",
         properties: { title: { type: "string", maxLength: 200 }, body: { type: "string", maxLength: 100000 } },
@@ -327,7 +329,6 @@ export function PageEditor({ doc }: { doc: Doc }) {
       },
       outputSchema: { type: "object", properties: { id: { type: "string" }, slug: { type: "string" }, visibility: { const: "private" } } },
       run: withAgent("Saving draft", async input => {
-        if (input.title !== undefined) setTitle(input.title)
         // Not as you typing: the agent's text is saved once, as its change, not again as your autosave.
         if (input.body !== undefined) editor.commands.setContent(input.body, { contentType: "markdown", emitUpdate: false })
         const out = saveDraft({ title: input.title ?? titleRef.current?.value ?? doc.title, body: toMarkdown(editor) })
@@ -356,14 +357,14 @@ export function PageEditor({ doc }: { doc: Doc }) {
         if (dragKind(e.dataTransfer) === "image") insertImageFiles(editor, [...e.dataTransfer.files])
         else void openDropped(e.dataTransfer)
       }}>
-      {/* Toolbar: the page's path, then inserts; history, comments, you and sharing on the right. */}
+      {/* Toolbar: the block's path, then inserts; history, comments, you and sharing on the right. */}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
         <div className="flex min-w-0 items-center gap-1.5">
           <div className={pill}>
             <ToolButton label="Back (⌘[)" icon={ArrowLeftIcon} disabled={!canGo(-1)} onClick={() => go(-1)} />
             <ToolButton label="Forward (⌘])" icon={ArrowRightIcon} disabled={!canGo(1)} onClick={() => go(1)} />
           </div>
-          <PathPill doc={doc} markdown={() => toMarkdown(editor)} onPickFile={() => fileInput.current?.click()} onRenamed={setTitle} />
+          <PathPill doc={doc} markdown={() => toMarkdown(editor)} onPickFile={() => fileInput.current?.click()} />
           {editable && (
             <div className={pill}>
               <ToolButton label="Text" icon={TypeIcon} onClick={() => insertText(editor)} />
@@ -381,21 +382,21 @@ export function PageEditor({ doc }: { doc: Doc }) {
           )}
           {!editable && (
             <span className="flex min-w-0 items-center gap-1.5 ps-1 text-small whitespace-nowrap text-muted-foreground"
-              title={doc.kind === "post" ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}>
+              title={isBlock(doc) ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}>
               <Icon icon={LockIcon} size="xs" className="flex-none" />
               {/* The note gives way first when the toolbar is narrow; the lock and its tooltip stay. */}
-              <span className="truncate">{doc.kind === "post" ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}</span>
+              <span className="truncate">{isBlock(doc) ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}</span>
             </span>
           )}
         </div>
         <div className="flex flex-none items-center gap-1.5">
-          {doc.kind === "post" && (
+          {isBlock(doc) && (
             <div className={pill}>
               <ConnectionsButton doc={doc} editable={editable} variant="toolbar" side="bottom" />
             </div>
           )}
           <div className={pill}>
-            {/* Cortex pages are blocks too: the same history. */}
+            {/* Cortex items use the same history viewer. */}
             <HistoryButton doc={doc} className={pillButton} />
           </div>
           <Avatar className="size-8"><AvatarFallback className="bg-primary text-small text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
@@ -404,7 +405,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
 
       {marks.archived.has(doc.id) && (
         <div role="status" className="mx-3 flex items-center justify-between gap-2 rounded-xl bg-muted px-4 py-2 text-small animate-in fade-in-0">
-          <span>This page is archived: it is out of your tree, and kept.</span>
+          <span>This block is archived: it is out of your tree, and kept.</span>
           <Button size="xs" variant="ghost" onClick={() => toggleArchive(doc.id)}>Restore</Button>
         </div>
       )}
@@ -431,12 +432,17 @@ export function PageEditor({ doc }: { doc: Doc }) {
                 </PopoverContent>
               </Popover>
             )}
-            <textarea ref={titleRef} rows={1} value={title} readOnly={!editable} placeholder="Untitled page" aria-label="Title"
-              onChange={e => { setTitle(e.target.value); autosave(doc.id, { title: e.target.value }) }}
+            <textarea ref={titleRef} rows={1} value={title} readOnly={!editable} placeholder="Untitled block" aria-label="Title"
+              onChange={e => {
+                const next = e.target.value
+                setTitleDraft(next)
+                autosave(doc.id, { title: next })
+              }}
+              onBlur={() => setTitleDraft(null)}
               onKeyDown={e => {
                 if (e.key === "Enter" || (e.key === "ArrowDown" && e.currentTarget.selectionStart === title.length)) {
                   e.preventDefault()
-                  // Move at once, so the next keys land in the page, not the title.
+                  // Move at once, so the next keys land in the block, not the title.
                   editor.view.focus()
                   editor.commands.setTextSelection(1)
                 }
@@ -467,7 +473,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
         </div>
       </div>
 
-      {/* Dropping: a page or text file opens; an image goes into the page. */}
+      {/* Dropping: a block or text file opens; an image goes into the block. */}
       {dropping && (
         <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl bg-background/70 ring-2 ring-primary/40 backdrop-blur-[2px] animate-in fade-in-0 duration-(--ohm-duration-state)">
           <span className="rounded-full bg-popover px-4 py-2 text-body shade-3">

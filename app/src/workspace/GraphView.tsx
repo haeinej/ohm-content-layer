@@ -71,10 +71,10 @@ function areaOf(channel: GraphChannel, at: Map<string, SimNode>) {
 /** A floating control over the graph: the popover surface, solid in dark. */
 const floating = "rounded-2xl bg-popover text-popover-foreground shade-3"
 
-/** Lives in the side panel, in the personal repository. What it draws follows the repository's scope and who you are looking as. */
+/** Lives in the side panel, in the home. What it draws follows the home's scope and who you are looking as. */
 export function GraphView() {
   const { rev, scope, audience, graphCenter: center, view, filters: repoFilters } = useWorkspace()
-  // The open page is ringed in the graph too: one active page, everywhere.
+  // The open block is ringed in the graph too: one active block, everywhere.
   const activeId = view.kind === "doc" ? view.id : null
   const include = useMemo(() => scopeFolders(scope), [scope])
   const [filters, setFilters] = useState({ links: DEFAULT_FILTERS.links, connections: DEFAULT_FILTERS.connections, areas: true })
@@ -258,7 +258,7 @@ export function GraphView() {
           {links.map((l, i) => {
             const a = l.source as SimNode, b = l.target as SimNode
             const on = lit ? a.id === lit || b.id === lit : null
-            const connected = l.kinds.includes("connects")
+            const connected = l.wholeBlock
             return (
               <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} vectorEffect="non-scaling-stroke"
                 strokeWidth={widthOf(l) + (on ? 0.4 : 0)} strokeLinecap="round"
@@ -286,9 +286,9 @@ export function GraphView() {
                 onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), open(n.doc.id))}>
                 {/* A larger, invisible target: small nodes are easy to hit. */}
                 <circle r={Math.max(r + 6, 12)} className="fill-transparent" />
-                {(isLit || n.id === activeId) && <circle r={r + 3.5} className="fill-none stroke-primary dark:stroke-foreground" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
+                {(isLit || n.doc.id === activeId) && <circle r={r + 3.5} className="fill-none stroke-primary dark:stroke-foreground" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
                 <circle r={r} className={cn("transition-[fill] duration-(--ohm-duration-open) ease-(--ohm-ease-out)",
-                  isLit || n.id === activeId ? "fill-primary dark:fill-foreground" : "fill-muted-foreground")} />
+                  isLit || n.doc.id === activeId ? "fill-primary dark:fill-foreground" : "fill-muted-foreground")} />
               </g>
             )
           })}

@@ -1,3 +1,4 @@
+import { bySlug } from "@/data/workspace-data"
 // The notification center's record: what agents did through the page's WebMCP tools, and the
 // workspace's own notices. Kept in memory for the wireframe, newest first, a week at most.
 import { useSyncExternalStore } from "react"
@@ -11,7 +12,7 @@ export type NotificationItem = {
   at: number
   read: boolean
   tone?: "error" | "info"
-  /** A page it is about, opened from the item. */
+  /** A block it is about, opened from the item. */
   ref?: string
 }
 
@@ -19,7 +20,7 @@ const WEEK = 7 * 24 * 60 * 60 * 1000
 const now = Date.now()
 let items: NotificationItem[] = [
   { id: "n1", kind: "agent", title: "Searched your vault for “slow software”", detail: "workspace.search · 3 matches", at: now - 6 * 60_000, read: false },
-  { id: "n2", kind: "agent", title: "Saved “Graph sketches” as private", detail: "workspace.save-draft", at: now - 2 * 3600_000, read: false, ref: "p10" },
+  { id: "n2", kind: "agent", title: "Saved “Graph sketches” as private", detail: "workspace.save-draft", at: now - 2 * 3600_000, read: false, ref: bySlug("graph-sketches")?.id },
   { id: "n3", kind: "system", title: "Your vault is up to date", detail: "Nothing waiting to publish", at: now - 26 * 3600_000, read: true },
 ]
 const listeners = new Set<() => void>()

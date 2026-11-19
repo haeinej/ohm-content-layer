@@ -1,10 +1,14 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { createSampleSource } from "../src/data/sample-source"
+import { blockKey, byId, channelRowId, demoJournal, docIdOf, placedIn } from "../src/data/workspace-data"
+import { fixtureIds } from "../src/data/sample"
+import { buildGraph } from "../src/graph/model"
+import { isPostId } from "../../vault/vault/file.mjs"
 import { search } from "../src/data/search"
 import { createServiceSource } from "../src/data/service-source"
 import { blockOf, type BlockRef, type HomeFile } from "../src/data/source"
-import { collect, createDraft, deleteDoc, saveDraft, setSource } from "../src/workspace/store"
+import { collect, createDraft, deleteDoc, moveBlock, restoreVersion, saveDraft, setSource } from "../src/workspace/store"
 import { newNodeId } from "../../vault/vault/node.mjs"
 
 test("the sample workspace edits and collects blocks through the same data source search reads", async () => {
@@ -33,6 +37,57 @@ test("the sample workspace edits and collects blocks through the same data sourc
     await setSource(sampleSource)
     deleteDoc(draft.id)
     assert.deepEqual(await search({ query: "Alder lantern" }), [])
+    await setSource()
+  }
+})
+
+test("draft kinds, history and channel moves use the same TID across placements", async () => {
+  const sampleSource = createSampleSource()
+  await setSource(sampleSource)
+  const draft = createDraft({ homeChannel: "writing/journal", title: "Alder lantern" })
+  try {
+    assert.ok(isPostId(draft.id))
+    assert.equal(byId(draft.id)?.kind, "text")
+    const initial = demoJournal().currentVersion(draft.id)!
+    saveDraft({ body: "https://example.test/alder-lantern" })
+    assert.equal(byId(draft.id)?.kind, "link")
+    const row = channelRowId(draft.id, "projects/tools")
+    assert.equal(docIdOf(row), draft.id)
+    assert.equal(placedIn(row), "projects/tools")
+    assert.ok(moveBlock(draft.id, "writing/journal", "projects/tools").homeChannelChanged)
+    assert.equal(byId(draft.id)?.homeChannel, "projects/tools")
+    assert.ok((await sampleSource.connections()).some(edge =>
+      edge.kind === "contains" && edge.from === "channel:projects/tools" && edge.to === blockKey(draft.id)))
+    restoreVersion(draft.id, initial)
+    assert.equal(byId(draft.id)?.homeChannel, "writing/journal")
+    assert.equal(byId(draft.id)?.kind, "text")
+  } finally {
+    await setSource()
+  }
+})
+
+test("vault evidence and cortex inference refer to the same block keys and keep separate histories", async () => {
+  const sampleSource = createSampleSource()
+  await setSource(sampleSource)
+  try {
+    const evidence = await sampleSource.connections()
+    const garden = blockKey(fixtureIds.garden)
+    assert.ok(evidence.some(edge => edge.from === garden && edge.to === blockKey(fixtureIds.slow) && edge.kind === "links"))
+    assert.ok(evidence.some(edge => edge.from === garden && edge.kind === "mentions" && edge.to.startsWith("entity:")))
+    const graph = buildGraph()
+    assert.ok(graph.nodes.some(node => node.id === garden))
+    const inference = byId(fixtureIds.slowness)!
+    assert.equal(inference.kind, "inference")
+    assert.ok(inference.evidence?.length)
+    for (const pointer of inference.evidence) {
+      assert.ok(pointer.node.startsWith("block:"))
+      assert.ok(demoJournal().snapshotAt(pointer.version))
+    }
+    assert.ok(demoJournal().historyLines("cortex").some(line => line.type === "change" && line.node === inference.id))
+    assert.ok(demoJournal().historyLines("vault").some(line => line.type === "change" && line.node === fixtureIds.garden))
+    assert.ok(demoJournal().historyLines("vault").every(line => line.type !== "change" || line.node !== inference.id))
+    assert.equal((await search({ query: "June", scope: "entities" }))[0]?.kind, "entity")
+  } finally {
     await setSource()
   }
 })

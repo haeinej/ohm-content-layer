@@ -12,12 +12,12 @@ const missing = () => new DOMException("There is no such sample block.", "NotFou
 const stale = () => new DOMException("The sample block changed. Read it again before saving.", "InvalidStateError")
 
 export function createSampleSource() {
-  const { posts, cortex, owner, people, inbox } = structuredClone({ ...fixtures })
-  const all = [...posts, ...cortex]
-  const journal = createJournal(all)
+  const { blocks, cortex, owner, entities, inbox, fixtureIds } = structuredClone({ ...fixtures })
+  const all = [...blocks, ...cortex]
+  const journal = createJournal(all, fixtureIds)
   const channels: ChannelRecord[] = []
   const revisions = new Map<string, { content: string; version: string }>()
-  const friendList = people.filter(person => person.did !== owner.did).map(person => ({ did: person.did, added: "2026-11-01" }))
+  const friendList = entities.filter(person => person.did !== owner.did).map(person => ({ did: person.did, added: "2026-11-01" }))
   let sequence = 0
 
   const versionOf = (doc: Doc) => {
@@ -36,11 +36,11 @@ export function createSampleSource() {
     channels.push({ id: newNodeId(), path, order: [], created })
   }
 
-  for (const post of posts) for (const path of channelsOf(post)) ensureChannel(path, post.updated)
+  for (const post of blocks) for (const path of channelsOf(post)) ensureChannel(path, post.updated)
   for (const path of ["reading", "projects/someday"]) ensureChannel(path, "2026-11-18")
 
   function find(ref: BlockRef, version?: string) {
-    const doc = posts.find(post => post.id === ref.id && post.visibility === ref.layer)
+    const doc = blocks.find(post => post.id === ref.id && post.visibility === ref.layer)
     if (!doc) throw missing()
     if (version !== undefined && versionOf(doc) !== version) throw stale()
     return doc
@@ -53,7 +53,7 @@ export function createSampleSource() {
   const source = {
     // Cortex, inbox and the demo's timeline have no live workspace integration in WP2.
     demo: {
-      cortex, owner, people, inbox, journal,
+      cortex, owner, entities, inbox, journal,
       markInboxRead(id: string) {
         const item = inbox.find(item => item.id === id)
         if (item) item.unread = false
@@ -67,9 +67,9 @@ export function createSampleSource() {
     },
     account() { return { did: owner.did, user: { name: owner.name }, mirrored: false, service: null } },
     listBlocks(layers: readonly Layer[] = visibleLayers) {
-      return posts.filter(post => layers.includes(post.visibility)).map((post): BlockHead => ({
+      return blocks.filter(post => layers.includes(post.visibility)).map((post): BlockHead => ({
         id: post.id, layer: post.visibility, path: fileOf(post).path, title: post.title, version: versionOf(post),
-        store: post.visibility === "private" ? "sealed" : "post",
+        store: post.visibility === "private" ? "sealed" : post.kind === "post" ? "post" : "block",
       }))
     },
     readBlock(ref) {
@@ -77,18 +77,18 @@ export function createSampleSource() {
       return { ...fileOf(doc), version: versionOf(doc) }
     },
     saveBlock(ref, file, replaces, change?) {
-      const held = posts.find(post => post.id === ref.id)
+      const held = blocks.find(post => post.id === ref.id)
       if ((held ? versionOf(held) : null) !== replaces || (held && held.visibility !== ref.layer)) throw stale()
       const { doc } = docOf(ref, { ...file, text: setProperty(file.text, "visibility", ref.layer) })
       if (held) Object.assign(held, doc)
-      else { posts.push(doc); all.push(doc) }
+      else { blocks.push(doc); all.push(doc) }
       refreshChannels(doc)
       journal.syncJournal(change)
       return { version: versionOf(held ?? doc) }
     },
     deleteBlock(ref, replaces) {
       const doc = find(ref, replaces)
-      posts.splice(posts.indexOf(doc), 1)
+      blocks.splice(blocks.indexOf(doc), 1)
       all.splice(all.indexOf(doc), 1)
       revisions.delete(doc.id)
       journal.syncJournal()
@@ -100,19 +100,19 @@ export function createSampleSource() {
       find(ref, replaces).visibility = layer
     },
     vault(layers: readonly Layer[] = visibleLayers) {
-      const blocks = posts.filter(post => layers.includes(post.visibility)).map(fileOf)
+      const files = blocks.filter(post => layers.includes(post.visibility)).map(fileOf)
       const channelFiles = channels.map(channel => ({
         path: `${channel.path}/_channel.md`,
         text: writeNoteFile({
-          properties: { sampleId: channel.id, created: channel.created, order: channel.order.map(id => posts.find(doc => doc.id === id)?.slug).filter(Boolean) },
+          properties: { sampleId: channel.id, created: channel.created, order: channel.order.map(id => blocks.find(doc => doc.id === id)?.slug).filter(Boolean) },
           body: channel.description,
         }),
       }))
-      const entities = people.map(person => ({
+      const entityFiles = entities.map(person => ({
         path: `_entities/person/${person.handle}.md`,
         text: writeNoteFile({ properties: { name: person.name, aliases: [person.handle], uri: `at://${person.did}` } }),
       }))
-      return readVault([...blocks, ...channelFiles, ...entities])
+      return readVault([...files, ...channelFiles, ...entityFiles])
     },
     connections(layers?: readonly Layer[]): VaultEvidence {
       const vault = source.vault(layers)
@@ -124,7 +124,7 @@ export function createSampleSource() {
           : block),
       })
     },
-    search: createSampleSearch(all, people),
+    search: createSampleSearch(all, entities),
     history(ref) {
       return journal.linesFor(ref.id).filter(line => line.op !== "remove")
         .map(line => ({ rev: line.id, version: line.after, created: line.at })).reverse()
@@ -141,7 +141,7 @@ export function createSampleSource() {
       visibilityMove(ref, to)
       const doc = find(ref, replaces)
       doc.visibility = to
-      return { ref: { id: ref.id, layer: to, store: to === "private" ? "sealed" : "post" }, version: versionOf(doc), cleanupPending: false }
+      return { ref: { id: ref.id, layer: to, store: to === "private" ? "sealed" : doc.kind === "post" ? "post" : "block" }, version: versionOf(doc), cleanupPending: false }
     },
     async listFriends() { return structuredClone(friendList) },
     async removeFriend(did) {

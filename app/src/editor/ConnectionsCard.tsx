@@ -1,7 +1,7 @@
 // A block's connections as a card that opens beside it, like an info panel: the graph around it, the
-// part of the tree it sits in, and the list of its connections. It opens from the page's toolbar, and
+// part of the tree it sits in, and the list of its connections. It opens from the block's toolbar, and
 // from the dot that shows at the right end of a block's row when you hover it. Pull a line from that
-// dot to another block (in the tree, the graph or the open page) to connect the two.
+// dot to another block (in the tree, the graph or the open block) to connect the two.
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { NetworkIcon, WaypointsIcon } from "lucide-react"
@@ -10,7 +10,7 @@ import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { notify } from "@/components/ui/notice"
-import { byId, bySlug, channelsOf, cortex, incoming, outgoing, PLACED, posts, docIdOf, titleOf, type Doc } from "@/data/workspace-data"
+import { blockKey, isBlock, channelRowId, byId, channelsOf, docForEvidence, evidenceKey, workspaceEvidence, cortex, blocks, docIdOf, titleOf, type Doc } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { connectDocs, open, revealFolder, setRepoMode, showGraph, useWorkspace } from "@/workspace/store"
 import { connectionCount, ConnectionList } from "./Connected"
@@ -20,7 +20,8 @@ type MiniEdge = { to: string; inferred: boolean }
 
 /** Everything one step from the block: its channels, the blocks it connects with, and the cortex items drawn from it. */
 function neighbourhood(doc: Doc, go: (id: string) => void, reveal: (path: string) => void) {
-  const nodes: MiniNode[] = [{ id: doc.id, name: titleOf(doc), kind: "self" }]
+  const self = evidenceKey(doc.id) ?? blockKey(doc.id)
+  const nodes: MiniNode[] = [{ id: self, name: titleOf(doc), kind: "self" }]
   const edges: MiniEdge[] = []
   const add = (n: MiniNode, inferred = false) => {
     if (nodes.some(m => m.id === n.id)) return
@@ -28,9 +29,17 @@ function neighbourhood(doc: Doc, go: (id: string) => void, reveal: (path: string
     edges.push({ to: n.id, inferred })
   }
   for (const path of channelsOf(doc)) add({ id: `channel:${path}`, name: path.split("/").at(-1)!, kind: "channel", go: () => reveal(path) })
-  for (const o of outgoing(doc)) { const t = bySlug(o.slug); if (t) add({ id: t.id, name: titleOf(t), kind: "block", go: () => go(t.id) }) }
-  for (const f of incoming(doc)) add({ id: f.id, name: titleOf(f), kind: "block", go: () => go(f.id) })
-  for (const c of cortex) if (c.about?.includes(doc.slug)) add({ id: c.id, name: c.title, kind: "cortex", go: () => go(c.id) }, true)
+  for (const edge of workspaceEvidence()) {
+    const other = edge.from === self ? edge.to : edge.to === self ? edge.from : ""
+    if (!other.startsWith("block:")) continue
+    const neighbour = docForEvidence(other)
+    if (neighbour) add({ id: other, name: titleOf(neighbour), kind: "block", go: () => go(neighbour.id) })
+  }
+  for (const c of cortex) {
+    if (c.kind === "inference" && c.evidence?.some(item => item.node === self)) {
+      add({ id: `inference:${c.id}`, name: c.title, kind: "cortex", go: () => go(c.id) }, true)
+    }
+  }
   return { nodes, edges }
 }
 
@@ -78,13 +87,13 @@ function MiniGraph({ doc, go, reveal }: { doc: Doc; go: (id: string) => void; re
   )
 }
 
-/** The part of the repository tree the block sits in: each of its channels, with it and its neighbours there. */
+/** The part of the home tree the block sits in: each of its channels, with it and its neighbours there. */
 function partialTree(doc: Doc): FileTreeNode[] {
   return channelsOf(doc).map((path, i) => {
-    const inChannel = posts.filter(p => channelsOf(p).includes(path))
+    const inChannel = blocks.filter(p => channelsOf(p).includes(path))
     const shown = [doc, ...inChannel.filter(p => p.id !== doc.id)].slice(0, 5)
     const more = inChannel.length - shown.length
-    const leafId = (d: Doc) => (d.id === doc.id && i === 0 ? d.id : `${d.id}${PLACED}card:${path}`)
+    const leafId = (d: Doc) => (d.id === doc.id && i === 0 ? d.id : channelRowId(d.id, path))
     return {
       id: `card:${path}`, name: path.replace("/", " › "),
       children: [
@@ -138,14 +147,14 @@ export function ConnectionsCard({ doc, editable, onClose }: { doc: Doc; editable
   )
 }
 
-/** The block a connecting line is over: a block's row in the tree, a graph node, or the open page. */
+/** The block a connecting line is over: a block's row in the tree, a graph node, or the open block. */
 function blockAt(x: number, y: number, from: string): { el: HTMLElement; id: string } | null {
   const el = document.elementFromPoint(x, y) as HTMLElement | null
   const row = el?.closest<HTMLElement>("[data-slot=file-tree-item]")
   const holder = row ?? el?.closest<HTMLElement>("[data-doc-id]")
   const id = row ? (row.dataset.id?.includes(":") ? null : docIdOf(row.dataset.id ?? "")) : holder?.dataset.docId
   const doc = id ? byId(id) : undefined
-  return holder && doc?.kind === "post" && doc.id !== from ? { el: holder, id: doc.id } : null
+  return holder && isBlock(doc) && doc.id !== from ? { el: holder, id: doc.id } : null
 }
 
 /**
@@ -214,7 +223,7 @@ function useConnectLine(doc: Doc, onLinking?: (on: boolean) => void) {
 /**
  * The button that opens a block's connections card, and the card. `variant` picks how the button
  * looks: a dot on a tree row, which also pulls a line to connect, or a pill button with a count in
- * the page's toolbar.
+ * the block's toolbar.
  */
 export function ConnectionsButton({ doc, editable, variant, open: openProp, onOpenChange, onLinking, side = "right", className }: {
   doc: Doc

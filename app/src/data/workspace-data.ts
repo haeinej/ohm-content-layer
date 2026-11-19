@@ -2,7 +2,7 @@ import { docOf } from "./block-document"
 import { createJournal } from "./journal"
 import { sampleSource, type SampleSource } from "./sample-source"
 import type { Account, BlockFile, BlockHead, HomeSource, VaultContents, VaultEvidence } from "./source"
-import { sectionOf, outgoing as describeOutgoing, type ChannelRecord, type Doc, type Outgoing, type Person } from "./workspace-model"
+import { outgoing as describeOutgoing, type ChannelRecord, type Doc, type Outgoing, type Entity } from "./workspace-model"
 export * from "./workspace-model"
 
 type Selection = HomeSource | SampleSource
@@ -12,12 +12,12 @@ let source: Selection = sampleSource
 let selection = 0
 
 // A read projection for the prototype's synchronous render paths. Only adapters own records.
-export let posts: Doc[] = []
+export let blocks: Doc[] = []
 export let cortex: SampleSource["demo"]["cortex"] = []
 export let inbox: SampleSource["demo"]["inbox"] = []
 export let channelRecords: ChannelRecord[] = []
-export let owner: Person = defaultOwner
-export let people: Person[] = []
+export let owner: Entity = defaultOwner
+export let entities: Entity[] = []
 let vault: VaultContents
 let edges: VaultEvidence = []
 let versions = new Map<string, { ref: BlockHead; version: string }>()
@@ -40,10 +40,10 @@ const publish = (next: Selection, account: Account, files: [BlockHead, BlockFile
   vault = contents
   edges = evidence
   owner = demo?.owner ?? { did: account.did ?? "", handle: account.did ?? "", name: account.user.name }
-  people = demo?.people ?? []
+  entities = demo?.entities ?? []
   cortex = demo?.cortex ?? []
   inbox = demo?.inbox ?? []
-  posts = parsed.map(({ doc }) => doc)
+  blocks = parsed.map(({ doc }) => doc)
   channelRecords = channels
   versions = new Map(parsed.map(({ doc, ref, version }) => [doc.id, { ref, version }]))
   byKey = new Map(parsed.map(({ key, doc }) => [key, doc]))
@@ -70,11 +70,10 @@ export async function selectSource(next: Selection) {
 
 export const demoJournal = () => sampleWorkspace()?.demo.journal ?? emptyJournal
 export const blockVersion = (id: string) => versions.get(id)
-export const byId = (id: string) => posts.find(doc => doc.id === id) ?? cortex.find(doc => doc.id === id)
-export const bySlug = (slug: string) => posts.find(doc => doc.slug === slug) ?? cortex.find(doc => doc.slug === slug)
+export const byId = (id: string) => blocks.find(doc => doc.id === id) ?? cortex.find(doc => doc.id === id)
+export const bySlug = (slug: string) => blocks.find(doc => doc.slug === slug) ?? cortex.find(doc => doc.slug === slug)
 export const channelByPath = (path: string) => channelRecords.find(channel => channel.path === path)
-export const isSection = (path: string) => posts.some(doc => sectionOf(doc) === path || doc.label === path)
-export const personByHandle = (handle: string) => people.find(person => person.handle === handle || person.did === handle)
+export const entityByHandle = (handle: string) => entities.find(person => person.handle === handle || person.did === handle)
 export function inOrder(path: string, docs: Doc[]) {
   const rank = new Map(vault.items(path).flatMap((node, index) => node.type === "block" ? [[node.slug, index] as const] : []))
   return [...docs].sort((a, b) => (rank.get(a.slug) ?? Infinity) - (rank.get(b.slug) ?? Infinity))
@@ -103,5 +102,5 @@ export function outgoing(doc: Doc): Outgoing[] {
 
 export function incoming(doc: Doc) {
   const ids = new Set(edges.filter(edge => edge.kind === "links" && edge.to === evidenceKey(doc.id)).map(edge => edge.from))
-  return posts.filter(other => other.id !== doc.id && ids.has(evidenceKey(other.id) ?? ""))
+  return blocks.filter(other => other.id !== doc.id && ids.has(evidenceKey(other.id) ?? ""))
 }

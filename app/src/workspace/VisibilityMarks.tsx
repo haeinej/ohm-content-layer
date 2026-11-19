@@ -1,5 +1,4 @@
-// With visibility shown, every page in the repository says who it is for, in a small pill at the row's
-// end that changes it in place. Showing a page to more people asks first; marking is not publishing.
+// The visibility pills show each block's sample layer. Widening access asks for approval.
 // The tree's rows are ohm-ui's, so the pills sit over them, measured from the rows.
 import { useLayoutEffect, useState } from "react"
 import type { LucideIcon } from "lucide-react"
@@ -9,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { byId, titleOf, type Doc, type Visibility } from "@/data/workspace-data"
+import { isBlock, byId, docIdOf, titleOf, type Doc, type Visibility } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { setVisibility, useWorkspace } from "./store"
 
@@ -27,7 +26,7 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
   const [asking, setAsking] = useState<{ doc: Doc; to: Visibility } | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
 
-  // Measure every page row, again whenever the tree changes shape.
+  // Measure every block row, again whenever the tree changes shape.
   useLayoutEffect(() => {
     if (!container || !showVisibility) return setMarks([])
     const measure = () => {
@@ -35,7 +34,7 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
       const next: Mark[] = []
       container.querySelectorAll<HTMLElement>("[data-slot=file-tree-item], [data-row-id]").forEach(el => {
         const id = el.dataset.rowId ?? el.dataset.id ?? ""
-        if (!id || id.includes(":") || !byId(id)) return
+        if (!id || id.includes(":") || !byId(docIdOf(id))) return
         const r = el.getBoundingClientRect()
         next.push({ id, top: r.top - base.top, height: r.height })
       })
@@ -59,9 +58,10 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
   if (!showVisibility) return null
   return <>
     {marks.map(m => {
-      const doc = byId(m.id)!
-      const post = doc.kind === "post"
-      const v = post ? doc.visibility : "private"
+      const doc = byId(docIdOf(m.id))
+      if (!doc) return null
+      const block = isBlock(doc)
+      const v = block ? doc.visibility : "private"
       const pill = cn(
         // Icon only: the label is in the tooltip and for screen readers.
         "pointer-events-auto absolute right-8 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full transition-colors duration-(--ohm-duration-press)",
@@ -70,7 +70,7 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
       )
       return (
         <div key={m.id} data-row-menu className="pointer-events-none absolute inset-x-0 z-[9]" style={{ top: m.top, height: m.height }}>
-          {post ? (
+          {block ? (
             <DropdownMenu open={openId === m.id} onOpenChange={o => setOpenId(o ? m.id : null)}>
               <DropdownMenuTrigger render={<button type="button" title={VISIBILITY[v].label} aria-label={`“${titleOf(doc)}” is for ${VISIBILITY[v].label}. Change`} className={cn(pill, "hover:bg-foreground/12")} />}>
                 <Icon icon={VISIBILITY[v].icon} size="xs" />
@@ -96,7 +96,7 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
         <DialogHeader>
           <DialogTitle>Show “{asking && titleOf(asking.doc)}” to {asking && VISIBILITY[asking.to].label.toLowerCase()}?</DialogTitle>
           <DialogDescription>
-            It is marked in your vault as for {asking && VISIBILITY[asking.to].label.toLowerCase()}. It reaches your site and other applications only when you publish.
+            This changes the block’s visibility in the sample home. Publishing requires a separate preview and approval.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -104,9 +104,9 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
           <Button onClick={() => {
             if (!asking) return
             setVisibility(asking.doc.id, asking.to)
-            notify({ message: `“${titleOf(asking.doc)}” is marked for ${VISIBILITY[asking.to].label.toLowerCase()}. Not published yet.`, tone: "info" })
+            notify({ message: `“${titleOf(asking.doc)}” now has ${asking.to} visibility in the sample home.`, tone: "info" })
             setAsking(null)
-          }}>Mark for {asking && VISIBILITY[asking.to].label.toLowerCase()}</Button>
+          }}>Change visibility</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

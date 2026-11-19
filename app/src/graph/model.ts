@@ -8,7 +8,8 @@
 // Every edge is the person's own: a link they wrote in a block's text (`[[slug]]`), or a connection
 // they made between whole blocks. Both are evidence, rebuilt from the content. What agents work out
 // about the person stays in the cortex and is not drawn here.
-import { channelRecords, channelsOf, docForEvidence, mentions, workspaceEvidence, owner, personByHandle, posts, sees, type Audience, type Doc, type Person } from "@/data/workspace-data"
+import { blockKey, blocks, docForEvidence, evidenceKey, workspaceEvidence, channelRecords, channelsOf, entityByHandle, mentions, owner, sees, type Audience, type Doc, type Entity } from "@/data/workspace-data"
+import type { VaultEvidence } from "@/data/source"
 
 export type GraphNode = {
   id: string
@@ -20,23 +21,23 @@ export type GraphNode = {
 }
 
 /** A link written in the text, or a connection made between whole blocks. */
-export type EdgeKind = "links" | "connects"
+export type EdgeKind = VaultEvidence[number]["kind"]
 /**
  * One edge per pair of blocks. `kinds` says which ways they are joined; `weight` is how strongly:
- * one for each way they are joined, and one for each channel they share. GraphView draws it as
+ * one for each evidence kind, and one for each channel they share. GraphView draws it as
  * the line's thickness.
  */
-export type GraphEdge = { source: string; target: string; kinds: EdgeKind[]; weight: number; why?: string }
+export type GraphEdge = { source: string; target: string; kinds: EdgeKind[]; weight: number; wholeBlock?: boolean; why?: string }
 
 /** A channel, as the area its blocks are drawn in. */
 export type GraphChannel = { path: string; name: string; parent?: string; depth: number; members: string[] }
 
-export type Graph = { center: Person; nodes: GraphNode[]; edges: GraphEdge[]; channels: GraphChannel[] }
+export type Graph = { center: Entity; nodes: GraphNode[]; edges: GraphEdge[]; channels: GraphChannel[] }
 
 export type GraphFilters = {
   /** Handle or DID. Defaults to the owner; anyone else shows the owner's blocks that mention them. */
   center?: string
-  /** The repo's prime folders. The graph draws the vault's blocks only; without the vault it is empty. */
+  /** Whether the home scope includes the vault. The graph draws vault blocks. */
   vault?: boolean
   /** Links written in the text. */
   links?: boolean
@@ -44,19 +45,22 @@ export type GraphFilters = {
   connections?: boolean
   /** Who is looking: only what they can see is drawn. */
   audience?: Audience
-  /** The repository's filters, as a test each page must pass. */
+  /** The home's filters, as a test each block must pass. */
   keep?: (d: Doc) => boolean
 }
-export const DEFAULT_FILTERS = { vault: true, links: true, connections: true, audience: "personal" as Audience }
+export const DEFAULT_FILTERS = { vault: true, links: true, connections: true, audience: "private" as Audience }
 
 export function buildGraph(filters: GraphFilters = {}): Graph {
   const f = { ...DEFAULT_FILTERS, ...filters }
-  const center = (f.center && personByHandle(f.center)) || owner
+  const center = (f.center && entityByHandle(f.center)) || owner
   const isOwner = center.did === owner.did
 
-  const docs = !f.vault ? [] : (isOwner ? posts : posts.filter(p => mentions(p).includes(center.handle)))
+  const docs = !f.vault ? [] : (isOwner ? blocks : blocks.filter(p => mentions(p).includes(center.handle)))
     .filter(d => sees(f.audience, d) && (!filters.keep || filters.keep(d)))
-  const nodes = new Map<string, GraphNode>(docs.map(d => [d.id, { id: d.id, name: d.title, doc: d, channels: channelsOf(d), degree: 0 }]))
+  const nodes = new Map<string, GraphNode>(docs.map(doc => {
+    const id = evidenceKey(doc.id) ?? blockKey(doc.id)
+    return [id, { id, name: doc.title, doc, channels: channelsOf(doc), degree: 0 }]
+  }))
 
   // Channels, with every channel above them: `a/b` is b inside a.
   const channels = new Map<string, GraphChannel>()
@@ -80,24 +84,27 @@ export function buildGraph(filters: GraphFilters = {}): Graph {
     }
   }
   // Channels are records: yours show even when empty, as a label with no area yet.
-  if (isOwner && f.vault && f.audience === "personal") for (const { path } of channelRecords) channel(path)
+  if (isOwner && f.vault && f.audience === "private") for (const { path } of channelRecords) channel(path)
 
   // Edges: what each block points at, merged into one per pair.
   const edges = new Map<string, GraphEdge>()
-  const join = (a: string, b: string, kind: EdgeKind, why?: string) => {
+  const join = (a: string, b: string, kind: EdgeKind, wholeBlock: boolean, why?: string) => {
     if (a === b || !nodes.has(a) || !nodes.has(b)) return
     const key = [a, b].sort().join("|")
     const held = edges.get(key) ?? { source: a, target: b, kinds: [], weight: 0 }
     if (!held.kinds.includes(kind)) held.kinds.push(kind)
+    if (wholeBlock) held.wholeBlock = true
     if (why && !held.why) held.why = why
     edges.set(key, held)
   }
   for (const edge of workspaceEvidence()) {
-    if (edge.kind !== "links") continue
-    const from = docForEvidence(edge.from), target = docForEvidence(edge.to)
-    if (!from || !target) continue
-    if (edge.at !== "connect" && f.links) join(from.id, target.id, "links")
-    if (edge.at === "connect" && f.connections) join(from.id, target.id, "connects", from.connect?.find(link => link.to === target.slug)?.why)
+    const wholeBlock = edge.kind === "links" && edge.at === "connect"
+    if (wholeBlock ? !f.connections : !f.links) continue
+    const target = docForEvidence(edge.to)
+    const why = wholeBlock && target
+      ? nodes.get(edge.from)?.doc.connect?.find(each => each.to === target.slug)?.why
+      : undefined
+    join(edge.from, edge.to, edge.kind, wholeBlock, why)
   }
   // How strongly: each way they are joined, and each channel they share.
   for (const e of edges.values()) {

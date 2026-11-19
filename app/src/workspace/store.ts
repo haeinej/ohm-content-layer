@@ -1,10 +1,10 @@
 // Workspace state, and the handlers both the UI and the WebMCP tools call (AGENTS.md rule 2).
 import { useSyncExternalStore } from "react"
-import { blockVersion, byId, cortex, channelRecords, channelsOf, demoJournal, inbox, inOrder, owner, posts,
-  refreshSample, sampleWorkspace, sectionOf, selectSource, type Audience, type ChannelRecord, type Doc, type Visibility,
+import { blockVersion, byId, cortex, channelRecords, channelsOf, demoJournal, inbox, inOrder, owner, blocks, bySlug, isBlock,
+  refreshSample, sampleWorkspace, selectSource, type Audience, type ChannelRecord, type Doc, type Visibility,
 } from "@/data/workspace-data"
 import { docOf, fileOf } from "@/data/block-document"
-import { newNodeId } from "../../../vault/vault/node.mjs"
+import { inferKind, isChannelPath, newNodeId } from "../../../vault/vault/node.mjs"
 import { createServiceSource, type ServiceOptions } from "@/data/service-source"
 import type { BlockRef, HomeSource } from "@/data/source"
 import { sampleSource, type SampleSource } from "@/data/sample-source"
@@ -56,7 +56,7 @@ export type Density = "compact" | "comfortable" | "rounded"
 const savedDensity = (): Density => {
   try { const d = localStorage.getItem("ohm-ux:density"); return d === "comfortable" || d === "rounded" ? d : "compact" } catch { return "compact" }
 }
-/** Which of the repository's two prime folders are shown. "All" is both. */
+/** Which of the home's two parts are shown. "All" is both. */
 export type RepoScope = { cortex: boolean; vault: boolean }
 export const SIDE_WIDTH = { min: 220, max: 640, initial: 300 }
 const savedWidth = () => {
@@ -67,35 +67,35 @@ export type ToolName = "workspace.search" | "workspace.open" | "workspace.graph"
 
 type State = {
   side: Side
-  /** The personal repo: as a tree, or as the graph. */
+  /** The home: as a tree, or as the graph. */
   repoMode: "tree" | "graph" | "history"
-  /** Which of the repo's two prime folders the side panel and the graph show. */
+  /** Which of the home's two parts the side panel and the graph show. */
   scope: RepoScope
   /** The side panel's width, set with its handle. */
   sideWidth: number
   /** Who you are looking as: yourself, a friend, or anyone. */
   audience: Audience
-  /** The repository shows who each page is for, with a pill to change it. */
+  /** The home shows who each block is for, with a pill to change it. */
   showVisibility: boolean
-  /** What the repository's tree and graph are narrowed to. */
+  /** What the home's tree and graph are narrowed to. */
   filters: Filters
   graphCenter: string
   view: View
   searchOpen: boolean
   agent: { state: AgentState; label: string } | null
   rev: number
-  /** The last page brought back by a restore or revert, so only its open editor re-reads it. */
+  /** The last block brought back by a restore or revert, so only its open editor re-reads it. */
   restored: { id: string; n: number } | null
-  /** A change chosen in the repository's timeline: its page's history card opens on it. */
+  /** A change chosen in the home's timeline: its block's history card opens on it. */
   historyFocus: { id: string; line: string; n: number } | null
   appearance: Appearance
   density: Density
-  /** Pages opened, oldest first, and where we are in them: back and forward walk this. */
+  /** Blocks opened, oldest first, and where we are in them: back and forward walk this. */
   history: string[]
   at: number
   /** Where to go back to when settings close. */
   returnTo: { view: View; side: Side } | null
-  /** Ask the tree to show something (a page or a folder): it opens the way to it and scrolls to it. */
+  /** Ask the tree to show something (a block, channel or cortex category): it opens the way to it and scrolls to it. */
   reveal: { target: string; n: number } | null
   /** The panel last shown, for ⌘\ to bring back. */
   lastSide: Exclude<Side, null>
@@ -108,7 +108,7 @@ const narrow = () => typeof window !== "undefined" && window.matchMedia("(max-wi
 const sideAfterOpen = (): Partial<State> => (narrow() ? { side: null } : {})
 
 let state: State = {
-  side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "personal", showVisibility: false, filters: NO_FILTERS,
+  side: narrow() ? null : "repo", repoMode: "tree", scope: { cortex: true, vault: true }, sideWidth: savedWidth(), audience: "private", showVisibility: false, filters: NO_FILTERS,
   graphCenter: owner.handle, view: { kind: "empty" }, searchOpen: false, agent: null, rev: 0, restored: null, historyFocus: null,
   appearance: "system", density: savedDensity(), agentsAllowed: true,
   history: [], at: -1, returnTo: null, reveal: null, lastSide: "repo",
@@ -120,7 +120,7 @@ let state: State = {
 const listeners = new Set<() => void>()
 let walking = false
 const set = (patch: Partial<State>) => {
-  // The one place the open page changes: record it in history, and have the tree reveal it.
+  // The one place the open block changes: record it in history, and have the tree reveal it.
   const next = patch.view
   if (next?.kind === "doc" && !(state.view.kind === "doc" && state.view.id === next.id)) {
     if (!walking) {
@@ -145,10 +145,12 @@ export async function setSource<Master, Sealed>(
 ) {
   if (!await selectSource("service" in next ? createServiceSource(next.service) : next)) return
   usedSlugs.clear()
-  for (const doc of [...posts, ...cortex]) usedSlugs.add(doc.slug)
+  for (const doc of [...blocks, ...cortex]) usedSlugs.add(doc.slug)
   bodyReplacements.clear()
   sourceRevision = ++replacementSequence
   Object.values(marks).forEach(mark => mark.clear())
+  const unreadFixture = sampleWorkspace() && bySlug("yanaka-dusk")
+  if (unreadFixture) marks.unread.add(unreadFixture.id)
   set({ ...bump(), graphCenter: owner.handle, view: { kind: "empty" }, history: [], at: -1,
     reveal: null, returnTo: null, restored: null, historyFocus: null, searchOpen: false })
 }
@@ -161,7 +163,7 @@ export const toggleSide = (side: Exclude<Side, null>) => {
   if (state.side === "profile" && state.view.kind === "settings") return closeSettings()
   set({ side: state.side === side ? null : side })
 }
-/** ⌘\: hide the side panel, or bring back the one last shown. The page stays as it is either way. */
+/** ⌘\: hide the side panel, or bring back the one last shown. The block stays as it is either way. */
 export const togglePanel = () => set({ side: state.side ? null : state.lastSide })
 
 // History
@@ -182,7 +184,7 @@ export function go(dir: -1 | 1) {
   return false
 }
 
-/** Shows a folder in the tree: the panel opens on the repository, and the way to it opens. */
+/** Shows a folder in the tree: the panel opens on the home, and the way to it opens. */
 export function revealFolder(prime: "vault" | "cortex", path: string) {
   set({
     side: "repo", repoMode: "tree",
@@ -197,7 +199,7 @@ export const setAgent = (agent: State["agent"]) => set({ agent })
 export const setRepoMode = (repoMode: State["repoMode"]) => set({ repoMode, side: "repo" })
 export const setScope = (scope: RepoScope) => set({ scope })
 export const setFilters = (filters: Filters) => set({ filters })
-/** Whether a page shows in the repository under the current filters. */
+/** Whether a block shows in the home under the current filters. */
 export const kept = (d: Doc) => passes(state.filters, d, marks)
 export function setSideWidth(w: number) {
   const sideWidth = Math.round(Math.min(SIDE_WIDTH.max, Math.max(SIDE_WIDTH.min, w)))
@@ -210,11 +212,11 @@ export const scopeFolders = (scope: RepoScope) => scope
 // Visibility
 export const setAudience = (audience: Audience) => set({ audience })
 export const setShowVisibility = (showVisibility: boolean) =>
-  set({ showVisibility, side: "repo", repoMode: "tree", ...(showVisibility ? {} : { audience: "personal" as Audience }) })
-/** Marks who a post is for. Marking is not publishing; making a post less private asks first (the panel's dialog). */
+  set({ showVisibility, side: "repo", repoMode: "tree", ...(showVisibility ? {} : { audience: "private" as Audience }) })
+/** Marks who a block is for in the sample. The panel asks first when widening the audience. */
 export function setVisibility(id: string, visibility: Visibility) {
   const doc = byId(id)
-  if (!doc || doc.kind !== "post") throw new DOMException("Only posts have a visibility", "DataError")
+  if (!isBlock(doc)) throw new DOMException("Only blocks have visibility", "DataError")
   const held = blockVersion(id)!
   editable().markVisibility!(held.ref, visibility, held.version)
   set(refresh())
@@ -234,7 +236,7 @@ export function openSettings(tab: SettingsTab = "profile") {
   const returnTo = state.view.kind === "settings" ? state.returnTo : { view: state.view, side: state.side === "profile" ? state.lastSide : state.side }
   set({ side: narrow() && state.side === "profile" ? null : "profile", view: { kind: "settings", tab }, searchOpen: false, returnTo })
 }
-/** Leaving settings: back to the page and panel you came from. */
+/** Leaving settings: back to the block and panel you came from. */
 export function closeSettings() {
   const back = state.returnTo
   const view = back?.view.kind === "doc" && !byId(back.view.id) ? { kind: "empty" as const } : back?.view ?? { kind: "empty" as const }
@@ -264,27 +266,26 @@ export function open(id: string, mode: "read" | "edit" = "read") {
   return { id, title: doc.title, view: mode, next: mode === "edit" ? "workspace.save-draft" : "workspace.open" }
 }
 
-/** The graph lives in the side panel, in the personal repo. */
+/** The graph lives in the side panel, in the home. */
 export function showGraph(center?: string) {
   const g = buildGraph({ center, audience: state.audience, ...scopeFolders(state.scope), keep: kept })
   set({ side: "repo", repoMode: "graph", graphCenter: g.center.handle, searchOpen: false })
   return { center: g.center.handle, nodes: g.nodes.length, edges: g.edges.length }
 }
 
-let draftCount = 0
-const usedSlugs = new Set([...posts, ...cortex].map(doc => doc.slug))
-export function createDraft(input: { label?: string; sublabel?: string; channels?: string[]; title?: string } = {}) {
-  draftCount += 1
+const usedSlugs = new Set([...blocks, ...cortex].map(doc => doc.slug))
+export function createDraft(input: { homeChannel?: string; channels?: string[]; title?: string } = {}) {
+  const homeChannel = input.homeChannel?.trim() || "other"
+  validateChannel(homeChannel)
   const title = input.title?.trim() ?? ""
   const stem = slugify(title) || "untitled"
   let slug = stem
   for (let suffix = 2; usedSlugs.has(slug); suffix++) {
     slug = `${stem.slice(0, 59 - String(suffix).length)}-${suffix}`
   }
-  // Everything about the new page is set here, before the one change that records it.
+  // Everything about the new block is set here, before the one change that records it.
   const doc: Doc = {
-    id: `draft-${draftCount}`, kind: "post", slug, title,
-    label: input.label?.trim() || "other", ...(input.label && input.sublabel ? { sublabel: input.sublabel } : {}),
+    id: newNodeId(), kind: "text", slug, title, homeChannel,
     ...(input.channels?.length ? { channels: [...input.channels] } : {}), visibility: "private",
     updated: new Date().toISOString().slice(0, 10), body: "",
   }
@@ -294,17 +295,17 @@ export function createDraft(input: { label?: string; sublabel?: string; channels
   return { id: doc.id, slug, view: "edit", next: "workspace.save-draft" }
 }
 
-/** Saves the open post as private. Never publishes. */
+/** Saves the open block as private. Never publishes. */
 export function saveDraft(input: { title?: string; body?: string }) {
   const v = state.view
-  if (v.kind !== "doc") throw new DOMException("No post is open in the editor", "InvalidStateError")
+  if (v.kind !== "doc") throw new DOMException("No block is open in the editor", "InvalidStateError")
   const doc = draftOf(v.id)
-  if (!doc || doc.kind !== "post") throw new DOMException("Only posts are edited here", "DataError")
-  // Changing a post other people can see needs the person's approval (AGENTS.md rule 11): its own flow.
-  if (doc.visibility !== "private") throw new DOMException("This post is not private; changing it needs approval", "NotAllowedError")
+  if (!isBlock(doc)) throw new DOMException("Only blocks are edited here", "DataError")
+  // Changing a block other people can see needs the person's approval (AGENTS.md rule 11): its own flow.
+  if (doc.visibility !== "private") throw new DOMException("This block is not private; changing it needs approval", "NotAllowedError")
   if (input.title !== undefined) doc.title = input.title.trim()
-  if (input.body !== undefined) doc.body = input.body
-  // The editor keeps the post open; saving changes nothing about what is on screen.
+  if (input.body !== undefined) updateBody(doc, input.body)
+  // The editor keeps the block open; saving changes nothing about what is on screen.
   doc.updated = new Date().toISOString().slice(0, 10)
   persist(doc)
   set(refresh())
@@ -314,7 +315,7 @@ export function saveDraft(input: { title?: string; body?: string }) {
 export const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60)
 export { owner as me }
 
-/** A page's icon: an emoji shown above its title. */
+/** A block's icon: an emoji shown above its title. */
 export function setIcon(id: string, icon: string | undefined) {
   const doc = draftOf(id)
   if (!doc) return
@@ -322,12 +323,17 @@ export function setIcon(id: string, icon: string | undefined) {
   persist(doc)
   set(refresh())
 }
-/** Saves as you type, for private posts only. */
+function updateBody(doc: Doc, body: string) {
+  doc.body = body
+  if (doc.kind !== "post" && doc.kind !== "excerpt") doc.kind = inferKind(body) as Doc["kind"]
+}
+
+/** Saves as you type, for private blocks only. */
 export function autosave(id: string, patch: { title?: string; body?: string }) {
   const doc = draftOf(id)
-  if (!doc || doc.kind !== "post" || doc.visibility !== "private") return
+  if (!isBlock(doc) || doc.visibility !== "private") return
   if (patch.title !== undefined) doc.title = patch.title
-  if (patch.body !== undefined) doc.body = patch.body
+  if (patch.body !== undefined) updateBody(doc, patch.body)
   doc.updated = new Date().toISOString().slice(0, 10)
   persist(doc)
   set(refresh())
@@ -335,12 +341,13 @@ export function autosave(id: string, patch: { title?: string; body?: string }) {
 
 /**
  * Collects a block into a channel, keeping every channel it is already in: a block can be in any
- * number of them. Its first channel, its site section, is changed only by moving it (moveBlock).
+ * number of them. Its home channel changes when you move the home row.
  */
 export function collect(id: string, path: string) {
   const doc = draftOf(id)
-  if (!doc || doc.kind !== "post") throw new DOMException("Only blocks can be collected into channels", "DataError")
-  if (sectionOf(doc) === path || doc.channels?.includes(path)) return { added: false }
+  if (!isBlock(doc)) throw new DOMException("Only blocks can be collected into channels", "DataError")
+  validateChannel(path)
+  if (doc.homeChannel === path || doc.channels?.includes(path)) return { added: false }
   doc.channels = [...(doc.channels ?? []), path]
   persist(doc)
   set(refresh())
@@ -350,33 +357,32 @@ export function collect(id: string, path: string) {
 /** Moves or adds a block's placement and updates the destination's order. */
 export function moveBlock(id: string, from: string, to: string, opts: { before?: string; after?: string; keep?: boolean } = {}) {
   const doc = draftOf(id)
-  if (!doc || doc.kind !== "post") throw new DOMException("Only blocks move between channels", "DataError")
-  let section = false
+  if (!isBlock(doc)) throw new DOMException("Only blocks move between channels", "DataError")
+  validateChannel(to)
+  let homeChannelChanged = false
   if (from !== to) {
     if (opts.keep) {
       if (!channelsOf(doc).includes(to)) doc.channels = [...(doc.channels ?? []), to]
-    } else if (sectionOf(doc) === from) {
-      const [label, sublabel] = to.split("/")
-      doc.label = label
-      doc.sublabel = sublabel
+    } else if (doc.homeChannel === from) {
+      doc.homeChannel = to
       doc.channels = doc.channels?.filter(c => c !== to)
-      section = true
+      homeChannelChanged = true
     } else {
       doc.channels = (doc.channels ?? []).filter(c => c !== from)
-      if (sectionOf(doc) !== to && !doc.channels.includes(to)) doc.channels.push(to)
+      if (doc.homeChannel !== to && !doc.channels.includes(to)) doc.channels.push(to)
     }
     persist(doc)
   }
   if (opts.before || opts.after) {
     const records = structuredClone(channelRecords)
-    const list = inOrder(to, posts.filter(post => channelsOf(post).includes(to))).map(post => post.id).filter(x => x !== id)
+    const list = inOrder(to, blocks.filter(post => channelsOf(post).includes(to))).map(post => post.id).filter(x => x !== id)
     const index = opts.before ? list.indexOf(opts.before) : list.indexOf(opts.after!) + 1
     list.splice(index < 0 ? list.length : index, 0, id)
     ensureChannel(records, to).order = list
     updateChannels(records)
   }
   set(refresh())
-  return { section, published: section && doc.visibility !== "private" }
+  return { homeChannelChanged, published: homeChannelChanged && doc.visibility !== "private" }
 }
 
 /**
@@ -387,6 +393,7 @@ export function moveBlock(id: string, from: string, to: string, opts: { before?:
 export function moveChannel(path: string, into: string | null) {
   const name = path.split("/").at(-1)!
   const next = into ? `${into}/${name}` : name
+  validateChannel(next)
   if (into && into.includes("/")) throw new DOMException("A channel inside a channel can't hold channels yet", "DataError")
   if (into && (into === path || into.startsWith(`${path}/`))) throw new DOMException("A channel can't go inside itself", "DataError")
   if (into && channelRecords.some(c => c.path.startsWith(`${path}/`))) throw new DOMException(`“${name}” holds channels of its own, so it can't go inside another yet`, "DataError")
@@ -422,13 +429,13 @@ export function createChannel(inside?: string) {
 
 /** Removes an empty channel. One with blocks or channels in it is refused: move them out first. */
 export function deleteChannel(path: string) {
-  if (posts.some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) || channelRecords.some(c => c.path.startsWith(`${path}/`)))
+  if (blocks.some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) || channelRecords.some(c => c.path.startsWith(`${path}/`)))
     throw new DOMException(`“${path.replace("/", " › ")}” is not empty: move what is in it out first`, "DataError")
   updateChannels(channelRecords.filter(channel => channel.path !== path))
   set(refresh())
 }
 
-/** Takes a block out of a channel. Its first channel stays: moving it (moveBlock) changes that. */
+/** Takes a block out of a channel. Use moveBlock to change its home channel. */
 export function uncollect(id: string, path: string) {
   const doc = draftOf(id)
   if (!doc?.channels?.includes(path)) return { removed: false }
@@ -445,7 +452,7 @@ export function uncollect(id: string, path: string) {
  */
 export function connectDocs(id: string, toId: string, why?: string) {
   const doc = draftOf(id), target = byId(toId)
-  if (!doc || !target || doc.kind !== "post" || target.kind !== "post") throw new DOMException("Only blocks connect to blocks", "DataError")
+  if (!isBlock(doc) || !isBlock(target)) throw new DOMException("Only blocks connect to blocks", "DataError")
   if (doc.id === target.id) throw new DOMException("A block does not connect to itself", "DataError")
   if (doc.visibility !== "private") throw new DOMException("Connecting changes what others see; it is not part of this wireframe yet", "NotAllowedError")
   if (doc.connect?.some(c => c.to === target.slug)) return { added: false }
@@ -475,7 +482,7 @@ export function disconnect(id: string, toSlug: string) {
   set(refresh())
 }
 
-/** Opens a Markdown or text file as a new private page. */
+/** Opens a Markdown or text file as a new private block. */
 export function openFile(name: string, text: string) {
   const title = name.replace(/\.(md|markdown|txt)$/i, "")
   const draft = createDraft({ title })
@@ -483,10 +490,10 @@ export function openFile(name: string, text: string) {
   return draft
 }
 
-// ─── Row actions: the ⋯ menu on a page in the repository ──────────────────────
+// ─── Row actions: the ⋯ menu on a block in the home ──────────────────────
 
-/** Pinned pages show on top of the repository; unread ones show in weight until opened; archived ones leave the tree. */
-export const marks = { pinned: new Set<string>(), unread: new Set<string>(["p11"]), archived: new Set<string>() }
+/** Pinned blocks show on top of the home; unread ones show in weight until opened; archived ones leave the tree. */
+export const marks = { pinned: new Set<string>(), unread: new Set<string>(blocks.filter(doc => doc.slug === "yanaka-dusk").map(doc => doc.id)), archived: new Set<string>() }
 const flip = (set: Set<string>, id: string, on = !set.has(id)) => { if (on) set.add(id); else set.delete(id); set_(bump()) }
 const set_ = (patch: Partial<State>) => set(patch)
 
@@ -497,7 +504,7 @@ export const toggleArchive = (id: string) => {
   if (marks.archived.has(id)) marks.pinned.delete(id)
 }
 
-/** Renames a page and keeps its slug so links and connections still resolve. */
+/** Renames a block and keeps its slug so links and connections still resolve. */
 export function renameDoc(id: string, title: string) {
   const doc = draftOf(id)
   if (!doc) return
@@ -507,7 +514,7 @@ export function renameDoc(id: string, title: string) {
   set(refresh())
 }
 
-/** Removes a page from the vault. Taking a published one down from the repository is its own step. */
+/** Removes a block from the vault. Taking a published one down from the home is its own step. */
 export function deleteDoc(id: string) {
   const held = blockVersion(id)
   if (!held) return
@@ -521,7 +528,7 @@ export function deleteDoc(id: string) {
   const at = idx >= 0 && idx <= state.at ? state.at - 1 : state.at
   set({ ...refresh(), history, at, ...(state.reveal?.target === id ? { reveal: null } : {}) })
   if (!wasOpen) return
-  // Deleting the open page lands on the page before it (or after it), never a blank editor.
+  // Deleting the open block lands on the block before it (or after it), never a blank editor.
   const landing = history[at] ?? history[at + 1]
   if (landing && byId(landing)) {
     walking = true
@@ -531,12 +538,12 @@ export function deleteDoc(id: string) {
 }
 
 /**
- * Renames a vault folder (`label` or `label/sublabel`): every page in it is refiled under the new
- * name. Folders are the owner's words; a published page's address follows on its next publish.
+ * Renames a channel and refiles its blocks. A post’s address follows on its next publish.
  */
-export function renameFolder(path: string, name: string) {
+export function renameChannel(path: string, name: string) {
   const next = name.trim().toLowerCase().replace(/\s+/g, "-")
   const to = [...path.split("/").slice(0, -1), next].join("/")
+  validateChannel(to)
   if (to === path) return { published: 0 }
   if (channelRecords.some(channel => channel.path === to)) throw new DOMException(`There is already a channel “${to.replace("/", " › ")}”`, "DataError")
   const records = channelRecords.map(channel => ({ ...channel, path: replacePath(channel.path, path, to, true) }))
@@ -546,18 +553,24 @@ export function renameFolder(path: string, name: string) {
   return { published }
 }
 
+function validateChannel(path: string) {
+  if (!isChannelPath(path) || path.length > 120 || path.split("/").length > 2) {
+    throw new DOMException("Choose a channel path with one or two levels.", "DataError")
+  }
+}
+
 const replacePath = (value: string, from: string, to: string, descendants: boolean) =>
   value === from || (descendants && value.startsWith(`${from}/`)) ? to + value.slice(from.length) : value
 
 function refile(from: string, to: string, descendants: boolean) {
   let published = 0
-  for (const doc of posts) {
-    const home = sectionOf(doc)
+  for (const doc of blocks) {
+    if (!isBlock(doc)) continue
+    const home = doc.homeChannel
     const next = replacePath(home, from, to, descendants)
     const channels = doc.channels?.map(path => replacePath(path, from, to, descendants))
     if (next === home && !channels?.some((path, index) => path !== doc.channels?.[index])) continue
-    const [label, sublabel] = next.split("/")
-    persist({ ...doc, label, sublabel, channels })
+    persist({ ...doc, homeChannel: next, channels })
     if (next !== home && doc.visibility !== "private") published++
   }
   return published
@@ -583,7 +596,7 @@ function markRestored(doc: Doc) {
 export function restoreVersion(id: string, version: string, reason?: string) {
   const doc = draftOf(id)
   const held = blockVersion(id)
-  if (!doc) throw new DOMException("There is no such page", "NotFoundError")
+  if (!doc) throw new DOMException("There is no such block", "NotFoundError")
   if (doc.visibility !== "private") throw new DOMException("Restoring changes what others see; it asks first, which is not part of this wireframe yet", "NotAllowedError")
   const source = editable()
   const entry = held && source.history(held.ref).find(entry => entry.version === version)
@@ -599,7 +612,7 @@ export function restoreVersion(id: string, version: string, reason?: string) {
 }
 
 /**
- * Undoes one change, as `git revert` does: only the parts of the page that change touched go back,
+ * Undoes one change, as `git revert` does: only the parts of the block that change touched go back,
  * and later changes to other parts stay. If a later change touched the same part, it is refused, and
  * restoring a whole version is the way. Like a restore, it is a new change, so it can be undone too.
  */
@@ -608,14 +621,14 @@ export function revertChange(lineId: string) {
   const line = changeById(lineId)
   if (!line) throw new DOMException("There is no such change", "NotFoundError")
   const doc = draftOf(line.node)
-  if (!doc) throw new DOMException("That page is gone; nothing to revert", "NotFoundError")
+  if (!doc) throw new DOMException("That block is gone and cannot be reverted", "NotFoundError")
   if (doc.visibility !== "private") throw new DOMException("Reverting changes what others see; it asks first, which is not part of this wireframe yet", "NotAllowedError")
-  if (!line.before || line.op === "create") throw new DOMException("This change made the page: to undo it, delete the page", "DataError")
+  if (!line.before || line.op === "create") throw new DOMException("This change created the block. Delete the block to undo it.", "DataError")
   const before = snapshotAt(line.before)!, after = snapshotAt(line.after)!, now = snap(doc)
   const fields = line.fields as (keyof Snapshot)[]
   if (!fields.length) throw new DOMException("This change changed nothing to revert", "DataError")
   const later = fields.filter(f => JSON.stringify(now[f]) !== JSON.stringify(after[f]))
-  const named = [...new Set(later.map(f => ({ body: "text", label: "first channel", sublabel: "first channel", connect: "connections" } as Record<string, string>)[f] ?? f))]
+  const named = [...new Set(later.map(f => ({ body: "text", homeChannel: "home channel", connect: "connections" } as Record<string, string>)[f] ?? f))]
   if (later.length) throw new DOMException(`A later change also touched its ${named.join(" and ")}: restore a whole version instead`, "DataError")
   applySnapshot(doc, { ...now, ...Object.fromEntries(fields.map(f => [f, before[f]])) } as Snapshot)
   doc.updated = new Date().toISOString().slice(0, 10)
@@ -624,10 +637,10 @@ export function revertChange(lineId: string) {
   return { id: doc.id, reverted: line.id, fields }
 }
 
-/** Opens the open page's history card on one change. */
+/** Opens the open block's history card on one change. */
 export const focusHistory = (id: string, line: string) => set({ historyFocus: { id, line, n: (state.historyFocus?.n ?? 0) + 1 } })
 
-/** Names the repository as it is now, so you or an agent can come back to it. It changes nothing. */
+/** Names the home as it is now, so you or an agent can come back to it. It changes nothing. */
 export function saveNow(name: string, note?: string) {
   if (!name.trim()) throw new DOMException("A save needs a name", "DataError")
   editable()

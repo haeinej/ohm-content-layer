@@ -48,7 +48,7 @@ export const SlashCommand = Extension.create({
 // ─── [[links]] and @mentions ───────────────────────────────────────────────────
 // Drawn as links in the text and followed on click; the text itself stays plain Markdown.
 
-// `[[slug]]` reads as the page's title; `[[slug|the words]]` keeps your words, linked to the page.
+// `[[slug]]` reads as the block's title; `[[slug|the words]]` keeps your words, linked to the block.
 export const REF = /\[\[([a-z0-9-]+)(?:\|([^\]\n]+))?\]\]|@([a-z0-9.-]+\.[a-z]+)/gi
 
 export const References = (onFollow: (ref: { slug?: string; handle?: string }) => void) =>
@@ -71,8 +71,8 @@ export const References = (onFollow: (ref: { slug?: string; handle?: string }) =
                   // While the caret is in it, the link shows as written, so it can be edited.
                   const editing = selTo >= from && selFrom <= to
                   if (slug && !editing) {
-                    // [[slug]] reads as the linked page's title: a green chunk. The raw text stays in
-                    // the page (and in its Markdown), hidden.
+                    // [[slug]] reads as the linked block's title: a green chunk. The raw text stays in
+                    // the block (and in its Markdown), hidden.
                     decos.push(Decoration.widget(from, () => {
                       const chip = document.createElement("span")
                       chip.className = target ? "ohm-link" : "ohm-link is-missing"

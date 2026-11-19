@@ -1,18 +1,18 @@
-import type { BlockKind } from "./block-kind"
+import { nodeKey } from "../../../vault/vault/node.mjs"
+import { isBlockKind, type BlockKind } from "./block-kind"
 
 export type Visibility = "public" | "friends" | "private"
-export type Kind = "post" | "memory" | "observation" | "skill" | "tool"
+export type CortexKind = "identity" | "memory" | "observation" | "skill" | "tool" | "playbook" | "working" | "inference"
+export type Kind = BlockKind | CortexKind
 export type Platform = "own" | "bluesky" | "instagram" | "x"
 
 export type Doc = {
   id: string
   kind: Kind
-  vaultKind?: BlockKind
   title: string
   slug: string
-  /** Vault: the label (section) and sublabel. Cortex: the folder. */
-  label: string
-  sublabel?: string
+  /** A vault block's home channel. Cortex files are filed by kind. */
+  homeChannel?: string
   visibility: Visibility
   body: string
   updated: string
@@ -20,30 +20,30 @@ export type Doc = {
   icon?: string
   /** Where a post first appeared: "own" for nowhere else, or the platform it was brought in from. */
   platform?: Platform
-  /** Channels the block is collected into besides its site section, as `channel` or `channel/inner`. */
+  /** Channels the block is collected into besides its home channel, as `channel` or `channel/inner`. */
   channels?: string[]
   /**
    * Blocks this one connects to, made by you: each by slug, with an optional line on why. Inline
    * connections live in the body as `[[slug]]` or `[[slug|the words]]`; these are whole-block ones.
    */
   connect?: Connection[]
-  /** Cortex only: what it was drawn from, as a channel (`label`, `label/sublabel`) or a block's slug. */
-  about?: string[]
+  /** Exact versions of the vault nodes an inference came from. */
+  evidence?: { node: string; version: string }[]
 }
+
+export const isBlock = (doc?: Doc | null): doc is Doc & { kind: BlockKind; homeChannel: string } =>
+  doc != null && isBlockKind(doc.kind) && doc.homeChannel !== undefined
+export const locationOf = (doc: Doc) => doc.homeChannel ?? doc.kind
+export const blockKey = (id: string) => nodeKey({ type: "block", id })
 
 export type Connection = { to: string; why?: string }
 
-export type Person = { did: string; handle: string; name: string }
+export type Entity = { did: string; handle: string; name: string }
 
-/** The channel that is a block's site section: `label` or `label/sublabel`. */
-export const sectionOf = (d: Doc) => (d.sublabel ? `${d.label}/${d.sublabel}` : d.label)
-/** Every channel a block is in: its site section first, then any others it was collected into. */
-export const channelsOf = (d: Doc) => [sectionOf(d), ...(d.channels ?? []).filter(c => c !== sectionOf(d))]
-/**
- * A tree row for a block in a channel other than its section is `id@channel`, so the same block can
- * show in many channels; its row in its section keeps the plain id.
- */
-export const PLACED = "@"
+/** Every channel a block is in, with its home channel first. */
+export const channelsOf = (doc: Doc) => isBlock(doc) ? [...new Set([doc.homeChannel, ...(doc.channels ?? [])])] : []
+/** A secondary tree row identifies both the block and the channel path. */
+export const channelRowId = (id: string, path: string) => `${id}/${path}`
 /**
  * A channel is a record of its own: it exists whether or not anything is in it, keeps its own order
  * of blocks (the same block can be first in one channel and last in another), and has an id that
@@ -51,9 +51,9 @@ export const PLACED = "@"
  * this wireframe; the store keeps the two in step.
  */
 export type ChannelRecord = { id: string; path: string; description?: string; order: string[]; created: string }
-export const docIdOf = (rowId: string) => rowId.split(PLACED)[0]
-export const placedIn = (rowId: string) => (rowId.includes(PLACED) ? rowId.slice(rowId.indexOf(PLACED) + 1) : null)
-export const titleOf = (d: Doc) => d.title || "Untitled page"
+export const docIdOf = (rowId: string) => rowId.split("/", 1)[0]
+export const placedIn = (rowId: string) => rowId.includes("/") ? rowId.slice(rowId.indexOf("/") + 1) : null
+export const titleOf = (d: Doc) => d.title || "Untitled block"
 /** `@handle` mentions in a body. */
 export const mentions = (doc: Doc) => [...doc.body.matchAll(/@([a-z0-9.-]+\.[a-z]+)/gi)].map(m => m[1])
 /** `[[slug]]` and `[[slug|the words]]` links in a body. */
@@ -80,9 +80,9 @@ export type InboxItem = {
   unread: boolean
 }
 
-export type Audience = "personal" | "friends" | "public"
-/** Who sees what: you see everything; friends see friends and public posts; everyone sees public ones. */
+export type Audience = "private" | "friends" | "public"
+/** Who sees what: you see everything; friends see friends and public blocks; everyone sees public ones. */
 export const sees = (audience: Audience, d: Doc) =>
-  (audience === "personal" || (d.kind === "post" && (d.visibility === "public" || (audience === "friends" && d.visibility === "friends"))))
+  (audience === "private" || (isBlock(d) && (d.visibility === "public" || (audience === "friends" && d.visibility === "friends"))))
 
 // Every channel the sample blocks are in, as records, and two more of your own that are still empty.

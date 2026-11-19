@@ -70,3 +70,15 @@ fixture. Live sign-in, the account app's unlock screens, and publishing
 await app integration and live verification. Kept versions in the service
 adapter currently cover private files. The local source awaits the decision
 about the local bridge.
+
+## Workspace vocabulary
+
+[Words](../../../docs/words.md) defines the terms. The sample projection uses these contracts.
+
+- Blocks use the vault's seven kinds. `post` is reserved for published blocks. The shared `createDraft` handler takes `homeChannel`, and body edits use the vault's `inferKind` for ordinary drafts. The legacy post XRPC payload still has its `label` and `sublabel` fields.
+- [PageEditor](../../src/editor/PageEditor.tsx) keeps the title input's whitespace while the draft matches the saved title after trimming. This lets the next word follow a typed space while autosave round-trips through the vault's normalized title. Blurring the field shows the saved title.
+- Use a 13-character TID for a block ID and `block:<id>` for a vault graph key. Secondary tree rows use `<id>/<channel path>`. The same TID identifies every placement. Slugs remain in Markdown wikilinks and published addresses.
+- Channels are navigated by path. The sample's original channel record ID stays a fixture field pending the channel identity decision. The vault's evidence kinds are `contains`, `links`, `embeds`, `mentions`, `from` and `quotes`. Whole-block links use `links`; their sample-only reason is presentation metadata.
+- Search uses the `entities` scope and `entity` hits. The sample keeps vault block changes and cortex file changes in separate histories; the home timeline reads both. Cortex inferences cite `{ node, version }` and never become vault edges.
+
+Run `npm --prefix app test` from the repository root to verify the sample paths and service fixtures. See the [human guide](../../README.md#blocks-channels-and-history) to walk through the workspace.

@@ -1,7 +1,7 @@
-// Filters for the personal repository: they narrow the tree and the graph alike.
-import type { Doc, Platform, Visibility } from "@/data/workspace-data"
+// Filters for the home: they narrow the tree and the graph alike.
+import { isBlock, type Doc, type Platform, type Visibility, type Kind } from "@/data/workspace-data"
 
-export type PageType = "text" | "photo" | "table" | "checklist" | "memory" | "observation" | "skill" | "tool"
+export type PageType = Kind
 export type Edited = "any" | "week" | "month" | "year"
 export type Status = "unread" | "pinned"
 
@@ -23,13 +23,20 @@ export const PLATFORMS: { id: Platform; label: string }[] = [
 ]
 export const TYPES: { id: PageType; label: string; cortex?: boolean }[] = [
   { id: "text", label: "Text" },
-  { id: "photo", label: "Photo" },
-  { id: "table", label: "Table" },
-  { id: "checklist", label: "Checklist" },
+  { id: "excerpt", label: "Excerpt" },
+  { id: "link", label: "Link" },
+  { id: "media", label: "Media" },
+  { id: "file", label: "File" },
+  { id: "code", label: "Code" },
+  { id: "post", label: "Post" },
+  { id: "identity", label: "Identity", cortex: true },
   { id: "memory", label: "Memory", cortex: true },
   { id: "observation", label: "Observation", cortex: true },
   { id: "skill", label: "Skill", cortex: true },
   { id: "tool", label: "Tool", cortex: true },
+  { id: "playbook", label: "Playbook", cortex: true },
+  { id: "working", label: "Working memory", cortex: true },
+  { id: "inference", label: "Inference", cortex: true },
 ]
 export const EDITED: { id: Edited; label: string; days: number }[] = [
   { id: "any", label: "Any time", days: Infinity },
@@ -38,23 +45,14 @@ export const EDITED: { id: Edited; label: string; days: number }[] = [
   { id: "year", label: "Past year", days: 366 },
 ]
 
-/** What a page is, read from its content; a cortex item is its kind. */
-export function typeOf(d: Doc): PageType {
-  if (d.kind !== "post") return d.kind
-  if (/!\[[^\]]*\]\([^)]+\)/.test(d.body)) return "photo"
-  if (/^\|.*\|\s*$/m.test(d.body)) return "table"
-  if (/^\s*- \[[ x]\]/m.test(d.body)) return "checklist"
-  return "text"
-}
-
 export const activeCount = (f: Filters) =>
   f.platform.size + f.type.size + f.visibility.size + f.status.size + (f.edited === "any" ? 0 : 1)
 
-/** Whether a page passes the filters. `marks` says which pages are unread or pinned. */
+/** Whether a block passes the filters. `marks` says which blocks are unread or pinned. */
 export function passes(f: Filters, d: Doc, marks: { unread: Set<string>; pinned: Set<string> }, today = new Date()) {
-  if (f.platform.size && !(d.kind === "post" && f.platform.has(d.platform ?? "own"))) return false
-  if (f.type.size && !f.type.has(typeOf(d))) return false
-  if (f.visibility.size && !f.visibility.has(d.kind === "post" ? d.visibility : "private")) return false
+  if (f.platform.size && !(isBlock(d) && f.platform.has(d.platform ?? "own"))) return false
+  if (f.type.size && !f.type.has(d.kind)) return false
+  if (f.visibility.size && !f.visibility.has(isBlock(d) ? d.visibility : "private")) return false
   if (f.edited !== "any") {
     const days = EDITED.find(e => e.id === f.edited)!.days
     if ((today.getTime() - new Date(`${d.updated}T12:00:00`).getTime()) / 86_400_000 > days) return false

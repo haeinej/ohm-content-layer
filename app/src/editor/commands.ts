@@ -37,12 +37,12 @@ const afterBlock = (e: Editor) => {
   return $from.depth > 0 ? $from.after(1) : e.state.doc.content.size
 }
 /** From "/" the block replaces the typed command; from the toolbar it is added after the current block. */
-/** Images come from a file: the page opens a picker (or takes a dropped or pasted image). */
+/** Images come from a file: the editor opens a picker (or takes a dropped or pasted image). */
 export const insertImage = (e: Editor, range?: Range) => {
   if (range) at(e, range).run()
   window.dispatchEvent(new CustomEvent("ohm:pick-image"))
 }
-/** Puts image files into the page at a position, or after the current block. */
+/** Puts image files into the editor at a position, or after the current block. */
 export function insertImageFiles(e: Editor, files: File[], pos?: number) {
   const images = files.filter(f => f.type.startsWith("image/"))
   if (!images.length) return false
@@ -71,12 +71,12 @@ export const INSERT_GROUPS: InsertGroup[] = [
   },
   {
     label: "Create", items: [
-      { id: "page", label: "Page", hint: "Create a page inside this one", icon: FileTextIcon, keywords: "subpage new", run: (e, r) => at(e, r).insertContent("[[untitled-page]] ").run() },
+      { id: "block-link", label: "Block link", hint: "Insert a link to a block", icon: FileTextIcon, keywords: "link wiki", run: (e, r) => at(e, r).insertContent("[[untitled-block]] ").run() },
     ],
   },
   {
     label: "Media", items: [
-      { id: "image", label: "Image", hint: "Upload, or drop one on the page", icon: ImageIcon, keywords: "picture photo upload", run: insertImage },
+      { id: "image", label: "Image", hint: "Upload, or drop one in the editor", icon: ImageIcon, keywords: "picture photo upload", run: insertImage },
       { id: "video", label: "Video", hint: "Upload a video", icon: VideoIcon, keywords: "movie", run: (e, r) => { at(e, r).run(); notify({ message: "Video is not part of this wireframe", tone: "info" }) } },
       { id: "audio", label: "Audio", hint: "Upload audio", icon: AudioLinesIcon, keywords: "sound music", run: (e, r) => { at(e, r).run(); notify({ message: "Audio is not part of this wireframe", tone: "info" }) } },
       { id: "file", label: "File", hint: "Upload a file", icon: FileIcon, keywords: "attachment", run: (e, r) => { at(e, r).run(); notify({ message: "Files are not part of this wireframe", tone: "info" }) } },

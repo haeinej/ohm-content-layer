@@ -218,7 +218,7 @@ export function createServiceSource<Master, Sealed>(options: ServiceOptions<Mast
         if (!node || !isBlockKind(node.kind)) return []
         const tokens = new Set(words([node.title, node.home, ...node.channels, node.body].join(" ")))
         if (!queryWords.length || !queryWords.every(word => tokens.has(word))) return []
-        return [{ id, title: node.title ?? node.slug, kind: "post", label: node.home, excerpt: node.body.slice(0, 120) }]
+        return [{ id, title: node.title ?? node.slug, kind: node.kind, location: node.home, excerpt: node.body.slice(0, 120) }]
       }
       if (privateSession?.unlocked()?.did === did) {
         const [shared, sealed] = await Promise.all([source.listBlocks(), unlocked().files.list()])
@@ -234,7 +234,7 @@ export function createServiceSource<Master, Sealed>(options: ServiceOptions<Mast
       const searchPosts = async (visibility: Layer) => {
         const result = await vaultAsk<{ posts: Match[] }>("searchPosts", { query: { q: query, visibility, limit: String(limit) }, signal })
         return result.posts.filter(post => post.visibility === visibility).map((post): SearchHit => ({
-          id: post.id, title: post.title ?? post.slug, kind: "post", label: [post.label, post.sublabel].filter(Boolean).join(" › "), excerpt: post.passage,
+          id: post.id, title: post.title ?? post.slug, kind: "post", location: [post.label, post.sublabel].filter(Boolean).join(" › "), excerpt: post.passage,
         }))
       }
       const [publicPosts, friendsPosts, friendsFiles] = await Promise.all([

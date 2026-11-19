@@ -4,11 +4,11 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { FileTextIcon } from "lucide-react"
 import { Icon } from "@/components/ui/icon"
-import { byId, posts, sectionOf, titleOf, type Doc } from "@/data/workspace-data"
+import { byId, blocks, locationOf, titleOf, type Doc } from "@/data/workspace-data"
 import { search } from "@/data/search"
 import { cn } from "@/lib/cn"
 
-const recent = (fromId: string) => posts.filter(p => p.id !== fromId).sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 6)
+const recent = (fromId: string) => blocks.filter(p => p.id !== fromId).sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 6)
 
 export function ConnectPicker({ fromId, onPick, onCancel, placeholder = "Connect to…", className }: {
   fromId: string
@@ -54,7 +54,7 @@ export function ConnectPicker({ fromId, onPick, onCancel, placeholder = "Connect
               className={cn("flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-body", i === at && "bg-primary text-primary-foreground")}>
               <Icon icon={FileTextIcon} size="sm" className="flex-none opacity-70" />
               <span className="min-w-0 flex-1 truncate">{d.icon ? `${d.icon} ` : ""}{titleOf(d)}</span>
-              <span className={cn("flex-none truncate text-small", i === at ? "opacity-80" : "text-muted-foreground")}>{sectionOf(d).replace("/", " › ")}</span>
+              <span className={cn("flex-none truncate text-small", i === at ? "opacity-80" : "text-muted-foreground")}>{locationOf(d).replace("/", " › ")}</span>
             </button>
           </li>
         ))}
