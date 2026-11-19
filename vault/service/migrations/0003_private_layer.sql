@@ -14,3 +14,15 @@ CREATE TABLE IF NOT EXISTS private_blocks (
   PRIMARY KEY (did, id)
 );
 CREATE INDEX IF NOT EXISTS private_blocks_changes ON private_blocks (did, seq);
+
+-- A member's key rotation, as the private store sees it: `target` is the generation of the master key
+-- being rotated to. From the start, a write sealed under an older generation is refused, so no device
+-- holding only the old key adds a file the rotation would miss; `finished` is set only when no block
+-- is below the target, in the same statement that checks. The row stays after, as the floor.
+CREATE TABLE IF NOT EXISTS private_rotations (
+  did TEXT PRIMARY KEY,
+  target INTEGER NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('rotating', 'finished')),
+  started_at TEXT NOT NULL,
+  finished_at TEXT
+);

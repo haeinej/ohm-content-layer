@@ -62,6 +62,14 @@ export function privateStore(db) {
   const next = '(SELECT COALESCE(MAX(seq), 0) + 1 FROM private_blocks WHERE did = ?1)';
   const changed = (id, held) => new Refused(409, 'Changed', 'The private block has changed since the version this request names', { id, current: held?.version ?? null });
   const row = held => ({ ciphertext: JSON.parse(held.ciphertext), version: held.version });
+  const rotationOf = did => db.prepare('SELECT target, state, started_at, finished_at FROM private_rotations WHERE did = ?1').bind(did).first();
+  const olderKey = (id, floor) => new Refused(409, 'OlderKey', `This block is sealed with an older master key than ${floor.target}, which the member ${floor.state === 'rotating' ? 'is rotating to' : 'rotated to'}. Unlock again, and seal it with the newer key`, { id, target: floor.target });
+  const below = async (did, target) => (await db.prepare('SELECT COUNT(*) AS count FROM private_blocks WHERE did = ?1 AND version IS NOT NULL AND generation < ?2').bind(did, target).first()).count;
+  const generationOf = value => {
+    const number = Number(value);
+    if (!Number.isSafeInteger(number) || number < 2) throw new Refused(400, 'InvalidRequest', 'A rotation is to a generation, a whole number from 2');
+    return number;
+  };
 
   return {
     // Every private block, or with `since`, what changed after that point, removals included. Only
@@ -101,16 +109,66 @@ export function privateStore(db) {
       const was = held?.version ?? null;
       if (was === version) return { id, version, unchanged: true };
       if (was !== replaces) throw changed(id, held);
+      // One statement: the version check, and the rotation floor (no write sealed under a key older
+      // than the one being rotated to), with the write itself.
       const written = await db.prepare(
         `INSERT INTO private_blocks (did, id, version, ciphertext, generation, size, seq, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ${next}, ?7, ?7)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ${next}, ?7, ?7
+         WHERE NOT EXISTS (SELECT 1 FROM private_rotations WHERE did = ?1 AND target > ?5)
          ON CONFLICT (did, id) DO UPDATE SET version = excluded.version, ciphertext = excluded.ciphertext, generation = excluded.generation,
            size = excluded.size, seq = excluded.seq, updated_at = excluded.updated_at
          WHERE private_blocks.version IS ?8
          RETURNING seq`,
       ).bind(did, id, version, text, generation, encoder.encode(text).length, now.toISOString(), replaces).first();
-      if (!written) throw changed(id, await current(did, id));
+      if (!written) {
+        const floor = await rotationOf(did);
+        if (floor && floor.target > generation) throw olderKey(id, floor);
+        throw changed(id, await current(did, id));
+      }
       return { id, version };
+    },
+
+    // ---- Key rotation ----
+    //
+    // The re-wrap itself happens on the member's device; the service never holds a readable key. What
+    // it keeps is the floor, so the rotation cannot be undermined by a device still on the old key,
+    // and the check that nothing is left below it.
+
+    // Starts (or, for the same target, confirms) a rotation to `target`. From now on, writes sealed
+    // under an older generation are refused.
+    async beginRotation(did, target, { now = new Date() } = {}) {
+      const to = generationOf(target);
+      const started = await db.prepare(
+        `INSERT INTO private_rotations (did, target, state, started_at) VALUES (?1, ?2, 'rotating', ?3)
+         ON CONFLICT (did) DO UPDATE SET target = excluded.target, state = 'rotating', started_at = excluded.started_at, finished_at = NULL
+         WHERE private_rotations.target < excluded.target
+         RETURNING target`,
+      ).bind(did, to, now.toISOString()).first();
+      const held = await rotationOf(did);
+      if (!started && held.target > to) throw new Refused(409, 'RotationAhead', `The member already rotated to ${held.target}`, { target: held.target });
+      return { target: to, state: held.state, remaining: await below(did, to), ...(started ? {} : { unchanged: true }) };
+    },
+
+    async rotation(did) {
+      const held = await rotationOf(did);
+      return { rotation: held ? { target: held.target, state: held.state, remaining: await below(did, held.target), started: held.started_at, ...(held.finished_at ? { finished: held.finished_at } : {}) } : null };
+    },
+
+    // Finishes the rotation only if no private block is below the target, checked in the same
+    // statement that marks it finished.
+    async finishRotation(did, target, { now = new Date() } = {}) {
+      const to = generationOf(target);
+      const finished = await db.prepare(
+        `UPDATE private_rotations SET state = 'finished', finished_at = ?3
+         WHERE did = ?1 AND target = ?2 AND state = 'rotating'
+           AND NOT EXISTS (SELECT 1 FROM private_blocks WHERE did = ?1 AND version IS NOT NULL AND generation < ?2)
+         RETURNING target`,
+      ).bind(did, to, now.toISOString()).first();
+      if (finished) return { target: to, state: 'finished' };
+      const held = await rotationOf(did);
+      if (!held || held.target !== to) throw new Refused(404, 'NotFound', `No rotation to ${to} is under way`);
+      if (held.state === 'finished') return { target: to, state: 'finished', unchanged: true };
+      throw new Refused(409, 'RotationRemaining', 'Some private blocks are still sealed under the older key. Re-wrap them, then finish', { target: to, remaining: await below(did, to) });
     },
 
     async remove(did, id, { replaces = null, now = new Date() } = {}) {

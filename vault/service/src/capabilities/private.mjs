@@ -21,13 +21,34 @@ export default {
     },
     'com.ohmmmm.vault.putPrivateBlock': {
       verb: 'POST', asks: 'member', changes: true,
-      about: 'Saves one private block\'s ciphertext. Anything that is not a sealed file is refused, so readable text is never kept. `replaces` is the version being replaced and is left out for a new block. Sent twice, it ends the same as sent once.',
+      about: 'Saves one private block\'s ciphertext. Anything that is not a sealed file is refused, so readable text is never kept, and so is a block sealed under an older master key than a rotation started. `replaces` is the version being replaced and is left out for a new block. Sent twice, it ends the same as sent once.',
       takes: { block: '`id` and `ciphertext` (the sealed file)', replaces: 'optional: the version it replaces' },
       gives: '`id`, `version`, and `unchanged` when nothing differed',
       run: async ({ body, privateBlocks, did }) => {
         const { block, replaces = null } = await body();
         return privateBlocks.write(did, block, { replaces });
       },
+    },
+    'com.ohmmmm.vault.beginPrivateRotation': {
+      verb: 'POST', asks: 'member', changes: true,
+      about: 'Starts a rotation of the member\'s master key to generation `target`, as the private store sees it: from now on a block sealed under an older generation is refused. The re-wrap happens on the member\'s device. The same target again changes nothing.',
+      takes: { target: 'the generation being rotated to' },
+      gives: '`target`, `state`, `remaining` (blocks still below it), and `unchanged` when it was already started',
+      run: async ({ body, privateBlocks, did }) => privateBlocks.beginRotation(did, (await body()).target),
+    },
+    'com.ohmmmm.vault.getPrivateRotation': {
+      verb: 'GET', asks: 'member', changes: false,
+      about: 'The member\'s latest key rotation, and how many private blocks are still below its target, so any device can resume it.',
+      takes: {},
+      gives: '`rotation` (target, state, remaining, started, finished) or null',
+      run: ({ privateBlocks, did }) => privateBlocks.rotation(did),
+    },
+    'com.ohmmmm.vault.finishPrivateRotation': {
+      verb: 'POST', asks: 'member', changes: true,
+      about: 'Finishes the rotation to `target`, only if no private block is still below it, checked in the same statement. The account deletes the old key\'s copies only after this.',
+      takes: { target: 'the generation being rotated to' },
+      gives: '`target`, `state`, and `unchanged` when it was already finished',
+      run: async ({ body, privateBlocks, did }) => privateBlocks.finishRotation(did, (await body()).target),
     },
     'com.ohmmmm.vault.deletePrivateBlock': {
       verb: 'POST', asks: 'member', changes: true,

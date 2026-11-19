@@ -101,6 +101,8 @@ How rotation is built (ohm-onboarding `docs/keys.md`):
 - The account holds the new key's copies beside the old key's until every file key is re-wrapped, then deletes the old copies. Each file is wrapped by one key or the other at every moment, and both keys are held, so stopping part way leaves every file openable; any device that opens the new key resumes.
 - The old key is kept wrapped by the new one (**history**), so a file the re-wrap missed still opens. Whoever holds the newer key gets the older, never the reverse.
 - A passkey's copy needs that passkey's PRF output, which only its authenticator gives, so a rotation keeps only the passkeys used on the rotating device; others are added again afterwards.
+- The vault service keeps the rotation's floor (`private_rotations`): from `beginPrivateRotation`, a private block sealed under an older generation is refused, before and after the finish, and `finishPrivateRotation` succeeds only when no block is below the target, checked in the same statement. The account deletes the old key's copies only after that. The re-wrap itself stays on the device: no Worker, Durable Object or Workflow ever holds a readable master key.
+- Planned with the account service's move to Cloudflare Workers (not built): the account Worker's `finishRotation` re-checks with the vault through a service binding before deleting old copies, and the account keeps each member's key copies, rotation, history and device links in a per-member Durable Object, whose alarm deletes an expired device link on time.
 
 ## Linking a device without a synced passkey
 

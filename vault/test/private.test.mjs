@@ -143,3 +143,36 @@ test('only the member reaches their private blocks; friends and other members se
   assert.deepEqual([stale.status, stale.error, stale.current], [409, 'Changed', put.version]);
   assert.equal((await ask(haein, 'deletePrivateBlock', { body: { id, replaces: put.version } })).removed, true);
 });
+
+test('during a rotation, old-key writes are refused, and it finishes only when nothing is below the target', async () => {
+  const store = privateStore(await testDatabase());
+  const keys = await sealer();
+  const did = 'did:web:pds.haein.test';
+  const [a, b] = [opaque(), opaque()];
+  const va = (await store.write(did, { id: a, ciphertext: await keys.seal(did, a, 'a') })).version;
+  const vb = (await store.write(did, { id: b, ciphertext: await keys.seal(did, b, 'b') })).version;
+  assert.deepEqual((await store.rotation(did)).rotation, null);
+
+  const begun = await store.beginRotation(did, 2);
+  assert.deepEqual([begun.target, begun.state, begun.remaining], [2, 'rotating', 2]);
+  assert.equal((await store.beginRotation(did, 2)).unchanged, true);
+  await assert.rejects(store.beginRotation(did, 1), refusal('InvalidRequest'));
+  // A device still on the old key cannot add or change a file the rotation would miss.
+  await assert.rejects(store.write(did, { id: opaque(), ciphertext: await keys.seal(did, 'x', 'late') }), refusal('OlderKey'));
+  await assert.rejects(store.write(did, { id: a, ciphertext: await keys.seal(did, a, 'a edited') }, { replaces: va }), refusal('OlderKey'));
+  // Not finished while a block is left below; the answer says how many.
+  await store.write(did, { id: a, ciphertext: await keys.seal(did, a, 'a', 2) }, { replaces: va });
+  const early = await store.finishRotation(did, 2).catch(problem => problem);
+  assert.deepEqual([early.code, early.extra.remaining], ['RotationRemaining', 1]);
+  assert.equal((await store.rotation(did)).rotation.remaining, 1);
+  await store.write(did, { id: b, ciphertext: await keys.seal(did, b, 'b', 2) }, { replaces: vb });
+  assert.deepEqual(await store.finishRotation(did, 2), { target: 2, state: 'finished' });
+  assert.equal((await store.finishRotation(did, 2)).unchanged, true);
+  await assert.rejects(store.finishRotation(did, 3), refusal('NotFound'));
+  // The floor stays: an old-key write is still refused after the rotation finished.
+  await assert.rejects(store.write(did, { id: opaque(), ciphertext: await keys.seal(did, 'y', 'stale') }), refusal('OlderKey'));
+  assert.ok(await store.write(did, { id: opaque(), ciphertext: await keys.seal(did, 'z', 'new', 2) }));
+  // A later rotation moves the floor; an earlier one is refused.
+  assert.equal((await store.beginRotation(did, 3)).target, 3);
+  await assert.rejects(store.beginRotation(did, 2), refusal('RotationAhead'));
+});
