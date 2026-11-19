@@ -56,7 +56,7 @@ How it looks and behaves, as Obsidian's graph view does:
 - **Centred on someone else** (from search or an inbox mention): only your blocks that mention them; "Back to me" returns.
 - **What it draws:** the vault's blocks the current audience can see, through the repository's filters. With only the cortex in scope, it is empty.
 - **Code:** built in `src/graph/model.ts` (blocks, channels, edges and their strength) and `src/workspace/GraphView.tsx` (forces, areas, interaction, drawing).
-- **Private blocks** (see ohm-vault's `plans/encryption.md`): their channels and connections are inside the encrypted files, so this graph is built on the device from decrypted blocks, never by the server.
+- **Private blocks** (see ohmmmm's [`vault/plans/encryption.md`](https://github.com/haeinej/ohmmmm/blob/main/vault/plans/encryption.md)): their channels and connections are inside the encrypted files, so this graph is built on the device from decrypted blocks, never by the server.
 
 ## The page editor
 
