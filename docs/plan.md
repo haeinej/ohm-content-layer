@@ -341,5 +341,7 @@ On 14 November 2026:
 
 ## Open decisions
 
+- **One journal for history and agent traces.** Proposed in [journal-and-history.md](journal-and-history.md): one append-only log for sessions, changes, traces, notes, proposals, decisions and stamps, with memories citing the versions they were drawn from.
+
 - **Whether a cortex can serve more than one identity,** such as a person and their company. The plan assumes one cortex per identity.
 - **How a remote client signs in** to a cortex served over HTTP.
