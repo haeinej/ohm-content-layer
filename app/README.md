@@ -40,7 +40,7 @@ npm --prefix app run dev   # http://localhost:5190
 
 - [flows/paths.md](flows/paths.md): every interaction path, what it is for, its end state, and the WebMCP tool for it
 - [AGENTS.md](AGENTS.md): the rules every flow follows
-- Build the app on its own from the repository root with `npm ci --prefix app` and `npm --prefix app run build`. The app install includes what the shared vault reader needs.
+- Install the app from the repository root with `npm ci --prefix app`. Run `npm --prefix app run build` to build it and `npm --prefix app test` to run its tests. Both use the app install.
 - The editor, tree, graph, connections and search use the same sample home. Create a private draft and add it to a channel to see it in the tree and find it in search. Sample changes live in memory and reset on reload. [Data sources](docs/agents/home-source.md) describes the sample and service contracts.
 - [docs/design.md](docs/design.md): ohm-ux's design layer: one radius for every surface, density, compact menus
 - [docs/webmcp.md](docs/webmcp.md): the WebMCP API as of the 13 November 2026 draft, and what changed from earlier guides
