@@ -1,6 +1,6 @@
 # Three layers: public, friends, and a private vault the server cannot read
 
-Written 19 November 2026, revised the same day. Keys live in ohm-onboarding, the account app. A proposal; nothing here is built. It extends [vault.md](vault.md).
+Written 19 November 2026, revised the same day. Keys live in ohm-onboarding, the account app. Partly built: see Steps. It extends [vault.md](vault.md). In the merged repository this is `vault/plans/encryption.md`; a person's vault folder is `ohmmmm.<handle>/vault`, beside their cortex (../../README.md).
 
 The first version of this plan encrypted friends-only content end to end as well. This revision keeps end-to-end encryption for the private layer only. The server can read the public and friends layers, so it can serve, search and share them; the private layer is a wallet the server holds but cannot open.
 
@@ -26,7 +26,7 @@ The private layer works like a password manager such as 1Password, or a messenge
 | Handle and profile | Yes | Already public in AT Protocol |
 | Published posts | Yes | Public by design; they live on the member's PDS and ohm may index them |
 | Friends-layer blocks, as `{ id, path, text, version }`, and the member's friend list (DIDs) | Yes | So ohm can show them to those friends, search them, and render them on any device without keys. Encrypted at rest with a key ohm manages, which protects against a stolen disk or backup, not against ohm itself |
-| The member's public encryption key, and each linked device's public key | Yes | Device links can be checked. Public keys reveal nothing |
+| A device link's one-time public key, while the link lasts (five minutes) | Yes | So the unlocked device's answer can be checked against the code it scanned. Public keys reveal nothing |
 | Private-layer blocks, as `{ id, ciphertext, version }` | **No** | Storage and sync only |
 | The master key, wrapped by each passkey's PRF output and by the recovery code, with each passkey's credential ID | **No** | So a signed-in device with a passkey, or the code, can unlock. The server cannot unwrap any copy |
 
@@ -96,6 +96,12 @@ These are possible while the vault is unlocked:
 
 If a passkey or the code may have been exposed, rotate the master key: make a new one, re-wrap every file key, and re-wrap the master key for each remaining passkey and the code. File contents do not need re-encrypting.
 
+How rotation is built (ohm-onboarding `docs/keys.md`):
+- Each master key has a **generation**; each wrapped copy and each sealed file says which generation it belongs to.
+- The account holds the new key's copies beside the old key's until every file key is re-wrapped, then deletes the old copies. Each file is wrapped by one key or the other at every moment, and both keys are held, so stopping part way leaves every file openable; any device that opens the new key resumes.
+- The old key is kept wrapped by the new one (**history**), so a file the re-wrap missed still opens. Whoever holds the newer key gets the older, never the reverse.
+- A passkey's copy needs that passkey's PRF output, which only its authenticator gives, so a rotation keeps only the passkeys used on the rotating device; others are added again afterwards.
+
 ## Linking a device without a synced passkey
 
 A device that cannot use any of the member's passkeys, and should not need the code, can be linked from one that is unlocked:
@@ -104,10 +110,12 @@ A device that cannot use any of the member's passkeys, and should not need the c
 2. The unlocked device scans it and sends the master key encrypted to that key, through the server, which cannot read it.
 3. The new device then makes its own passkey, so it can unlock itself from then on.
 
+Built in ohm-onboarding: a P-256 key pair whose private half never leaves the new device's memory, ECDH and HKDF to an AES key bound to the DID, the link and both public keys; the account keeps the handoff for five minutes, serves it once, and refuses an answer whose key is not the one the link started with. The QR code is what stops the server putting its own key in place of the new device's.
+
 ## The two stores
 
 - **Friends store.** It holds readable vault files: today's D1 `posts` table, generalised from posts to every kind of block, so a block, a channel or an entity can be friends-only. Writes use compare-and-swap on `replaces`, as the post store does now.
-- **Private store.** A vault file `{ path, text }` becomes `{ id, ciphertext, version }`.
+- **Private store.** A vault file `{ path, text }` becomes `{ id, ciphertext, version }`. Built: `private_blocks` (`service/migrations/0003_private_layer.sql`) and the Private requests (`listPrivateBlocks`, `getPrivateBlock`, `putPrivateBlock`, `deletePrivateBlock`). The ciphertext is a sealed file as ohm-onboarding's `packages/keys` makes it; the service accepts that shape and nothing else, so readable text is refused. `generation`, the size and the version are the only things it can see, and `listPrivateBlocks` with `below` finds the files a rotation has not re-wrapped.
   - The ID is opaque, because paths and file names are content too.
   - `version` is computed over the ciphertext, so the server can still refuse a stale write without reading anything.
   - The journal, the index and the configuration of roots are private: encrypted the same way, or kept only on devices.
@@ -155,10 +163,10 @@ As understood when this was written, AT Protocol's proposals for private data ("
 
 1. ~~`visibility` on blocks in place of `intent`, read and written by `vault/node.mjs`, with private as the default.~~ Done. A file with `visibility`, no `kind` and nothing only a block has is still read as a post file, so existing post files do not change; post sync reads files with the post reader and is unaffected.
 2. ~~Generalise the friends store from posts to vault files, with the friend list by DID and access checks.~~ Done on the service: `blocks` and `friends` tables (`service/migrations/0002_friends_layer.sql`), the Friends requests, friends-only posts readable by friends through the same requests. Friends-only posts stay in `posts`; other blocks are kept as files. Adding a friend is session-only. Not yet used by the editor or sync, and the migration is not applied to the deployed database.
-3. Keys: setup (master key, recovery code, first passkey), unlock with OAuth and the passkey's PRF, recovery with the code, the wrapped copies on the server, file keys. **Built in ohm-onboarding**, the account app: `packages/keys` (the device side, tested with a stand-in authenticator) and the account service's `keys.*` requests for the wrapped copies. The recovery is a 56-character code rather than 24 words, because no word list was taken in; its version byte leaves room for one.
-4. The private store: the ciphertext format, opaque IDs, and compare-and-swap on ciphertext versions.
+3. Keys: setup (master key, recovery code, first passkey), unlock with OAuth and the passkey's PRF, recovery with the code, the wrapped copies on the server, file keys. **Built in ohm-onboarding**, the account app: `packages/keys` (the device side, tested with a stand-in authenticator) and the account service's `keys.*` requests for the wrapped copies, with the setup, unlock, recovery and management screens, and master key rotation. The recovery is a 56-character code rather than 24 words, because no word list was taken in; its version byte leaves room for one.
+4. ~~The private store: the ciphertext format, opaque IDs, and compare-and-swap on ciphertext versions.~~ Done on the service (see "The two stores"). The migration is not applied to the deployed database, and nothing uses it yet but tests.
 5. `ohm vault sync` between both stores and the local folder, with confirmation before anything leaves the private layer.
-6. Device linking by QR.
+6. ~~Device linking by QR.~~ Built in ohm-onboarding (see above). Not tried with a real camera between two devices.
 7. The web app: server-rendered public and friends; private decrypted, searched and graphed on the device.
 8. Move existing private posts out of D1 and KV into the private store, then delete the readable copies.
 

@@ -56,6 +56,27 @@ CREATE INDEX IF NOT EXISTS blocks_changes ON blocks (did, seq);
 -- A path is a file in the member's folder, so it is used once.
 CREATE UNIQUE INDEX IF NOT EXISTS blocks_path ON blocks (did, path) WHERE version IS NOT NULL;
 
+-- The private layer: private blocks, as ciphertext only (plans/encryption.md, "The two stores").
+-- `id` is opaque, chosen on the member's device; paths and names are content and are inside the
+-- ciphertext. `ciphertext` is the sealed file (a file key wrapped by the member's master key, and
+-- the contents encrypted with it), which the service cannot open. `version` is computed over the
+-- ciphertext, so a stale write is refused without reading anything. `generation` says which master
+-- key wraps the file key, so a key rotation can find the files it has not re-wrapped yet. A removed
+-- block keeps its row with no version, so "what changed since" can say it went.
+CREATE TABLE IF NOT EXISTS private_blocks (
+  did TEXT NOT NULL,
+  id TEXT NOT NULL,
+  version TEXT,
+  ciphertext TEXT,
+  generation INTEGER,
+  size INTEGER,
+  seq INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (did, id)
+);
+CREATE INDEX IF NOT EXISTS private_blocks_changes ON private_blocks (did, seq);
+
 -- Who may read a member's friends layer, by DID. The member adds and removes them.
 CREATE TABLE IF NOT EXISTS friends (
   did TEXT NOT NULL,

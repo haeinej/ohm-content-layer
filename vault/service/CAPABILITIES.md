@@ -12,6 +12,7 @@ This page is the whole list. It is written from the same tables the service and 
 | --- | --- | --- | --- |
 | **Posts** | Read and change the posts in a vault, one at a time. Every change names the version it replaces, so two edits never overwrite each other unseen. | `listPosts`, `getPost`, `putPost`, `deletePost` | [posts.mjs](src/capabilities/posts.mjs) |
 | **Friends** | The friends layer: friends-only blocks, kept readable so the friends a member chose can read them, and the friend list that says who they are. A friend reads friends-only posts and blocks alike. Private blocks are never kept here. | `listBlocks`, `getBlock`, `putBlock`, `deleteBlock`, `listFriends`, `addFriend`, `removeFriend`, `listShared`, `getShared` | [friends.mjs](src/capabilities/friends.mjs) |
+| **Private** | The private layer: private blocks, kept only as ciphertext sealed on the member's devices. The service stores and syncs them and cannot read them; no friend or agent can be given their contents by the service. Each is `{ id, ciphertext, version }`, with an opaque ID and compare-and-swap on the version. | `listPrivateBlocks`, `getPrivateBlock`, `putPrivateBlock`, `deletePrivateBlock` | [private.mjs](src/capabilities/private.mjs) |
 | **Structure** | The shape of a vault: its labels, the sublabels inside them, and a line for each post. Enough to draw it or decide where something belongs, without reading any post in full. | `getTree` | [structure.mjs](src/capabilities/structure.mjs) |
 | **Search** | Find posts by the words in them, at every visibility. A title counts for more than a label, and a label for more than the body. | `searchPosts` | [search.mjs](src/capabilities/search.mjs) |
 | **Mirror** | Bring what the member has already published on their PDS into the vault. It only reads the PDS, and it never changes a post the member has since changed in the vault. | `importPublished` | [mirror.mjs](src/capabilities/mirror.mjs) |
@@ -190,6 +191,54 @@ One friends-only block or post another member shares with the asker, as its file
 | Takes | `owner`: the DID whose friends layer to read<br>`id`: the block's or post's ID |
 | Gives | `block` (id, path, text), `version` |
 
+## Private
+
+The private layer: private blocks, kept only as ciphertext sealed on the member's devices. The service stores and syncs them and cannot read them; no friend or agent can be given their contents by the service. Each is `{ id, ciphertext, version }`, with an opaque ID and compare-and-swap on the version.
+
+### `com.ohmmmm.vault.listPrivateBlocks`
+
+Every private block, by opaque ID, with its version, size and the generation of the master key that wraps its key. With `since`, only what changed after an earlier list, removals included. With `below`, only blocks wrapped by an older generation than that, for finishing a key rotation.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | `since`: optional: the `cursor` of an earlier list<br>`below`: optional: a generation |
+| Gives | `blocks` (id, version, generation, size), `cursor`, and `more` when there is another page |
+
+### `com.ohmmmm.vault.getPrivateBlock`
+
+One private block's ciphertext and version. Only the member's devices can open it.
+
+| | |
+| --- | --- |
+| Reads or changes | Reads only (`GET`) |
+| Who may ask | The member |
+| Takes | `id`: the block's opaque ID |
+| Gives | `id`, `ciphertext`, `version` |
+
+### `com.ohmmmm.vault.putPrivateBlock`
+
+Saves one private block's ciphertext. Anything that is not a sealed file is refused, so readable text is never kept. `replaces` is the version being replaced and is left out for a new block. Sent twice, it ends the same as sent once.
+
+| | |
+| --- | --- |
+| Reads or changes | Changes (`POST`) |
+| Who may ask | The member |
+| Takes | `block`: `id` and `ciphertext` (the sealed file)<br>`replaces`: optional: the version it replaces |
+| Gives | `id`, `version`, and `unchanged` when nothing differed |
+
+### `com.ohmmmm.vault.deletePrivateBlock`
+
+Removes one private block for good.
+
+| | |
+| --- | --- |
+| Reads or changes | Changes (`POST`) |
+| Who may ask | The member |
+| Takes | `id`: the block's opaque ID<br>`replaces`: the version being removed |
+| Gives | `id`, `removed` |
+
 ## Structure
 
 The shape of a vault: its labels, the sublabels inside them, and a line for each post. Enough to draw it or decide where something belongs, without reading any post in full.
@@ -358,13 +407,13 @@ A refusal is JSON with an `error`, which is one of the names below, and a `messa
 | `WrongMethod` | 405 | The request is the other of GET and POST |
 | `InvalidRequest` | 400 | The request is not JSON, or something it says is not what that request takes |
 | `InvalidPost` | 400 | The post is not one the vault can hold. The message lists every reason |
-| `InvalidBlock` | 400 | The block is not one the friends layer can hold: it is private or public, a post, or its file has problems. The message lists every reason |
+| `InvalidBlock` | 400 | The block is not one the layer can hold: for the friends layer, it is private or public, a post, or its file has problems; for the private layer, it is not a sealed file under an opaque ID. The message says why |
 | `InvalidCursor` | 400 | `since` is not a value an earlier list returned |
 | `NotFound` | 404 | There is no such post, block or saved version, or nothing there is shared with the asker |
-| `Changed` | 409 | The post or block has changed since the version the request names. The answer carries the current version |
+| `Changed` | 409 | The post, block or private block has changed since the version the request names. The answer carries the current version |
 | `SlugTaken` | 409 | Another post in the vault already has that slug |
 | `PathTaken` | 409 | Another block in the friends layer is already at that path |
-| `TooLarge` | 413 | The post is more than 600 KB of text, or a file it places is empty or larger than 25 MB |
+| `TooLarge` | 413 | The post or block is more than 600 KB of text, a sealed private block is more than 1 MB, or a file it places is empty or larger than 25 MB |
 | `FileUnreachable` | 502 | A file a post places could not be fetched from where the post says it is |
 | `AccountNotFound` | 404 | No AT Protocol account answers to that handle or DID |
 | `NoRepository` | 400 | The account's DID document does not say where its repository is kept |
@@ -410,6 +459,10 @@ These requests have no MCP tool. They serve the editor, command line, adapters o
 | `removeFriend` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
 | `listShared` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
 | `getShared` | Friends | Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor |
+| `listPrivateBlocks` | Private | undefined |
+| `getPrivateBlock` | Private | undefined |
+| `putPrivateBlock` | Private | undefined |
+| `deletePrivateBlock` | Private | undefined |
 | `exportFiles` | Export | The command line and the editor write the vault out. An agent reads posts one at a time |
 | `get` | Account | It rides on an ohm session, which an agent does not have |
 | `connect` | Account | It rides on an ohm session, which an agent does not have |

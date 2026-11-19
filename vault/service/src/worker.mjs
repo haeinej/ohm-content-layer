@@ -9,6 +9,7 @@ import { REQUESTS } from './capabilities/index.mjs';
 import { admitMember, createIdentity } from './identity.mjs';
 import { fromOurPages, links, ohmUser } from './ohm.mjs';
 import { blockStore } from './blocks.mjs';
+import { privateStore } from './private.mjs';
 import { postStore, Refused } from './store.mjs';
 
 const HEADERS = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
@@ -86,6 +87,7 @@ export function createService({ whoIs, get = fetch } = {}) {
         name, request, url, env, get, identify, linked, link, did, user,
         posts: postStore(env.DB),
         blocks: blockStore(env.DB),
+        privateBlocks: privateStore(env.DB),
         body: () => sent(request),
       });
       // Nearly every answer is JSON. A request that hands over a file answers with the file itself.

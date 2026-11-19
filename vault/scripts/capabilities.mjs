@@ -18,7 +18,7 @@ const ASKS = {
   ohm: ['The member, signed in to ohm', 'Their ohm session only. A request that changes something must also come from ohm\'s own pages'],
 };
 const FILES = Object.fromEntries(Object.entries({
-  Posts: 'posts', Friends: 'friends', Structure: 'structure', Search: 'search', Mirror: 'mirror', Publish: 'publish', Export: 'export', Account: 'account', Identity: 'identity',
+  Posts: 'posts', Friends: 'friends', Private: 'private', Structure: 'structure', Search: 'search', Mirror: 'mirror', Publish: 'publish', Export: 'export', Account: 'account', Identity: 'identity',
 }).map(([name, file]) => [name, `src/capabilities/${file}.mjs`]));
 
 // Every way the service says no. The same words go to a person in the editor and to an agent.
@@ -36,13 +36,13 @@ export const REFUSALS = {
   WrongMethod: [405, 'The request is the other of GET and POST'],
   InvalidRequest: [400, 'The request is not JSON, or something it says is not what that request takes'],
   InvalidPost: [400, 'The post is not one the vault can hold. The message lists every reason'],
-  InvalidBlock: [400, 'The block is not one the friends layer can hold: it is private or public, a post, or its file has problems. The message lists every reason'],
+  InvalidBlock: [400, 'The block is not one the layer can hold: for the friends layer, it is private or public, a post, or its file has problems; for the private layer, it is not a sealed file under an opaque ID. The message says why'],
   InvalidCursor: [400, '`since` is not a value an earlier list returned'],
   NotFound: [404, 'There is no such post, block or saved version, or nothing there is shared with the asker'],
-  Changed: [409, 'The post or block has changed since the version the request names. The answer carries the current version'],
+  Changed: [409, 'The post, block or private block has changed since the version the request names. The answer carries the current version'],
   SlugTaken: [409, 'Another post in the vault already has that slug'],
   PathTaken: [409, 'Another block in the friends layer is already at that path'],
-  TooLarge: [413, 'The post is more than 600 KB of text, or a file it places is empty or larger than 25 MB'],
+  TooLarge: [413, 'The post or block is more than 600 KB of text, a sealed private block is more than 1 MB, or a file it places is empty or larger than 25 MB'],
   FileUnreachable: [502, 'A file a post places could not be fetched from where the post says it is'],
   AccountNotFound: [404, 'No AT Protocol account answers to that handle or DID'],
   NoRepository: [400, 'The account\'s DID document does not say where its repository is kept'],

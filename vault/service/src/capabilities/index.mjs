@@ -14,11 +14,12 @@ import friends from './friends.mjs';
 import identity from './identity.mjs';
 import mirror from './mirror.mjs';
 import posts from './posts.mjs';
+import privateLayer from './private.mjs';
 import publish from './publish.mjs';
 import search from './search.mjs';
 import structure from './structure.mjs';
 
-export const CAPABILITIES = [posts, friends, structure, search, mirror, publish, exporting, account, identity];
+export const CAPABILITIES = [posts, friends, privateLayer, structure, search, mirror, publish, exporting, account, identity];
 
 // Every request by its name, with the capability it belongs to.
 export const REQUESTS = Object.fromEntries(CAPABILITIES.flatMap(capability =>

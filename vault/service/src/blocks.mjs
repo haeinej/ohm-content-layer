@@ -3,7 +3,7 @@
 // every other friends-only block, kept here as the file it is in the member's folder.
 //
 // Only friends-only blocks are taken. A private block is never kept readable: it belongs in the
-// encrypted store (plans/encryption.md), which is not built yet. A public block is published as a
+// private layer's store (./private.mjs), as ciphertext sealed on the member's device. A public block is published as a
 // post. Every write and removal names the version it replaces, and the database makes that check in
 // the same statement that makes the change, as the post store does.
 //
@@ -32,7 +32,7 @@ export function friendsBlock(given) {
   if (!read?.node || read.node.type !== 'block') refuse(`${path} is not a block's file: a Markdown file, in no folder starting with "." or "_"`);
   const { node, problems } = read;
   if (node.kind === 'post') refuse('This file reads as a post: it has visibility and no kind. Keep a post with putPost, which already keeps friends-only posts in this layer; to keep it as a block, give it a kind, such as kind: text');
-  if (node.visibility === 'private') refuse('A private block is never kept readable here. It belongs in the encrypted store, which is not built yet; until then it stays in the member\'s folder');
+  if (node.visibility === 'private') refuse('A private block is never kept readable here. Seal it on your device and keep it with putPrivateBlock');
   if (node.visibility === 'public') refuse('A public block is published, as a post. Keep it here as friends-only, or publish it');
   if (node.id && node.id !== id) refuse(`The file's id property is ${node.id}, not ${id}`);
   if (problems.length) refuse(problems.join('\n'));

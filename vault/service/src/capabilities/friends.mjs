@@ -1,7 +1,7 @@
 // Friends: the member's friends layer. Their friends-only blocks other than posts (friends-only
 // posts are kept with the Posts requests), who their friends are, and what a friend may read.
 // The service can read everything in this layer, so it can show it to those friends; private blocks
-// are never sent here (plans/encryption.md).
+// are never sent here; they are kept as ciphertext by the Private requests (plans/encryption.md).
 export default {
   name: 'Friends',
   about: 'The friends layer: friends-only blocks, kept readable so the friends a member chose can read them, and the friend list that says who they are. A friend reads friends-only posts and blocks alike. Private blocks are never kept here.',
