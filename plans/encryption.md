@@ -1,6 +1,6 @@
 # Three layers: public, friends, and a private vault the server cannot read
 
-Written 19 November 2026, revised the same day. A proposal; nothing here is built. It extends [vault.md](vault.md).
+Written 19 November 2026, revised the same day. Keys live in ohm-onboarding, the account app. A proposal; nothing here is built. It extends [vault.md](vault.md).
 
 The first version of this plan encrypted friends-only content end to end as well. This revision keeps end-to-end encryption for the private layer only. The server can read the public and friends layers, so it can serve, search and share them; the private layer is a wallet the server holds but cannot open.
 
@@ -28,9 +28,9 @@ The private layer works like a password manager such as 1Password, or a messenge
 | Friends-layer blocks, as `{ id, path, text, version }`, and the member's friend list (DIDs) | Yes | So ohm can show them to those friends, search them, and render them on any device without keys. Encrypted at rest with a key ohm manages, which protects against a stolen disk or backup, not against ohm itself |
 | The member's public encryption key, and each linked device's public key | Yes | Device links can be checked. Public keys reveal nothing |
 | Private-layer blocks, as `{ id, ciphertext, version }` | **No** | Storage and sync only |
-| The master key, wrapped by each passkey's PRF output and by the recovery phrase, with each passkey's credential ID | **No** | So a signed-in device with a passkey, or the phrase, can unlock. The server cannot unwrap any copy |
+| The master key, wrapped by each passkey's PRF output and by the recovery code, with each passkey's credential ID | **No** | So a signed-in device with a passkey, or the code, can unlock. The server cannot unwrap any copy |
 
-Never held by the server in readable form: the master key, the recovery phrase, and the text, title, path, channels, links, origin or journal of any private block.
+Never held by the server in readable form: the master key, the recovery code, and the text, title, path, channels, links, origin or journal of any private block.
 
 The server can still see that private files exist, how big they are and when they change. Padding sizes can blunt this but not remove it.
 
@@ -42,7 +42,7 @@ Signing in and unlocking are two different steps, and neither is enough alone.
 | --- | --- | --- | --- |
 | **Sign in** | OAuth: AT Protocol OAuth through the member's PDS, as the editor signs in today ([signin.js](../service/public/vault/signin.js)) | Who you are. Access to the public and friends layers, and to the private layer's ciphertext and wrapped keys | The server |
 | **Unlock** | A passkey on the device, using WebAuthn's PRF extension | A secret only the passkey can produce, which opens the master key | Only the device. The server never sees the secret |
-| **Recover** | The recovery phrase | Opens the master key when no passkey can | Only the device |
+| **Recover** | The recovery code | Opens the master key when no passkey can | Only the device |
 
 ### The keys
 
@@ -50,14 +50,14 @@ Signing in and unlocking are two different steps, and neither is enough alone.
 - **File keys.** Each private file is encrypted with its own key, wrapped by the master key, so keys can be rotated without re-encrypting every file.
 - **The master key, wrapped twice.** The server stores two copies, each unreadable without its secret:
   - one wrapped with a key derived (HKDF) from the passkey's PRF output, alongside that passkey's credential ID; there is one such copy for each passkey;
-  - one wrapped with a key derived from the recovery phrase.
+  - one wrapped with a key derived from the recovery code.
 
 ### Setting up, on the first device
 
 1. Sign in with OAuth.
 2. The device makes the master key.
-3. The device shows the recovery phrase once: 24 words of 256-bit randomness. The member writes it down, and the app checks a few of the words before going on. ohm cannot recover a private vault without it, and the app says so plainly before the vault is created.
-4. The member creates a passkey. The device asks it for its PRF output, wraps the master key with it, and uploads that wrapped copy and the one wrapped by the phrase.
+3. The device shows the recovery code once: 256 bits of randomness, written as 14 groups of four characters (Crockford base32, with a checksum that catches a mistyped character, and a version byte so a word list can be offered later). The member writes it down, and the app checks a few groups before going on. ohm cannot recover a private vault without it, and the app says so plainly before the vault is created.
+4. The member creates a passkey. The device asks it for its PRF output, wraps the master key with it, and uploads that wrapped copy and the one wrapped by the code.
 
 ### Unlocking on a device
 
@@ -74,31 +74,31 @@ A passkey that the platform syncs (iCloud Keychain, Google Password Manager, a p
 If no passkey can unlock (all devices lost, or a passkey that does not support PRF):
 
 1. Sign in with OAuth.
-2. Enter the recovery phrase.
-3. The device unwraps the master key with the phrase.
+2. Enter the recovery code.
+3. The device unwraps the master key with the code.
 4. The device asks for a new passkey to be made, and wraps the master key with it for next time.
 
-A device whose passkey provider lacks PRF can still use the vault, by entering the phrase each session, or by being linked by QR (below).
+A device whose passkey provider lacks PRF can still use the vault, by entering the code each session, or by being linked by QR (below).
 
 ### Why both steps
 
 - **Someone who takes over the OAuth sign-in** gets ciphertext and wrapped keys, and cannot open either.
 - **Someone with the passkey** but not the account cannot fetch anything.
 - **The server**, holding everything it stores, can open nothing.
-- **The phrase's copy is safe to store**, because the phrase has 256 bits of randomness and cannot be guessed. That is also why there is no separate passphrase: a phrase a person makes up could be guessed against the stored copy.
+- **The code's copy is safe to store**, because the code has 256 bits of randomness and cannot be guessed. That is also why there is no separate passphrase: a phrase a person makes up could be guessed against the stored copy.
 
 ### Changing things
 
 These are possible while the vault is unlocked:
 - adding a passkey: wrap the master key with its PRF output;
 - removing a passkey: delete its wrapped copy;
-- replacing the recovery phrase: wrap the master key with the new one, and delete the old copy.
+- replacing the recovery code: wrap the master key with the new one, and delete the old copy.
 
-If a passkey or the phrase may have been exposed, rotate the master key: make a new one, re-wrap every file key, and re-wrap the master key for each remaining passkey and the phrase. File contents do not need re-encrypting.
+If a passkey or the code may have been exposed, rotate the master key: make a new one, re-wrap every file key, and re-wrap the master key for each remaining passkey and the code. File contents do not need re-encrypting.
 
 ## Linking a device without a synced passkey
 
-A device that cannot use any of the member's passkeys, and should not need the phrase, can be linked from one that is unlocked:
+A device that cannot use any of the member's passkeys, and should not need the code, can be linked from one that is unlocked:
 
 1. The new device shows a QR code holding a one-time public key.
 2. The unlocked device scans it and sends the master key encrypted to that key, through the server, which cannot read it.
@@ -155,7 +155,7 @@ As understood when this was written, AT Protocol's proposals for private data ("
 
 1. ~~`visibility` on blocks in place of `intent`, read and written by `vault/node.mjs`, with private as the default.~~ Done. A file with `visibility`, no `kind` and nothing only a block has is still read as a post file, so existing post files do not change; post sync reads files with the post reader and is unaffected.
 2. ~~Generalise the friends store from posts to vault files, with the friend list by DID and access checks.~~ Done on the service: `blocks` and `friends` tables (`service/migrations/0002_friends_layer.sql`), the Friends requests, friends-only posts readable by friends through the same requests. Friends-only posts stay in `posts`; other blocks are kept as files. Adding a friend is session-only. Not yet used by the editor or sync, and the migration is not applied to the deployed database.
-3. Keys: setup (master key, recovery phrase, first passkey), unlock with OAuth and the passkey's PRF, recovery with the phrase, the wrapped copies on the server, file keys.
+3. Keys: setup (master key, recovery code, first passkey), unlock with OAuth and the passkey's PRF, recovery with the code, the wrapped copies on the server, file keys. **Built in ohm-onboarding**, the account app: `packages/keys` (the device side, tested with a stand-in authenticator) and the account service's `keys.*` requests for the wrapped copies. The recovery is a 56-character code rather than 24 words, because no word list was taken in; its version byte leaves room for one.
 4. The private store: the ciphertext format, opaque IDs, and compare-and-swap on ciphertext versions.
 5. `ohm vault sync` between both stores and the local folder, with confirmation before anything leaves the private layer.
 6. Device linking by QR.
@@ -164,7 +164,7 @@ As understood when this was written, AT Protocol's proposals for private data ("
 
 ## Open questions
 
-- Which passkey providers support the PRF extension today, on which browsers and systems, so the app can say ahead of time whether a passkey will unlock or the phrase will be needed.
+- Which passkey providers support the PRF extension today, on which browsers and systems, so the app can say ahead of time whether a passkey will unlock or the code will be needed.
 - How much metadata to hide in the private store (padding sizes, batching writes), against the cost.
 - Whether a phone with a large private vault needs a local index, kept encrypted on the device.
 - Friend lists: one list per member to start, or channel-level groups (closer to spaces) from the beginning.
