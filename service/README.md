@@ -19,7 +19,7 @@ A member's vault: their posts, reached with a handful of requests. Every request
 
 ## What it can do
 
-The service groups requests into capabilities under [src/capabilities/](src/capabilities/): posts, structure, search, mirror, publish, export, account, identity and the private Cortex. **[CAPABILITIES.md](CAPABILITIES.md) is the reference**: every request, what it takes and gives, who may ask it, every way the service says no, and which requests each of an agent's tools is made of. That page is written from the same tables the service runs on (`npm run capabilities`), and a test fails if the two differ.
+The service groups requests into capabilities under [src/capabilities/](src/capabilities/): posts, structure, search, mirror, publish, export, account and identity. **[CAPABILITIES.md](CAPABILITIES.md) is the reference**: every request, what it takes and gives, who may ask it, every way the service says no, and which requests each of an agent's tools is made of. That page is written from the same tables the service runs on (`npm run capabilities`), and a test fails if the two differ.
 
 A request sent twice ends the same as sent once. Saving a post, whatever it says about who may see it, changes only this copy.
 
@@ -74,7 +74,7 @@ One ohm account works in one AT Protocol account, and one AT Protocol account be
 
 `GET /xrpc/com.ohmmmm.identity.whoAmI`, sent with such a token issued for that request, answers with the DID the token names, and with the account's handle when the handle points back to it. ohm's sign-in asks it, over a binding, to sign a member in with their AT Protocol account; it gives nothing away, since only the holder of a token can ask whom it names.
 
-Either way, `MEMBERS` lists the DIDs let in; `*` lets anyone in. Private vault/Cortex data and keyboard mutations require membership. Account discovery, connection and disconnection remain available for onboarding or recovery after membership is removed; connecting still verifies the new account's PDS token. Each request pins the connected DID before checking `X-Ohm-Did`, so a concurrent reconnect cannot retarget that request to the new account.
+Either way, `MEMBERS` lists the DIDs let in; `*` lets anyone in. Private vault data and keyboard mutations require membership. Account discovery, connection and disconnection remain available for onboarding or recovery after membership is removed; connecting still verifies the new account's PDS token. Each request pins the connected DID before checking `X-Ohm-Did`, so a concurrent reconnect cannot retarget that request to the new account.
 
 Repository reads require a complete, valid listing. Failed pages, repeated cursors, duplicate/foreign record keys and a cursor remaining after the page limit refuse the operation rather than treating a partial listing as the repository. The first-mirror completion flag belongs to the original ohm user and DID; reconnecting during import cannot mark the new DID complete.
 
@@ -85,12 +85,14 @@ An agent's `vault_mirror` approval covers the displayed counts and conversion ca
 | Path | What it is |
 | --- | --- |
 | [src/store.mjs](src/store.mjs) | The posts: list, read, write, remove, and the tree. The database makes the version check in the statement that makes the change |
+| [src/blocks.mjs](src/blocks.mjs) | The friends layer: friends-only blocks other than posts, kept as their files (path and text) with the same version checks; each member's friend list; and what a friend may read, friends-only posts included. Private and public blocks are refused |
 | [src/identity.mjs](src/identity.mjs) | Reading and checking a token |
 | [src/ohm.mjs](src/ohm.mjs) | Asking ohm's sign-in who a session belongs to, and the table of which AT Protocol account each ohm account connected |
 | [src/capabilities/](src/capabilities/) | What the service can do, one capability to a file. Each request says what it is called, whether it reads or changes, who may ask, and how it is answered |
 | [src/worker.mjs](src/worker.mjs) | The router: settles who is asking, in the way the request says, and hands over to it |
 | [CAPABILITIES.md](CAPABILITIES.md) | The reference, written from those tables |
-| [schema.sql](schema.sql) | The database's tables |
+| [schema.sql](schema.sql) | The database's tables: `posts`, `links`, `blocks` and `friends` |
+| [migrations/](migrations/) | One-off changes to an existing database. [0001_drop_cortex.sql](migrations/0001_drop_cortex.sql) drops the tables of the retired agent-memory prototype; apply it by hand to a database created before it was removed. [0002_friends_layer.sql](migrations/0002_friends_layer.sql) adds `blocks` and `friends`; it only adds, and is needed before the Friends requests work on an existing database |
 
 Tests are in [../test/service.test.mjs](../test/service.test.mjs), [../test/identity.test.mjs](../test/identity.test.mjs) and, for the page's app-password sign-in, [../test/signin.test.mjs](../test/signin.test.mjs), and run against the SQLite built into Node, which is what Cloudflare D1 is.
 

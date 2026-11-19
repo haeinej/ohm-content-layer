@@ -6,7 +6,7 @@ It runs one way only. It reads from each platform and writes to your PDS. It nev
 
 ## When to use it
 
-There are two ways to put a website on this content layer.
+There are two ways to put a website on ohm-vault.
 
 | | Source of truth | What you run |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ A source is a platform's name, where to read it, and the label its posts are fil
 | Platform | How it is read | Needs |
 | --- | --- | --- |
 | Anything with a feed: your website, Substack, a blog | Its RSS, Atom, or JSON Feed | The feed's address |
-| X | X's API | An X developer token with read access, saved as the secret `X_BEARER_TOKEN`. This reader has not been run against X. Bring in history with [the archive importer](../README.md#import-an-x-archive) |
+| X | X's API | An X developer token with read access, saved as the secret `X_BEARER_TOKEN`. This reader has not been run against X |
 
 Each post becomes one record. Its key comes from its address, so the same post always lands on the same record: `a-walk` from your website, `substack-a-letter` from Substack, `x-1234` from X. Its form is identified from its content, its images are copied into your repository with their source addresses kept, and a post from another platform records where it first appeared. A post from your own website keeps the address of the page it came from as its address, and one that changes at its source is written again with the time it was updated.
 

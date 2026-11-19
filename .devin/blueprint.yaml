@@ -9,4 +9,4 @@ knowledge:
   - name: runtime
     contents: Node.js 22 or newer is required; this setup was verified with Node 24.
   - name: optional-components
-    contents: Cirrus uses its own frozen pnpm lock; the archive importer requires JDK21 and Maven. Verify these components separately from the root Node suite.
+    contents: Cirrus uses its own frozen pnpm lock. Verify it separately from the root Node suite.

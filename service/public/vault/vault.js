@@ -11,12 +11,11 @@
 // Everything shown is put on the page as text, never as markup.
 import { carryOut } from './publish.js';
 import { askPds, begin, beginWithPassword, finish, leave, restore, sendPds } from './signin.js';
-import { createCortexPanel } from './cortex.js';
 import { createAccountScope } from './account-scope.js';
 
 const $ = id => document.getElementById(id);
 const state = { mode: 'ohm', me: null, audience: '', did: '', tree: null, current: null, publishing: false, plan: null, page: 'vault', signup: false, busy: false, step: 'where' };
-const PAGES = { vault: 'Vault', cortex: 'Cortex' };
+const PAGES = { vault: 'Vault' };
 let selection = 0;
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -30,19 +29,11 @@ function icon(name) {
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 const accountScope = createAccountScope({ member: () => state.did, changed: () => {
-  cortex.reset();
   state.current = null; state.tree = null; state.plan = null;
   state.did = ''; state.me = null;
   screen('sign-in');
   location.reload();
 } });
-
-const cortex = createCortexPanel({
-  call, notice, changed: () => queueMicrotask(narrow),
-  canApprove: () => state.mode === 'ohm' && Boolean(state.me?.did),
-});
-$('panel').append(cortex.directory);
-$('content').append(cortex.screen);
 
 // ---- Messages. Every one is a notice: a pill at the top that leaves on its own. ----
 function notice(text, tone = 'info') {
@@ -222,7 +213,6 @@ async function signOut() {
   if (!canLeaveWorkspace()) return;
   selection++;
   accountScope.reset();
-  cortex.reset();
   await leave().catch(() => {});
   if (state.mode === 'ohm') await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
   location.reload();
@@ -280,7 +270,6 @@ $('disconnect').addEventListener('click', async () => {
   try {
     selection++;
     await call('com.ohmmmm.account.disconnect', { body: {} });
-    cortex.reset();
     location.reload();
   } catch (problem) {
     failed('Disconnecting', problem);
@@ -309,7 +298,6 @@ async function tellOhm(path, token) {
 // the step they are at.
 async function open() {
   accountScope.reset();
-  cortex.reset();
   state.did = '';
   state.mode = 'ohm';
   state.me = null;
@@ -392,7 +380,7 @@ async function enter({ name, did, mirrored = true, approvedAtPds = false }) {
 
 // ---- The app's screen: the rail picks a page; the side panel and the main screen follow it. ----
 function go(page, { checked = false } = {}) {
-  if (!PAGES[page] || (state.page === 'cortex' && page === 'cortex')) return false;
+  if (!PAGES[page]) return false;
   if (page !== state.page) {
     if (!checked && !canLeaveWorkspace()) return false;
     selection++;
@@ -405,12 +393,11 @@ function go(page, { checked = false } = {}) {
   for (const part of $('app').querySelectorAll('.directory-scroll[data-page], .directory-actions[data-page], .screen[data-page]')) part.hidden = part.dataset.page !== page;
   for (const button of $('app').querySelectorAll('[data-go]')) button.setAttribute('aria-pressed', String(button.dataset.go === page));
   mainScreen();
-  if (page === 'cortex') cortex.open().catch(problem => failed('Opening the cortex', problem));
   return true;
 }
-// On a phone the side panel is the screen until a post or cortex item is open.
+// On a phone the side panel is the screen until a post is open.
 function narrow() {
-  const detail = state.page === 'cortex' ? cortex.hasDetail() : state.current || state.publishing;
+  const detail = state.current || state.publishing;
   $('app').classList.toggle('mobile-directory', !detail);
 }
 // The main screen shows one of three things: a post, what publishing would change, or nothing yet.
@@ -570,7 +557,7 @@ const fields = { title: 'post-name', label: 'label', sublabel: 'sublabel', slug:
 const formValues = () => JSON.stringify(Object.values(fields).map(id => $(id).value));
 const postDirty = () => Boolean(state.current && formValues() !== state.current.baseline);
 function canLeavePost() { return !postDirty() || confirm('Discard your unsaved post changes?'); }
-function canLeaveWorkspace() { return canLeavePost() && (state.page !== 'cortex' || cortex.canLeave()); }
+function canLeaveWorkspace() { return canLeavePost(); }
 window.addEventListener('beforeunload', event => {
   if (postDirty()) { event.preventDefault(); event.returnValue = ''; }
 });

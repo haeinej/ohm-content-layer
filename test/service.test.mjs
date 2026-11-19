@@ -240,9 +240,6 @@ test('a stale linked-session tab cannot read or write another member or disconne
   const cases = [
     ['getTree', {}],
     ['putPost', { body: { post: post('stale-draft') } }],
-    ['com.ohmmmm.cortex.listMemories', {}],
-    ['com.ohmmmm.cortex.putMemory', { verb: 'POST', body: { name: 'stale-draft', body: 'Haein private draft' } }],
-    ['com.ohmmmm.cortex.approveSkill', { verb: 'POST', body: { name: 'stale-skill', version: 'old-version' } }],
     ['com.ohmmmm.account.get', {}],
     ['com.ohmmmm.account.disconnect', {}],
   ];
@@ -254,7 +251,6 @@ test('a stale linked-session tab cannot read or write another member or disconne
   const current = { cookie, expected: jun.did };
   assert.equal((await (await ask(jun, 'com.ohmmmm.account.get', current)).json()).did, jun.did);
   assert.equal((await (await ask(jun, 'getTree', current)).json()).posts, 0);
-  assert.equal((await ask(jun, 'com.ohmmmm.cortex.getMemory', { ...current, query: { name: 'stale-draft' } })).status, 404);
   const signedOut = await ask(jun, 'getTree', { expected: jun.did, token: null });
   assert.equal(signedOut.status, 401);
   assert.equal((await signedOut.json()).error, 'SignInRequired');
@@ -402,12 +398,12 @@ test('what publishing would change is worked out for a member\'s own vault, with
 });
 
 test('every request belongs to one capability, and says what it is, who may ask, and whether it changes anything', () => {
-  assert.deepEqual(CAPABILITIES.map(capability => capability.name), ['Posts', 'Structure', 'Search', 'Mirror', 'Publish', 'Export', 'Account', 'Identity', 'Context', 'Memory', 'Notes', 'Turns', 'Skills', 'Tools', 'Cortex Export']);
+  assert.deepEqual(CAPABILITIES.map(capability => capability.name), ['Posts', 'Friends', 'Structure', 'Search', 'Mirror', 'Publish', 'Export', 'Account', 'Identity']);
   const names = CAPABILITIES.flatMap(capability => Object.keys(capability.requests));
   assert.equal(new Set(names).size, names.length, 'a request has one home');
   assert.deepEqual(Object.keys(REQUESTS).sort(), [...names].sort());
   for (const [name, request] of Object.entries(REQUESTS)) {
-    assert.match(name, /^com\.ohmmmm\.(vault|account|identity|cortex)\.[a-z][A-Za-z]+$/);
+    assert.match(name, /^com\.ohmmmm\.(vault|account|identity)\.[a-z][A-Za-z]+$/);
     assert.ok(['GET', 'POST'].includes(request.verb) && ['nobody', 'token', 'member', 'ohm'].includes(request.asks), name);
     assert.ok(typeof request.about === 'string' && request.about.length > 20 && typeof request.gives === 'string' && typeof request.takes === 'object', name);
     // Whatever changes something is a POST, and whatever is a GET changes nothing.

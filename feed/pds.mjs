@@ -1,7 +1,5 @@
 import { cleanName, OTHER, readForm } from './forms.mjs';
 
-// An older note type, read only when a site asks for it with INCLUDE_LEGACY_NOTES.
-export const COLLECTION = 'com.haeinjung.note';
 export const BSKY_POST = 'app.bsky.feed.post';
 // Every site's posts are this one record type, so any software can find them by one name. Only a
 // site's own optional schemas sit under the person's own domain.
@@ -34,7 +32,7 @@ export function ownCollection(namespace, name) {
 // things: the person's namespace, and where their older posts are.
 function olderPostCollection(value) {
   if (value === undefined || value === POST) return undefined;
-  if (typeof value !== 'string' || !NSID.test(value) || value === COLLECTION) {
+  if (typeof value !== 'string' || !NSID.test(value) || value === 'com.haeinjung.note') {
     throw new Error('ATPROTO_POST_COLLECTION is no longer needed: every post is com.ohmmmm.post. Set ATPROTO_SITE_NAMESPACE to your domain written backwards, such as com.example');
   }
   ownNamespace(value.slice(0, value.lastIndexOf('.')));
@@ -119,20 +117,6 @@ export function pdsConfig(env) {
     ...(namespace ? { namespace } : {}),
     ...(older ? { olderCollection: older } : {}),
   };
-}
-
-export function normalizeNote(value) {
-  if (value?.$type !== COLLECTION || typeof value.text !== 'string' || !value.text.trim() ||
-      new TextEncoder().encode(value.text).length > 10_000 || typeof value.createdAt !== 'string') return null;
-  const time = Date.parse(value.createdAt);
-  if (!Number.isFinite(time)) return null;
-  const note = { text: value.text, createdAt: new Date(time).toISOString(), platform: 'website' };
-  if (value.sourceUrl !== undefined) {
-    if (typeof value.sourceUrl !== 'string' || !/^https:\/\/x\.com\/i\/web\/status\/\d{1,19}$/.test(value.sourceUrl)) return null;
-    note.sourceUrl = value.sourceUrl;
-    note.platform = 'x';
-  }
-  return note;
 }
 
 function blobCid(blob, type) {

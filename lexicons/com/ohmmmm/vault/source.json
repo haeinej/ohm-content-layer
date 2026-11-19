@@ -1,0 +1,31 @@
+{
+  "lexicon": 1,
+  "id": "com.ohmmmm.vault.source",
+  "description": "Something that came in from outside, kept as it was captured: a page, a post on another platform, a file. Your words about it are blocks. Kept as _sources/<id>/source.json, with extracted.md beside it when its text is kept and original.<ext> when its bytes are.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["kind", "uri", "capturedAt"],
+        "properties": {
+          "kind": { "type": "string", "knownValues": ["page", "post", "file", "image", "video", "audio", "thread", "book", "other"] },
+          "uri": { "type": "string", "maxLength": 2000, "description": "Where it lives: an HTTP(S) address, an AT URI, a local path or a Google Drive path." },
+          "platform": { "type": "string", "maxLength": 100, "description": "Lower case: x, substack, arena, website, drive, local..." },
+          "platformId": { "type": "string", "maxLength": 500, "description": "The platform's own ID, so capturing it again finds the same source." },
+          "title": { "type": "string", "maxLength": 3000 },
+          "author": { "type": "string", "maxLength": 1000 },
+          "publishedAt": { "type": "string", "format": "datetime" },
+          "capturedAt": { "type": "string", "format": "datetime" },
+          "retain": {
+            "type": "string",
+            "description": "How much is kept: reference (where it is, nothing more), text (its text in extracted.md), full (its bytes too).",
+            "knownValues": ["reference", "text", "full"]
+          },
+          "meta": { "type": "unknown", "description": "Anything else the connector found, kept as it came." }
+        }
+      }
+    }
+  }
+}

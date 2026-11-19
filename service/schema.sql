@@ -34,104 +34,33 @@ CREATE TABLE IF NOT EXISTS links (
   mirrored_at TEXT
 );
 
--- Cortex data is private to a DID and never part of the posts queried by Publish or Mirror.
-CREATE TABLE IF NOT EXISTS cortex_memories (
+-- The friends layer: blocks a member keeps readable here, so the friends they chose can read them.
+-- One row for each block that is not a post (posts stay in `posts`, whose friends-only rows are part
+-- of the same layer). A block is kept as the file it is in the member's folder: its path and its
+-- text. Private blocks are never kept here; public ones are published as posts. A removed block
+-- keeps its row with no version, so "what changed since" can say it went. See plans/encryption.md.
+CREATE TABLE IF NOT EXISTS blocks (
   did TEXT NOT NULL,
-  name TEXT NOT NULL,
+  id TEXT NOT NULL,
   version TEXT,
-  description TEXT,
+  path TEXT,
   kind TEXT,
-  memory TEXT,
-  written_by TEXT,
+  title TEXT,
+  text TEXT,
   seq INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  PRIMARY KEY (did, name)
-);
-CREATE INDEX IF NOT EXISTS cortex_memory_changes ON cortex_memories (did, seq);
-
-CREATE TABLE IF NOT EXISTS cortex_memory_versions (
-  did TEXT NOT NULL,
-  name TEXT NOT NULL,
-  version TEXT NOT NULL,
-  memory TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  written_by TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  replaced_at TEXT NOT NULL,
-  PRIMARY KEY (did, name, seq)
-);
--- A compare-and-swap and its history cannot be separated by a failed or competing request.
-CREATE TRIGGER IF NOT EXISTS cortex_preserve_memory BEFORE UPDATE ON cortex_memories
-WHEN OLD.version IS NOT NULL AND (OLD.version IS NOT NEW.version)
-BEGIN
-  INSERT INTO cortex_memory_versions (did, name, version, memory, seq, written_by, created_at, replaced_at)
-  VALUES (OLD.did, OLD.name, OLD.version, OLD.memory, OLD.seq, OLD.written_by, OLD.updated_at, NEW.updated_at);
-END;
-
-CREATE TABLE IF NOT EXISTS cortex_notes (
-  did TEXT NOT NULL,
-  id TEXT NOT NULL,
-  text TEXT NOT NULL,
-  session TEXT NOT NULL,
-  project TEXT,
-  written_by TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  settled_at TEXT,
-  outcome TEXT,
   PRIMARY KEY (did, id)
 );
-CREATE INDEX IF NOT EXISTS cortex_notes_waiting ON cortex_notes (did, settled_at, created_at, id);
+CREATE INDEX IF NOT EXISTS blocks_changes ON blocks (did, seq);
+-- A path is a file in the member's folder, so it is used once.
+CREATE UNIQUE INDEX IF NOT EXISTS blocks_path ON blocks (did, path) WHERE version IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS cortex_turns (
+-- Who may read a member's friends layer, by DID. The member adds and removes them.
+CREATE TABLE IF NOT EXISTS friends (
   did TEXT NOT NULL,
-  id TEXT NOT NULL,
-  session TEXT NOT NULL,
-  agent TEXT NOT NULL,
-  project TEXT,
-  prompt TEXT NOT NULL,
-  answer TEXT NOT NULL,
-  written_by TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (did, id)
+  friend TEXT NOT NULL,
+  added_at TEXT NOT NULL,
+  PRIMARY KEY (did, friend)
 );
-CREATE INDEX IF NOT EXISTS cortex_turns_waiting ON cortex_turns (did, created_at, id);
--- Receipts let a settled turn stay removed if an adapter retries its original delivery.
-CREATE TABLE IF NOT EXISTS cortex_turn_receipts (
-  did TEXT NOT NULL,
-  id TEXT NOT NULL,
-  digest TEXT NOT NULL,
-  settled_at TEXT,
-  PRIMARY KEY (did, id)
-);
-
-CREATE TABLE IF NOT EXISTS cortex_skills (
-  did TEXT NOT NULL,
-  name TEXT NOT NULL,
-  version TEXT,
-  description TEXT,
-  skill TEXT,
-  written_by TEXT,
-  approved_version TEXT,
-  seq INTEGER NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (did, name)
-);
-CREATE INDEX IF NOT EXISTS cortex_skill_changes ON cortex_skills (did, seq);
-
-CREATE TABLE IF NOT EXISTS cortex_tools (
-  did TEXT NOT NULL,
-  name TEXT NOT NULL,
-  version TEXT,
-  description TEXT,
-  tool TEXT,
-  enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
-  proposed INTEGER NOT NULL DEFAULT 0 CHECK (proposed IN (0, 1)),
-  written_by TEXT,
-  seq INTEGER NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (did, name)
-);
-CREATE INDEX IF NOT EXISTS cortex_tool_changes ON cortex_tools (did, seq);
+CREATE INDEX IF NOT EXISTS friends_of ON friends (friend);

@@ -10,22 +10,15 @@
 //   ohm     an ohm session only
 import account from './account.mjs';
 import exporting from './export.mjs';
+import friends from './friends.mjs';
 import identity from './identity.mjs';
 import mirror from './mirror.mjs';
 import posts from './posts.mjs';
 import publish from './publish.mjs';
 import search from './search.mjs';
 import structure from './structure.mjs';
-import memory from './memory.mjs';
-import context from './context.mjs';
-import notes from './notes.mjs';
-import skills from './skills.mjs';
-import tools from './tools.mjs';
-import { pendingCapabilities } from '../../../cortex/pending.mjs';
 
-const implementations = { Notes: notes, Skills: skills, Tools: tools };
-export const CAPABILITIES = [posts, structure, search, mirror, publish, exporting, account, identity, context, memory,
-  ...pendingCapabilities.map(capability => implementations[capability.name] ?? capability)];
+export const CAPABILITIES = [posts, friends, structure, search, mirror, publish, exporting, account, identity];
 
 // Every request by its name, with the capability it belongs to.
 export const REQUESTS = Object.fromEntries(CAPABILITIES.flatMap(capability =>

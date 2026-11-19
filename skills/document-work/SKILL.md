@@ -54,7 +54,8 @@ navigation or entry point so their readers can find them.
 
 Read the documentation build before editing. Change the authored source, then
 regenerate its outputs. In ohm, public documentation is authored in
-`public/docs/build.py`; the adjacent HTML, Markdown and LLM files are generated.
+`docs/build.py` in the separate haeinej/ohm-site repository; the adjacent HTML,
+Markdown and LLM files are generated.
 An agent contract may instead belong in `docs/agents/`, a service reference or an
 existing capability document. Do not create a competing copy of a contract that
 already has an authoritative source.
@@ -111,7 +112,7 @@ and that generated references include the relevant requests and tools. Use the
 project's normal testing approval process for browser or other interactive tests.
 
 Use only evidence appropriate for the documents' audience. Never copy credentials,
-private notes, member memories, identifying fixtures or internal conversation
+private notes, member posts, identifying fixtures or internal conversation
 history into public guides. Use clearly synthetic examples with the same shape.
 Keep transient task status in the handoff, not in an evergreen guide.
 

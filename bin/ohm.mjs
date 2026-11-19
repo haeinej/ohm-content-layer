@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // One entry point for every command, so they can be run from any folder:
-//   npx github:haeinej/ohm-content-layer <command> [options]
+//   npx github:haeinej/ohm-vault <command> [options]
 const commands = {
   identity: ['identity.mjs', 'Show an identity and the repository it owns. Takes a handle or DID.'],
   configure: ['configure.mjs', 'Print a site configuration for --site and --handle or --did.'],
@@ -14,6 +14,7 @@ const commands = {
   render: ['render.mjs', 'Rebuild one of your site\'s own pages from a post: render adopt, then render build.'],
   sync: ['sync.mjs', 'Say what syncing your folder with your vault would do: --folder PATH. Add --apply to sync. Never publishes.'],
   snapshot: ['snapshot.mjs', 'Print the feed snapshot the site Worker would store.'],
+  vault: ['vault.mjs', 'Work with a vault folder on this machine: vault init, index, status, inspect REF, search WORDS. --vault DIR.'],
 };
 const [name] = process.argv.splice(2, 1);
 if (!Object.hasOwn(commands, name ?? '')) {

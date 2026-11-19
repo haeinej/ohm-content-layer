@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -410,7 +411,7 @@ test('a post that is a link to a file takes the file in and keeps its source', a
     const preview = async (body, ...options) => {
       await writeFile(join(folder, 'post.md'), body);
       const { stdout, stderr } = await promisify(execFile)(process.execPath, [
-        new URL('../scripts/publish.mjs', import.meta.url).pathname, '--config', join(folder, 'site.jsonc'),
+        fileURLToPath(new URL('../scripts/publish.mjs', import.meta.url)), '--config', join(folder, 'site.jsonc'),
         '--file', join(folder, 'post.md'), '--slug', 'a-post', ...options,
       ]);
       return { ...JSON.parse(stdout), stderr };
@@ -544,14 +545,14 @@ test('the post schema is fixed, and a site adds its own fields only through its 
     } } } }));
     await writeFile(join(folder, 'more.json'), JSON.stringify({ episode: 1 }));
     const preview = (...options) => promisify(execFile)(process.execPath, [
-      new URL('../scripts/publish.mjs', import.meta.url).pathname, '--config', join(folder, 'site.jsonc'),
+      fileURLToPath(new URL('../scripts/publish.mjs', import.meta.url)), '--config', join(folder, 'site.jsonc'),
       '--file', join(folder, 'post.md'), '--slug', 'a-post', '--site-schema', join(folder, 'postSite.json'), ...options,
     ]).then(({ stdout }) => JSON.parse(stdout).record, error => error.stderr.trim());
     assert.deepEqual((await preview('--site', 'eyebrow=collisions — ep.01', '--site', join(folder, 'more.json'))).site, own);
     assert.equal((await preview()).site, undefined);
     assert.match(await preview('--site', 'mood=calm'), /Declare mood in .* the post schema itself is fixed/);
     const profile = (...options) => promisify(execFile)(process.execPath, [
-      new URL('../scripts/profile.mjs', import.meta.url).pathname, '--config', join(folder, 'site.jsonc'),
+      fileURLToPath(new URL('../scripts/profile.mjs', import.meta.url)), '--config', join(folder, 'site.jsonc'),
       '--site-schema', join(folder, 'profileSite.json'), ...options,
     ]).then(({ stdout }) => JSON.parse(stdout).record, error => error.stderr.trim());
     await writeFile(join(folder, 'profileSite.json'), JSON.stringify({ defs: { main: { type: 'object', properties: { now: { type: 'string' } } } } }));
@@ -636,7 +637,7 @@ test('a private post previews with its public address, and says where the owner 
     } }));
     await writeFile(join(folder, 'post.md'), 'Not yet.');
     const preview = (...options) => promisify(execFile)(process.execPath, [
-      new URL('../scripts/publish.mjs', import.meta.url).pathname, '--config', join(folder, 'site.jsonc'),
+      fileURLToPath(new URL('../scripts/publish.mjs', import.meta.url)), '--config', join(folder, 'site.jsonc'),
       '--file', join(folder, 'post.md'), '--slug', 'hello', '--title', 'Hello', '--label', 'Writings', '--date', '2026-01-01', ...options,
     ]).then(({ stdout }) => JSON.parse(stdout), error => error.stderr.trim());
     const open = await preview();
@@ -697,7 +698,7 @@ test('migrate copies posts from an older post type, and changes nothing until to
       ATPROTO_POST_COLLECTION: from,
     } }));
     const run = (options = [], env = {}) => promisify(execFile)(process.execPath, [
-      new URL('../scripts/migrate.mjs', import.meta.url).pathname, '--config', join(folder, 'site.jsonc'), ...options,
+      fileURLToPath(new URL('../scripts/migrate.mjs', import.meta.url)), '--config', join(folder, 'site.jsonc'), ...options,
     ], { env: { ...process.env, ATPROTO_APP_PASSWORD: '', ...env } }).then(({ stdout }) => JSON.parse(stdout), error => error.stderr.trim());
 
     const preview = await run();

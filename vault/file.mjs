@@ -112,7 +112,7 @@ export const addressKind = address => {
 
 // Run `change` over the parts of a body that are not code, so nothing inside a code block or
 // between backticks is ever touched.
-function outsideCode(body, change) {
+export function outsideCode(body, change) {
   const out = [];
   let fence = null;
   for (const line of body.split('\n')) {

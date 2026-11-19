@@ -11,15 +11,14 @@ export function commandConfig() {
   return values.config ?? positionals[0];
 }
 
-// 'ohm-content-layer.jsonc' is the name the configuration had before the project was renamed.
-const PLACES = ['feed/wrangler.site.jsonc', 'wrangler.site.jsonc', 'ohm.jsonc', 'ohm-content-layer.jsonc'];
+const PLACES = ['feed/wrangler.site.jsonc', 'wrangler.site.jsonc', 'ohm.jsonc'];
 
 export function configPath(given) {
   if (given) return given;
   const found = PLACES.find(place => existsSync(place));
   if (!found) {
     throw new Error('No site configuration here. Create one with:\n' +
-      '  npx github:haeinej/ohm-content-layer configure --site https://example.com --handle example.com > ohm.jsonc\n' +
+      '  npx github:haeinej/ohm-vault configure --site https://example.com --handle example.com > ohm.jsonc\n' +
       'or name one with --config PATH');
   }
   return found;

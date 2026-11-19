@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { postStore } from '../service/src/store.mjs';
@@ -355,7 +356,7 @@ test('the sync command, a real folder, and the service over the network with rea
     await writeFile(join(folder, '.obsidian', 'app.json'), '{}');
     await writeFile(join(root, 'site.jsonc'), JSON.stringify({ vars: { ATPROTO_DID: did, ATPROTO_PDS_ORIGIN: `http://127.0.0.1:${pds.address().port}`, SITE_ORIGIN: 'https://example.test' } }));
     const sync = (...options) => promisify(execFile)(process.execPath, [
-      new URL('../scripts/sync.mjs', import.meta.url).pathname, '--config', join(root, 'site.jsonc'), '--folder', folder,
+      fileURLToPath(new URL('../scripts/sync.mjs', import.meta.url)), '--config', join(root, 'site.jsonc'), '--folder', folder,
       '--vault', `http://127.0.0.1:${vault.address().port}`, '--vault-did', audience, ...options,
     ], { env: { ...process.env, ATPROTO_APP_PASSWORD: 'app-password' } }).then(({ stdout }) => JSON.parse(stdout), error => error.stderr.trim());
 

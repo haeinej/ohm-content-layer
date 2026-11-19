@@ -36,7 +36,7 @@ npm run publish:post -- \
   --media street=./street.jpg
 ```
 
-This prints a local preview. When ready, set `ATPROTO_APP_PASSWORD` and rerun the command with `--publish` to make the block public. For an X archive, the Java importer accepts one `--label` for the posts in that selection. [X archive import](../README.md#import-an-x-archive)
+This prints a local preview. When ready, set `ATPROTO_APP_PASSWORD` and rerun the command with `--publish` to make the block public.
 
 ## What the record needs
 

@@ -8,9 +8,9 @@ agent documentation, maintained with the work. The
 This skill is one folder: `SKILL.md`, both writing outlines, `README.md` for
 people and this `contract.md` for agents. Keep its resources together when
 bundling it. The product uses its own canonical pair: ohm's
-[human quick start](../../public/docs/quick-start.md) and
-[agent working guide](../../public/docs/agent-guide.md), both generated from the
-authored public-docs source.
+[human quick start](https://docs.ohmmmm.com/quick-start) and
+[agent working guide](https://docs.ohmmmm.com/agent-guide), both generated from the
+authored public-docs source in haeinej/ohm-site.
 
 ## Entry points and flow
 
@@ -78,8 +78,8 @@ or that a client will invoke the skill.
 
 In this repository, run `npm test` and `git diff --check` from the repository root
 when validating an implementation change. If public docs changed, edit
-[public/docs/build.py](../../public/docs/build.py), run `npm run docs:build`, and
-review the generated HTML, Markdown and LLM copies. The generated files are not
+`docs/build.py` in [haeinej/ohm-site](https://github.com/haeinej/ohm-site), run
+`npm run docs:build` there, and review the generated HTML, Markdown and LLM copies. The generated files are not
 the authoring source.
 
 The skill's authored sources are

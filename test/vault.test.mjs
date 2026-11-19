@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { POST } from '../feed/pds.mjs';
@@ -233,7 +234,7 @@ test('the publish command writes through the vault, and a friends-only post prev
     // The smallest PNG there is: one transparent pixel.
     await writeFile(join(folder, 'street.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
     const publish = (...options) => promisify(execFile)(process.execPath, [
-      new URL('../scripts/publish.mjs', import.meta.url).pathname, '--config', join(folder, 'site.jsonc'),
+      fileURLToPath(new URL('../scripts/publish.mjs', import.meta.url)), '--config', join(folder, 'site.jsonc'),
       '--file', join(folder, 'post.md'), '--slug', 'after-the-rain', '--label', 'Field notes', '--date', '2026-01-01',
       '--media', `street=${join(folder, 'street.png')}`, ...options,
     ], { env: { ...process.env, ATPROTO_APP_PASSWORD: 'app-password' } }).then(({ stdout }) => stdout.trim(), error => error.stderr.trim());
