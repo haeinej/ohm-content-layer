@@ -48,7 +48,8 @@ What I used for the board review. It joins on `account_id`, not `user_id`, becau
 - **kind** says what the block is: `text`, `excerpt`, `link`, `media`, `file`, `code` or `post`. You rarely write it. A block that is one fenced code block is `code`, one embedded file is `file` or `media`, one address is a `link`, and anything else is `text`. Write it when you mean something else, as above.
 - **origin** is where the original lives, when it is not this file: a path on your computer (`~/…` or `/…`), a Google Drive path (`gdrive:My Drive/…`, or the folder Google Drive for desktop mounts), a web address, or an AT URI.
 - **from** names the source a block was captured from, and **excerpt** holds the exact words you kept: `excerpt: {"quote": "the words"}`.
-- **by**, **status** and **intent** say who made a block (`me` or `agent:<name>`), whether it is `proposed`, `kept` or `archived`, and who you mean it for when published.
+- **by** and **status** say who made a block (`me` or `agent:<name>`) and whether it is `proposed`, `kept` or `archived`.
+- **visibility** says which layer the block is in, and so who can read it: `private` (the default; encrypted, readable only on your devices), `friends` (readable by ohm and the friends you choose) or `public` (published). Leave it out and the block is private. See [the plan for the three layers](../plans/encryption.md); the storage behind them is not built yet.
 
 The file stays readable: SQL, Python or any other code goes in a fenced block with its language, and Obsidian's `[[links]]`, `![[embeds]]`, callouts, Mermaid diagrams and math all keep working. The vault never runs code.
 
@@ -183,6 +184,6 @@ The vault reads your files and writes them back exactly as it found them, so you
 
 When something cannot be read, the vault says so in a sentence and leaves the file as it is: a channel that is not a folder, two files with the same name, an origin it does not understand, a copied file that carries another file's ID.
 
-A post stays a post. It keeps its label, its address and its visibility, and sync and publishing treat it exactly as before. Listing extra `channels` on it does not change where it is published.
+A post stays a post. It keeps its label, its address and its visibility, and sync and publishing treat it exactly as before. Listing extra `channels` on it does not change where it is published. A file with `visibility` and no `kind` is read as a post, as it always was, unless it has something only a block has (`origin`, `from`, `excerpt`, `by`, `status`, `created` or `updated`). To make a plain note friends-only without it becoming a post, give it a `kind`, such as `kind: text`.
 
 [The agent reference](agents/vault-format.md) has the exact contracts.

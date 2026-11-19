@@ -12,7 +12,7 @@
         "properties": {
           "kind": {
             "type": "string",
-            "description": "What the block is. Read from the content when not given: one fenced code block is code, one embedded file is file or media, one address is link, otherwise text. A file with a visibility property is a post. Treat a kind you do not know as text.",
+            "description": "What the block is. Read from the content when not given: one fenced code block is code, one embedded file is file or media, one address is link, otherwise text. A post file (see visibility) is a post. Treat a kind you do not know as text.",
             "knownValues": ["text", "excerpt", "link", "media", "file", "code", "post"]
           },
           "title": { "type": "string", "maxGraphemes": 300, "maxLength": 3000 },
@@ -45,10 +45,10 @@
             "description": "Who made the block: me, or agent:<name>. An agent's block starts with status proposed."
           },
           "status": { "type": "string", "knownValues": ["proposed", "kept", "archived"] },
-          "intent": {
+          "visibility": {
             "type": "string",
-            "description": "Who the author means the block for when it is published. Not access control.",
-            "knownValues": ["private", "friends", "public"]
+            "description": "Which layer the block is kept in, and so who can read it. public: published on the PDS, readable by anyone. friends: kept readable by the vault service and shown to the friends the member chose. private: encrypted, with keys only on the member's devices. A block that does not say is private. A file with visibility, no kind, and none of origin, from, excerpt, by, status, created or updated is read as a post file.",
+            "knownValues": ["public", "friends", "private"]
           },
           "created": { "type": "string", "format": "datetime" },
           "updated": { "type": "string", "format": "datetime" }

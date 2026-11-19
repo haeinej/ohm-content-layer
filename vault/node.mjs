@@ -11,7 +11,7 @@
 // The schemas are lexicons/com/ohmmmm/vault/*.json. A file that was a post (it has a visibility
 // property) is read as a block of kind post, through vault/file.mjs, so nothing that syncs posts
 // changes. Evidence is only what the content shows; a model's conclusions belong to ohm-cortex.
-import { FILE_TYPES, graphemes, isSlug, kindOf as mediaKind, VaultProblem } from './core.mjs';
+import { FILE_TYPES, graphemes, isSlug, kindOf as mediaKind, VaultProblem, VISIBILITIES } from './core.mjs';
 import { filePost, isPostId, newPostId, postFile, postProblems, readProperties, slugOf, splitFile, writeNoteFile } from './file.mjs';
 
 export const BLOCK_KINDS = ['text', 'excerpt', 'link', 'media', 'file', 'code', 'post'];
@@ -20,11 +20,19 @@ export const ENTITY_KINDS = ['person', 'work', 'place', 'org'];
 export const SOURCE_KINDS = ['page', 'post', 'file', 'image', 'video', 'audio', 'thread', 'book', 'other'];
 export const RETAIN = ['reference', 'text', 'full'];
 export const STATUSES = ['proposed', 'kept', 'archived'];
-export const INTENTS = ['private', 'friends', 'public'];
 export const EDGE_KINDS = ['contains', 'links', 'embeds', 'mentions', 'from', 'quotes'];
 
 // The properties each kind of file holds, in the order they are written. `id` is always written last.
-export const BLOCK_FIELDS = ['kind', 'title', 'slug', 'channels', 'origin', 'from', 'excerpt', 'tags', 'by', 'status', 'intent', 'created', 'updated'];
+export const BLOCK_FIELDS = ['kind', 'title', 'slug', 'channels', 'origin', 'from', 'excerpt', 'tags', 'by', 'status', 'visibility', 'created', 'updated'];
+// Which layer a block is kept in, and so who can read it: public on the PDS, friends readable by the
+// vault service and the friends chosen, private encrypted with keys only on the member's devices.
+// A block that does not say is private. See plans/encryption.md.
+export { VISIBILITIES };
+export const DEFAULT_VISIBILITY = 'private';
+// Properties a post file never has. A file with visibility, no kind, and none of these is a post
+// file, as every post file written before blocks existed is; with any of them it is a block.
+const BLOCK_ONLY = ['origin', 'from', 'excerpt', 'by', 'status', 'created', 'updated'];
+const given = value => value !== undefined && value !== null && value !== '';
 export const CHANNEL_FIELDS = ['title', 'kind', 'order', 'site'];
 export const ENTITY_FIELDS = ['name', 'aliases', 'uri'];
 export const SOURCE_FIELDS = ['kind', 'uri', 'platform', 'platformId', 'title', 'author', 'publishedAt', 'capturedAt', 'retain', 'meta'];
@@ -98,9 +106,12 @@ function readId(properties, problems) {
 function readBlock(place, path, text_) {
   const { head, body } = splitFile(text_);
   const { properties, problems } = readProperties(head);
-  const given = properties.kind ?? undefined;
-  // A post keeps every rule a post has: the same reader, the same writer, the same version.
-  if (given === 'post' || (given === undefined && properties.visibility !== undefined && properties.visibility !== null)) {
+  const kindSaid = properties.kind ?? undefined;
+  // A post keeps every rule a post has: the same reader, the same writer, the same version. A file
+  // is a post when it says so, or when it is a post file as the post code writes one: visibility,
+  // no kind, and nothing only a block has.
+  const postFile = given(properties.visibility) && !BLOCK_ONLY.some(key => given(properties[key]));
+  if (kindSaid === 'post' || (kindSaid === undefined && postFile)) {
     const read = filePost(path, text_);
     const channels = list(read.post.properties.channels).filter(channel => channel !== place.home);
     return {
@@ -108,7 +119,7 @@ function readBlock(place, path, text_) {
         type: 'block', kind: 'post', path, home: place.home, slug: read.post.slug,
         ...(read.post.id ? { id: read.post.id } : {}),
         ...(read.post.title ? { title: read.post.title } : {}),
-        channels, body: read.post.body, post: read.post,
+        channels, visibility: read.post.visibility, body: read.post.body, post: read.post,
       },
       problems: [...read.problems, ...channelProblems(channels)],
     };
@@ -117,7 +128,7 @@ function readBlock(place, path, text_) {
   if (!isSlug(slug)) problems.push(`"${place.name}" does not make a slug. Add a slug property in lowercase Latin letters, digits and hyphens.`);
   const id = readId(properties, problems);
   const content = body.trim();
-  const kind = given === undefined || given === null ? inferKind(content) : String(given);
+  const kind = kindSaid === undefined || kindSaid === null ? inferKind(content) : String(kindSaid);
   const title = text(properties.title);
   if (title && graphemes(title) > 300) problems.push('A title is at most 300 characters');
   const channels = unique(list(properties.channels)).filter(channel => channel !== place.home);
@@ -135,13 +146,14 @@ function readBlock(place, path, text_) {
   if (by && by !== 'me' && !/^agent:[A-Za-z0-9._-]+$/.test(by)) problems.push('by is me, or agent: and the agent\'s name');
   const status = text(properties.status);
   if (status && !STATUSES.includes(status)) problems.push(`status is one of: ${STATUSES.join(', ')}`);
-  const intent = text(properties.intent);
-  if (intent && !INTENTS.includes(intent)) problems.push(`intent is one of: ${INTENTS.join(', ')}`);
+  const saidVisibility = text(properties.visibility);
+  const visibility = VISIBILITIES.includes(saidVisibility) ? saidVisibility : DEFAULT_VISIBILITY;
+  if (saidVisibility && visibility !== saidVisibility) problems.push(`visibility is one of: ${VISIBILITIES.join(', ')}. This block is treated as private.`);
   for (const name of ['created', 'updated']) if (properties[name] != null && !isDate(String(properties[name]))) problems.push(`${name} is a date`);
   const tags = unique(list(properties.tags).map(tag => tag.replace(/^#/, '')));
   return {
     node: {
-      type: 'block', kind, ...(given !== undefined && given !== null ? { kindGiven: true } : {}),
+      type: 'block', kind, ...(kindSaid !== undefined && kindSaid !== null ? { kindGiven: true } : {}),
       path, home: place.home, slug, ...(id ? { id } : {}),
       ...(title ? { title } : {}),
       ...(properties.slug !== undefined && properties.slug !== null ? { slugGiven: true } : {}),
@@ -150,7 +162,8 @@ function readBlock(place, path, text_) {
       ...(from ? { from } : {}),
       ...(isObject(excerpt) ? { excerpt } : {}),
       ...(tags.length ? { tags } : {}),
-      ...(by ? { by } : {}), ...(status ? { status } : {}), ...(intent ? { intent } : {}),
+      ...(by ? { by } : {}), ...(status ? { status } : {}),
+      visibility, ...(saidVisibility ? { visibilityGiven: true } : {}),
       ...(properties.created != null ? { created: String(properties.created) } : {}),
       ...(properties.updated != null ? { updated: String(properties.updated) } : {}),
       body: content, properties: rest(properties, BLOCK_FIELDS),
@@ -262,14 +275,20 @@ export function nodeFile(node) {
     if (problems.length) throw new VaultProblem(problems.join('\n'));
     const path = node.path ?? [node.home, `${node.slug}.md`].filter(Boolean).join('/');
     const named = slugOf(path.split('/').at(-1).replace(/\.md$/i, ''));
+    const visibility = node.visibility ?? DEFAULT_VISIBILITY;
+    if (!VISIBILITIES.includes(visibility)) throw new VaultProblem(`visibility is one of: ${VISIBILITIES.join(', ')}`);
+    const writesVisibility = node.visibilityGiven || visibility !== DEFAULT_VISIBILITY;
+    // A block that writes visibility and nothing only a block has would read back as a post file,
+    // so it says its kind.
+    const looksLikePost = writesVisibility && !BLOCK_ONLY.some(key => given(node[key]));
     const properties = {
-      ...(node.kindGiven || node.kind !== inferKind(node.body) ? { kind: node.kind } : {}),
+      ...(node.kindGiven || node.kind !== inferKind(node.body) || looksLikePost ? { kind: node.kind } : {}),
       title: node.title,
       ...(node.slugGiven || named !== node.slug ? { slug: node.slug } : {}),
       ...(node.channels?.length ? { channels: unique(node.channels).filter(channel => channel !== node.home) } : {}),
       origin: node.origin, from: node.from, excerpt: node.excerpt,
       ...(node.tags?.length ? { tags: node.tags } : {}),
-      by: node.by, status: node.status, intent: node.intent, created: node.created, updated: node.updated,
+      by: node.by, status: node.status, ...(writesVisibility ? { visibility } : {}), created: node.created, updated: node.updated,
       ...node.properties,
       id: node.id,
     };

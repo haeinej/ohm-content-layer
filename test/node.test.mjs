@@ -4,7 +4,7 @@ import test from 'node:test';
 import { filePost, postFile } from '../vault/file.mjs';
 import {
   BLOCK_FIELDS, BLOCK_KINDS, CHANNEL_FIELDS, CHANNEL_KINDS, ENTITY_FIELDS, ENTITY_KINDS, evidence, inferKind, newNodeId,
-  nodeFile, nodeKey, originKind, readNode, readVault, RETAIN, SOURCE_FIELDS, SOURCE_KINDS,
+  nodeFile, nodeKey, originKind, readNode, readVault, RETAIN, SOURCE_FIELDS, SOURCE_KINDS, VISIBILITIES,
 } from '../vault/node.mjs';
 
 const lexicon = async name => JSON.parse(await readFile(new URL(`../lexicons/com/ohmmmm/vault/${name}.json`, import.meta.url), 'utf8'));
@@ -15,6 +15,7 @@ test('each vault lexicon declares exactly the fields its file holds, with the sa
   assert.equal(block.main.key, 'tid');
   assert.deepEqual(Object.keys(block.main.record.properties).sort(), [...BLOCK_FIELDS.filter(field => field !== 'slug'), 'body'].sort());
   assert.deepEqual(block.main.record.properties.kind.knownValues, BLOCK_KINDS);
+  assert.deepEqual(block.main.record.properties.visibility.knownValues, VISIBILITIES);
   const channel = (await lexicon('channel')).defs.main.record.properties;
   assert.deepEqual(Object.keys(channel).sort(), [...CHANNEL_FIELDS, 'description'].sort());
   assert.deepEqual(channel.kind.knownValues, CHANNEL_KINDS);
@@ -52,7 +53,7 @@ test('a block, a channel, an entity and a source each read back from their file 
   const block = readNode('analytics/churn-query.md', [
     '---', 'kind: code', 'title: Q3 churn query', 'channels: [sql-snippets, analytics]', 'origin: ~/work/queries/churn.sql',
     `from: ${ID.s}`, 'excerpt: {"quote": "joins on account_id", "position": 12}', 'tags: [retention, "#board"]', 'by: agent:claude',
-    'status: proposed', 'intent: private', 'created: 2026-11-19', 'mood: tired', `id: ${ID.a}`, '---', '',
+    'status: proposed', 'visibility: friends', 'created: 2026-11-19', 'mood: tired', `id: ${ID.a}`, '---', '',
     'What I used for the board review.', '', '```sql', 'select 1;', '```', '', '![[churn.sql]]',
   ].join('\n'));
   assert.deepEqual(block.problems, []);
@@ -64,13 +65,15 @@ test('a block, a channel, an entity and a source each read back from their file 
   assert.deepEqual(node.channels, ['sql-snippets']);
   assert.deepEqual(node.tags, ['retention', 'board']);
   assert.deepEqual(node.properties, { mood: 'tired' });
+  assert.equal(node.visibility, 'friends');
   const again = nodeFile(node);
   assert.equal(again.path, 'analytics/churn-query.md');
   assert.deepEqual(readNode(again.path, again.text).node, node);
 
-  // A block whose kind is what its content shows does not write it.
+  // A block whose kind is what its content shows does not write it, and one that does not say is private.
   const plain = readNode('ideas/seed.md', 'An idea.\n').node;
   assert.equal(plain.kind, 'text');
+  assert.equal(plain.visibility, 'private');
   assert.doesNotMatch(nodeFile(plain).text, /kind/);
   assert.equal(nodeFile(plain).text, 'An idea.\n');
   // A file named in words keeps its name, and its slug is made from it.
@@ -116,6 +119,32 @@ test('a file that is a post is read as a post block, and written back exactly as
   assert.match(placed.text, /channels:\n {2}- independence/);
   assert.deepEqual(filePost(placed.path, placed.text).problems, []);
   assert.deepEqual(readNode(placed.path, placed.text).node.channels, ['independence']);
+});
+
+test('visibility says which layer a block is in, and a post file is still told from a block', () => {
+  // A post file as the post code writes one: visibility, no kind, nothing only a block has.
+  const post = readNode('writing/old.md', '---\ntitle: Old\nvisibility: friends\nmood: calm\n---\n\nWords.');
+  assert.equal(post.node.kind, 'post');
+  assert.equal(post.node.visibility, 'friends');
+  // The same with something only a block has is a block, and keeps its layer.
+  const block = readNode('writing/new.md', '---\ntitle: New\nvisibility: friends\norigin: ~/notes/new.md\n---\n\nWords.');
+  assert.equal(block.node.kind, 'text');
+  assert.equal(block.node.visibility, 'friends');
+  assert.deepEqual(readNode(nodeFile(block.node).path, nodeFile(block.node).text).node, block.node);
+  // A block that says kind is never a post file, whatever else it has.
+  assert.equal(readNode('a/b.md', '---\nkind: text\nvisibility: public\n---\n\nx').node.kind, 'text');
+  // Made in code, a friends-only block with nothing else says its kind, so it reads back as a block.
+  const made = nodeFile({ type: 'block', kind: 'text', home: 'notes', slug: 'shared', title: 'Shared', channels: [], visibility: 'friends', body: 'For friends.', properties: {} });
+  assert.match(made.text, /kind: text/);
+  assert.equal(readNode(made.path, made.text).node.kind, 'text');
+  assert.equal(readNode(made.path, made.text).node.visibility, 'friends');
+  // A private block does not write what is already the default.
+  assert.doesNotMatch(nodeFile({ type: 'block', kind: 'text', home: 'notes', slug: 'mine', channels: [], visibility: 'private', body: 'Mine.', properties: {} }).text, /visibility|kind/);
+  // A layer that does not exist is named, and the block is kept private.
+  const odd = readNode('a/c.md', '---\nvisibility: everyone\norigin: ~/c.md\n---\n\nx');
+  assert.equal(odd.node.visibility, 'private');
+  assert.match(odd.problems.join(), /visibility is one of: public, friends, private/);
+  assert.throws(() => nodeFile({ ...block.node, visibility: 'everyone' }), /visibility is one of/);
 });
 
 test('reading a whole vault finds every channel, orders its items and names what does not fit', () => {
