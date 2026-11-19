@@ -32,7 +32,10 @@ public and Friends content.
 Call `visibilityMove` before asking the member to confirm. A Friends-to-private
 move writes the sealed copy first, then removes the readable copy using its
 original version. `cleanupPending` means the destination write succeeded and
-removal requires review. A private-to-Friends copy discloses its contents to
+removal requires review. For a private destination, supply a random opaque
+storage ID and keep it with the pending move so you can inspect the destination
+if a write response is lost. The vault TID stays inside the sealed file.
+A private-to-Friends copy discloses its contents to
 the vault service and friends. Publication starts with `publishPlan`, which
 previews the changes. The member-facing confirmation and publishing flows can
 use these operations when connected.

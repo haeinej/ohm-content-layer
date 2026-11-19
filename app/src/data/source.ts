@@ -29,7 +29,8 @@ export type VisibilityMove = {
   action: "publish" | "copy" | "copy-and-remove"
   warning: string
 }
-export type MoveResult = { version: string; cleanupPending: boolean }
+export type MoveResult = { ref: BlockRef; version: string; cleanupPending: boolean }
+export type MoveTarget = { layer: "friends" } | { layer: "private"; opaqueId: string }
 export type VaultContents = ReturnType<typeof readVault>
 export type VaultEvidence = ReturnType<typeof evidence>
 
@@ -46,7 +47,7 @@ export interface HomeSource {
   history(ref: BlockRef): Promise<HistoryVersion[]>
   readVersion(ref: BlockRef, rev: HistoryVersion["rev"]): Promise<HomeFile>
   visibilityMove(ref: BlockRef, to: Layer): VisibilityMove
-  moveVisibility(ref: BlockRef, to: Exclude<Layer, "public">, version: string): Promise<MoveResult>
+  moveVisibility(ref: BlockRef, to: MoveTarget, version: string): Promise<MoveResult>
   listFriends(): Promise<Friend[]>
   removeFriend(did: string): Promise<void>
   listShared(owner: string): Promise<BlockHead[]>
@@ -73,19 +74,23 @@ export function visibilityMove(ref: BlockRef, to: Layer): VisibilityMove {
 export async function moveVisibility(
   source: Pick<HomeSource, "readBlock" | "saveBlock" | "deleteBlock">,
   from: BlockRef,
-  layer: Exclude<Layer, "public">,
+  target: MoveTarget,
   version: string,
 ): Promise<MoveResult> {
+  const { layer } = target
   const move = visibilityMove(from, layer)
   const file = await source.readBlock(from)
   if (file.version !== version) throw new DOMException("The block changed. Review it again before moving it.", "InvalidStateError")
   const block = blockOf(file)
-  if (!block) throw new DOMException("Only a block can move between layers.", "DataError")
+  if (!block?.id) throw new DOMException("Only a block with a vault ID can move between layers.", "DataError")
   const next = "post" in block
     ? { ...block, visibility: layer, post: { ...block.post, visibility: layer } }
     : { ...block, visibility: layer, visibilityGiven: true }
-  const ref: BlockRef = { id: from.id, layer, store: layer === "private" ? "sealed" : "post" in next ? "post" : "block" }
-  const result = await source.saveBlock(ref, nodeFile(next), null)
+  const ref: BlockRef = {
+    id: target.layer === "private" ? target.opaqueId : block.id, layer,
+    store: layer === "private" ? "sealed" : "post" in next ? "post" : "block",
+  }
+  const result = { ref, ...await source.saveBlock(ref, nodeFile(next), null) }
   if (move.action === "copy-and-remove") {
     // Separate stores have no joint transaction. A failed deletion leaves both versions intact.
     try { await source.deleteBlock(from, version) }

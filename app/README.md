@@ -27,6 +27,8 @@ All data is synthetic. Run the app to explore a sample vault and cortex. Reloadi
 
 To try saving and searching, create a block titled “Alder lantern”, add a line of text, and open Search. Search for “Alder lantern” to find the same block you just edited. This workspace uses the sample adapter, so those edits last for the current session. The service adapter is available for integrating signed-in vault access in the app. Private service files require an unlocked device and reach the service as ciphertext.
 
+The editor saves pending typing when you switch blocks. Restoring a version or reverting a change loads the resulting text. Links to a draft keep working after you rename it.
+
 ```sh
 npm ci --prefix app
 npm --prefix app run dev   # http://localhost:5190

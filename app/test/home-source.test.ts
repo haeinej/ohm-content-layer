@@ -75,7 +75,7 @@ test("member service reads use the signed-in DID and shared reads request a scop
 
 test("private browser files require unlock and only sealed data crosses the service boundary", async () => {
   const did = "did:web:member.example.test"
-  const id = newNodeId()
+  const id = "fixture-opaque-private-file"
   const ref: BlockRef = { id, store: "sealed", layer: "private" }
   const file: HomeFile = { path: "journal/example.md", text: "---\nkind: text\n---\n\nAn example private orchard." }
   let session: { did: string; master: string } | null = null

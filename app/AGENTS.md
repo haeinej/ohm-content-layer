@@ -75,6 +75,8 @@ Root `npm test` also runs the app typecheck and build. The import preserved hist
 
 ## Each flow
 
+The editor assigns a unique draft slug at creation. Title edits preserve it for inline links and whole-block connections. The debounce and navigation cleanup share a flush callback. It uses the block's `bodyRevision` to skip a stale buffer after a restore or revert. See the [workspace guide](README.md#the-workspace-wireframe) for the editor behavior.
+
 A flow is a file `flows/<flow>.md` (from the template) plus its code. The file is the specification: steps, the screen for each step and its ohm-ui components, the tool for each step with its schema and annotations, where approval happens, and the end states. Write the file first, then build to it.
 
 ## Before calling a flow done

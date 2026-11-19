@@ -62,6 +62,7 @@ const friendList = sample.people.filter(person => person.did !== sample.owner.di
  */
 const workspace = {
   getDoc: sample.byId, posts: () => sample.posts, channels: () => sample.channelRecords,
+  slugs: () => sample.all.map(doc => doc.slug),
   owner: sample.owner, inbox: () => sample.inbox,
   getChannel: sample.channelByPath, ensureChannel: sample.ensureChannel,
   addDoc, removeDoc, removeChannel, inOrder: sample.inOrder,
@@ -136,7 +137,7 @@ export const sampleSource: HomeSource & { workspace: typeof workspace } = {
     return fileOf({ ...doc, ...snapshot })
   },
   visibilityMove,
-  async moveVisibility(ref, to, replaces) {
+  async moveVisibility(ref, { layer: to }, replaces) {
     visibilityMove(ref, to)
     const doc = sample.posts.find(post => post.id === ref.id && post.visibility === ref.layer)
     if (!doc) throw missing()
@@ -144,7 +145,7 @@ export const sampleSource: HomeSource & { workspace: typeof workspace } = {
     // The sample presents a single view of a block across layers.
     doc.visibility = to
     journal.syncJournal()
-    return { version: versionOf(doc), cleanupPending: false }
+    return { ref: { id: ref.id, layer: to, store: to === "private" ? "sealed" : "post" }, version: versionOf(doc), cleanupPending: false }
   },
   async listFriends() { return structuredClone(friendList) },
   async removeFriend(did) {

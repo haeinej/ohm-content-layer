@@ -99,8 +99,10 @@ export function createServiceSource<Master, Sealed>(options: ServiceOptions<Mast
     return { path: file.path, text: file.text }
   }
   const checkRef = (ref: BlockRef) => {
-    if (!isPostId(ref.id) || (ref.layer === "private" && ref.store !== "sealed")
-      || (ref.layer !== "private" && ref.store === "sealed") || (ref.layer === "public" && ref.store !== "post")) {
+    const valid = ref.layer === "private"
+      ? ref.store === "sealed" && /^[A-Za-z0-9_-]{16,64}$/.test(ref.id)
+      : isPostId(ref.id) && (ref.store === "post" || (ref.layer === "friends" && ref.store === "block"))
+    if (!valid) {
       throw new HomeRefusal("InvalidBlock", "Choose an ID and storage layer for this block.")
     }
   }
@@ -165,7 +167,7 @@ export function createServiceSource<Master, Sealed>(options: ServiceOptions<Mast
       checkRef(ref)
       const read = readNode(file.path, file.text)
       const block = blockOf(file)
-      if (!read?.node || read.problems.length || (read.node.id && read.node.id !== ref.id)
+      if (!read?.node || read.problems.length || (ref.store !== "sealed" && read.node.id && read.node.id !== ref.id)
         || (block && block.visibility !== ref.layer) || (ref.store !== "sealed" && !block)) {
         throw new HomeRefusal("InvalidFile", "Give a valid vault file for this ID and layer.")
       }

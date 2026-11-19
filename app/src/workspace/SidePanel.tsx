@@ -275,6 +275,7 @@ function RepoPanel() {
     const doc = byId(reveal.target)
     const [prime, path] = doc ? [doc.kind === "post" ? "vault" : "cortex", doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label]
       : (reveal.target.split(":") as [string, string])
+    if (path === undefined) return
     const parts = path.split("/")
     const ways = [`prime:${prime}`, ...parts.map((_, i) => `${prime}:${parts.slice(0, i + 1).join("/")}`)]
     setExpanded(s => (ways.every(w => s.has(w)) ? s : new Set([...s, ...ways])))
