@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { createServiceSource } from "../src/data/service-source"
+import { sampleSource } from "../src/data/sample-source"
 import { blockOf, moveVisibility, type BlockRef } from "../src/data/source"
+import { isPostId, setProperty } from "../../vault/vault/file.mjs"
 import { newNodeId } from "../../vault/vault/node.mjs"
 
 test("a Friends block with an envelope-only TID keeps it inside the private copy", async () => {
@@ -64,4 +66,16 @@ test("unlocking preserves a Friends search match on its channel path", async () 
     unlocked = state
     assert.deepEqual((await source.search({ query: "journals" })).map(hit => hit.id), [id])
   }
+})
+
+test("sample file saves add and remove whole-block links", async () => {
+  const ref: BlockRef = { id: newNodeId(), layer: "private", store: "sealed" }
+  assert.ok(isPostId(ref.id))
+  const file = { path: "reading/alder.md", text: "---\nkind: post\nvisibility: private\n---\n\nA seed." }
+  const first = await sampleSource.saveBlock(ref, file, null)
+  const added = await sampleSource.saveBlock(ref, { ...file, text: setProperty(file.text, "connect", ["garden-of-notes"]) }, first.version)
+  assert.match((await sampleSource.readBlock(ref)).text, /connect:.*garden-of-notes/)
+  const cleared = await sampleSource.saveBlock(ref, file, added.version)
+  assert.doesNotMatch((await sampleSource.readBlock(ref)).text, /connect:/)
+  await sampleSource.deleteBlock(ref, cleared.version)
 })
