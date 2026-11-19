@@ -10,10 +10,10 @@ import { initCortex, openCortex } from '../src/folder.mjs';
 import { createTools, TOOLS } from '../src/tools.mjs';
 import { checkVault, folderVault } from '../src/vault.mjs';
 
-// Every person and post here is invented.
+// Every person and block here is invented.
 const template = fileURLToPath(new URL('../template', import.meta.url));
 const refused = code => problem => problem.code === code;
-const writePost = async (root, path, { id, title, body = '' }) => {
+const writeBlock = async (root, path, { id, title, body = '' }) => {
   await mkdir(dirname(join(root, path)), { recursive: true });
   await writeFile(join(root, path), `---\nid: ${id}\ntitle: ${title}\n---\n${body}`);
 };
@@ -21,20 +21,20 @@ const writePost = async (root, path, { id, title, body = '' }) => {
 async function setup() {
   const base = await mkdtemp(join(tmpdir(), 'cortex-filing-'));
   const vault = join(base, 'vault');
-  await writePost(vault, 'meetings/harbour-board.md', { id: 'm1', title: 'Harbour board, March', body: 'We talked about the ferry timetable and the harbour wall.' });
-  await writePost(vault, 'meetings/garden-group.md', { id: 'm2', title: 'Garden group, April', body: 'Seeds, the shed roof.' });
-  await writePost(vault, 'essays/on-tides.md', { id: 'e1', title: 'On tides', body: 'The harbour empties twice a day.' });
-  await writePost(vault, 'notes/reading/atlas.md', { id: 'r1', title: 'Reading: an atlas of islands', body: 'Maps of every island.' });
-  for (const n of [1, 2, 3, 4, 5, 6]) await writePost(vault, `notes/harbour-${n}.md`, { id: `h${n}`, title: `Harbour note ${n}`, body: 'The ferry was late.' });
+  await writeBlock(vault, 'meetings/harbour-board.md', { id: 'm1', title: 'Harbour board, March', body: 'We talked about the ferry timetable and the harbour wall.' });
+  await writeBlock(vault, 'meetings/garden-group.md', { id: 'm2', title: 'Garden group, April', body: 'Seeds, the shed roof.' });
+  await writeBlock(vault, 'essays/on-tides.md', { id: 'e1', title: 'On tides', body: 'The harbour empties twice a day.' });
+  await writeBlock(vault, 'notes/reading/atlas.md', { id: 'r1', title: 'Reading: an atlas of islands', body: 'Maps of every island.' });
+  for (const n of [1, 2, 3, 4, 5, 6]) await writeBlock(vault, `notes/harbour-${n}.md`, { id: `h${n}`, title: `Harbour note ${n}`, body: 'The ferry was late.' });
   const dir = join(base, 'cortex');
   await initCortex(dir, template);
   const person = openCortex(dir, { actor: 'member' });
   await person.connectVault({ kind: 'folder', path: vault });
   const agent = openCortex(dir, { actor: 'claude-code' });
   await agent.start();
-  await agent.describeSection({ section: 'meetings', meaning: 'Transcripts of meetings I was in, one per meeting', conventions: 'Titled by the group and the month, such as "Harbour board, March"' });
-  await agent.describeSection({ section: 'essays', meaning: 'Finished long-form writing, one idea each', conventions: 'Titles start with "On"' });
-  await agent.describeSection({ section: 'notes/reading', meaning: 'Notes on books and articles I read', conventions: 'Titles start with "Reading:"' });
+  await agent.describeChannel({ channel: 'meetings', meaning: 'Transcripts of meetings I was in, one per meeting', conventions: 'Titled by the group and the month, such as "Harbour board, March"' });
+  await agent.describeChannel({ channel: 'essays', meaning: 'Finished long-form writing, one idea each', conventions: 'Titles start with "On"' });
+  await agent.describeChannel({ channel: 'notes/reading', meaning: 'Notes on books and articles I read', conventions: 'Titles start with "Reading:"' });
   return { base, vault, dir, person, agent, tools: createTools(agent) };
 }
 
@@ -55,27 +55,27 @@ async function listing(root) {
 
 const transcript = { kind: 'meeting transcript', title: 'Harbour board, May', text: 'Chair: the harbour wall is repaired. The ferry timetable changes in June. Harbour fees stay the same.' };
 
-test('the advice names a section from vault.md with its conventions, and up to five related posts', async () => {
+test('the advice names a channel from vault.md with its conventions, and up to five related blocks', async () => {
   const { tools } = await setup();
   const advice = await tools.call('cortex_file_advice', transcript);
   assert.deepEqual(advice.vault, { connected: true });
-  assert.equal(advice.sections[0].section, 'meetings');
-  assert.equal(advice.sections[0].meaning, 'Transcripts of meetings I was in, one per meeting');
-  assert.equal(advice.sections[0].conventions, 'Titled by the group and the month, such as "Harbour board, March"');
-  assert.equal(advice.sections[0].posts, 2);
-  assert.match(advice.sections[0].why, /meeting/);
-  assert.ok(advice.sections.length <= 3);
+  assert.equal(advice.channels[0].channel, 'meetings');
+  assert.equal(advice.channels[0].meaning, 'Transcripts of meetings I was in, one per meeting');
+  assert.equal(advice.channels[0].conventions, 'Titled by the group and the month, such as "Harbour board, March"');
+  assert.equal(advice.channels[0].blocks, 2);
+  assert.match(advice.channels[0].why, /meeting/);
+  assert.ok(advice.channels.length <= 3);
   assert.equal(advice.related.length, 5);
-  assert.deepEqual(advice.related[0], { id: 'm1', title: 'Harbour board, March', label: 'meetings' });
-  assert.ok(advice.related.every(post => post.id && post.title && post.label));
-  assert.match(advice.ask, /^Shall I file this under meetings, titled the way posts there are \(Titled by the group and the month/);
+  assert.deepEqual(advice.related[0], { id: 'm1', title: 'Harbour board, March', channel: 'meetings' });
+  assert.ok(advice.related.every(block => block.id && block.title && block.channel));
+  assert.match(advice.ask, /^Shall I file this in meetings, titled the way blocks there are \(Titled by the group and the month/);
   assert.match(advice.ask, /"Harbour board, March"/);
 
-  // A reading note goes elsewhere, matched by the words of its kind against the section's meaning.
+  // A reading note goes elsewhere, matched by the words of its kind against the channel's meaning.
   const reading = await tools.call('cortex_file_advice', { kind: 'reading note', title: 'A book about islands' });
-  assert.equal(reading.sections[0].section, 'notes/reading');
-  assert.equal(reading.sections[0].conventions, 'Titles start with "Reading:"');
-  assert.deepEqual(reading.related.map(post => post.id), ['r1']);
+  assert.equal(reading.channels[0].channel, 'notes/reading');
+  assert.equal(reading.channels[0].conventions, 'Titles start with "Reading:"');
+  assert.deepEqual(reading.related.map(block => block.id), ['r1']);
 });
 
 test('with no vault connected, the advice says so instead of guessing', async () => {
@@ -84,26 +84,26 @@ test('with no vault connected, the advice says so instead of guessing', async ()
   await initCortex(dir, template);
   const advice = await createTools(openCortex(dir, { actor: 'codex' })).call('cortex_file_advice', transcript);
   assert.deepEqual(advice.vault, { connected: false });
-  assert.deepEqual([advice.sections, advice.related], [[], []]);
+  assert.deepEqual([advice.channels, advice.related], [[], []]);
   assert.match(advice.ask, /No vault is connected/);
 
   // A vault that cannot be read is said to be unreadable, and nothing is guessed either.
   const gone = await adviseFiling(openCortex(dir, { vault: folderVault(join(base, 'missing')) }), transcript);
   assert.equal(gone.vault.reachable, false);
-  assert.deepEqual(gone.sections, []);
+  assert.deepEqual(gone.channels, []);
   assert.match(gone.ask, /cannot be read/);
 });
 
-test('a vault without search still answers, with no related posts', async () => {
+test('a vault without search still answers, with no related blocks', async () => {
   const { dir, vault } = await setup();
   const { search, ...rest } = folderVault(vault);
   assert.equal(typeof search, 'function');
   const without = checkVault(rest);
   assert.throws(() => checkVault({ ...rest, search: 'not an operation' }), refused('InvalidVault'));
   const advice = await adviseFiling(openCortex(dir, { vault: without }), transcript);
-  assert.equal(advice.sections[0].section, 'meetings');
+  assert.equal(advice.channels[0].channel, 'meetings');
   assert.deepEqual(advice.related, []);
-  assert.match(advice.ask, /^Shall I file this under meetings/);
+  assert.match(advice.ask, /^Shall I file this in meetings/);
 });
 
 test('asking for advice changes no file in the cortex or the vault', async () => {
@@ -145,9 +145,9 @@ test('a folder vault searches titles and bodies, title first', async () => {
   const folder = folderVault(vault);
   const found = await folder.search('harbour ferry', 3);
   assert.equal(found.length, 3);
-  assert.deepEqual(found[0], { id: 'm1', title: 'Harbour board, March', label: 'meetings' });
-  assert.deepEqual((await folder.search(['islands'])).map(post => post.id), ['r1']);
-  assert.deepEqual((await folder.search(['atlas'], 10))[0], { id: 'r1', title: 'Reading: an atlas of islands', label: 'notes', sublabel: 'reading' });
+  assert.deepEqual(found[0], { id: 'm1', title: 'Harbour board, March', channel: 'meetings' });
+  assert.deepEqual((await folder.search(['islands'])).map(block => block.id), ['r1']);
+  assert.deepEqual((await folder.search(['atlas'], 10))[0], { id: 'r1', title: 'Reading: an atlas of islands', channel: 'notes/reading' });
   assert.deepEqual(await folder.search('nothing-here-at-all'), []);
   assert.deepEqual(await folder.search(''), []);
 });
@@ -160,7 +160,7 @@ test('a new cortex ships the filing skill, and the rulebook says how to file', a
   assert.match(skill.text, /cortex_file_advice/);
   assert.match(start.rules, /## Filing\n/);
   assert.match(start.rules, /File only what they hand over/);
-  assert.match(start.rules, /Never write a post or a fact of your own/);
+  assert.match(start.rules, /Never write a block or a fact of your own/);
   assert.equal(start.rules.match(/File only what/g).length, 1, 'the filing lines are moved, not repeated');
 });
 
@@ -182,11 +182,11 @@ test('a specific approved skill is named before the general filing skill, and th
 
 test('search and advice match Korean and Japanese, where words are not spaced', async () => {
   const { dir, vault, agent, tools } = await setup();
-  await writePost(vault, 'meetings/harbour-ko.md', { id: 'k1', title: '항구 위원회 회의록', body: '방파제 수리를 논의했다.' });
-  await writePost(vault, 'notes/reading/book-ko.md', { id: 'k2', title: '읽은 것', body: '책 한 권을 다 읽었다.' });
-  await writePost(vault, 'meetings/harbour-ja.md', { id: 'j1', title: '港の会議', body: 'フェリーの時刻表について話した。' });
+  await writeBlock(vault, 'meetings/harbour-ko.md', { id: 'k1', title: '항구 위원회 회의록', body: '방파제 수리를 논의했다.' });
+  await writeBlock(vault, 'notes/reading/book-ko.md', { id: 'k2', title: '읽은 것', body: '책 한 권을 다 읽었다.' });
+  await writeBlock(vault, 'meetings/harbour-ja.md', { id: 'j1', title: '港の会議', body: 'フェリーの時刻表について話した。' });
   const folder = folderVault(vault);
-  const ids = async words => (await folder.search(words)).map(post => post.id);
+  const ids = async words => (await folder.search(words)).map(block => block.id);
   assert.deepEqual(await ids('회의'), ['k1']);
   assert.deepEqual(await ids('회의를'), ['k1'], 'a particle after the word still matches');
   assert.deepEqual(await ids('책'), ['k2'], 'a one-character word is kept');
@@ -199,32 +199,32 @@ test('search and advice match Korean and Japanese, where words are not spaced', 
   await agent.start();
   await openCortex(dir, { actor: 'member' }).syncVault();
   const advice = await tools.call('cortex_file_advice', { kind: '회의록', title: '항구 위원회 회의', text: '방파제' });
-  assert.deepEqual(advice.related.map(post => post.id), ['k1']);
+  assert.deepEqual(advice.related.map(block => block.id), ['k1']);
 });
 
-test('one piece of advice reads each post once, and search still sees a post that changed', async () => {
+test('one piece of advice reads each block once, and search still sees a block that changed', async () => {
   const { dir, vault } = await setup();
   const read = [];
   const counted = folderVault(vault, { readText: path => { read.push(path); return readFile(path, 'utf8'); } });
   await adviseFiling(openCortex(dir, { vault: counted }), transcript);
-  assert.equal(read.length, 10, 'ten posts, each read once for shape and search together');
+  assert.equal(read.length, 10, 'ten blocks, each read once for shape and search together');
   assert.equal(new Set(read).size, read.length);
 
   read.length = 0;
-  await writePost(vault, 'essays/on-tides.md', { id: 'e1', title: 'On tides and lighthouses', body: 'A lighthouse at the end of the wall.' });
-  assert.deepEqual((await counted.search('lighthouse')).map(post => post.id), ['e1']);
-  assert.equal(read.length, 1, 'only the changed post is read again');
+  await writeBlock(vault, 'essays/on-tides.md', { id: 'e1', title: 'On tides and lighthouses', body: 'A lighthouse at the end of the wall.' });
+  assert.deepEqual((await counted.search('lighthouse')).map(block => block.id), ['e1']);
+  assert.equal(read.length, 1, 'only the changed block is read again');
 });
 
-test('a section and its own subsection are not both offered', async () => {
+test('a channel and its own sub-channel are not both offered', async () => {
   const { vault, dir, agent, tools } = await setup();
-  await writePost(vault, 'notes/daily/monday.md', { id: 'd1', title: 'Monday', body: '' });
+  await writeBlock(vault, 'notes/daily/monday.md', { id: 'd1', title: 'Monday', body: '' });
   await openCortex(dir, { actor: 'member' }).syncVault();
-  await agent.describeSection({ section: 'notes', meaning: 'Short notes of every kind' });
-  await agent.describeSection({ section: 'notes/daily', meaning: 'A note for each day' });
+  await agent.describeChannel({ channel: 'notes', meaning: 'Short notes of every kind' });
+  await agent.describeChannel({ channel: 'notes/daily', meaning: 'A note for each day' });
   const advice = await tools.call('cortex_file_advice', { kind: 'reading note' });
-  const sections = advice.sections.map(section => section.section);
-  assert.equal(sections[0], 'notes/reading');
-  assert.equal(sections.includes('notes'), false, sections.join(', '));
-  assert.ok(sections.includes('notes/daily'));
+  const channels = advice.channels.map(channel => channel.channel);
+  assert.equal(channels[0], 'notes/reading');
+  assert.equal(channels.includes('notes'), false, channels.join(', '));
+  assert.ok(channels.includes('notes/daily'));
 });

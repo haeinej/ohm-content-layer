@@ -95,7 +95,7 @@ try {
   } else if (command === 'vault') {
     if (rest[0] === 'connect' && rest[1]) {
       const done = await openCortex(folder(rest[2]), { actor: 'member' }).connectVault({ kind: 'folder', path: resolve(rest[1]) });
-      console.log(`Connected the vault in ${resolve(rest[1])}: ${done.sections.length} sections`);
+      console.log(`Connected the vault in ${resolve(rest[1])}: ${done.channels.length} channel${done.channels.length === 1 ? '' : 's'}`);
     } else {
       const dir = folder(rest[0] === 'sync' ? rest[1] : rest[0]);
       const done = await openCortex(dir, { actor: 'member' }).syncVault();

@@ -154,7 +154,7 @@ test('every write to the cortex is a change line: node, op, versions before and 
   await person.connectVault({ kind: 'folder', path: vault });
   const map = await last();
   assert.deepEqual([map.node, map.op, map.before], ['vault.md', 'create', null]);
-  await agent.describeSection({ section: 'essays', meaning: 'Finished essays, one idea each' });
+  await agent.describeChannel({ channel: 'essays', meaning: 'Finished essays, one idea each' });
   const described = await last();
   assert.deepEqual([described.node, described.op, described.before, described.actor.name], ['vault.md', 'update', map.after, 'claude-code']);
   assert.match(described.reason, /essays/);

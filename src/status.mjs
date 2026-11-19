@@ -15,9 +15,9 @@ export async function cortexStatus(cortex, { now = new Date() } = {}) {
   for (const name of state.waiting.skills) add('skill-proposal', name, `cortex approve ${name}`);
   for (const name of state.waiting.tools) add('tool-proposal', name, `Build ${name} and add it to tools/, then delete .cortex/proposed/tools/${name}.md; or delete that proposal file.`);
   if (state.notes.length) add('notes', `${state.notes.length} observation${state.notes.length === 1 ? '' : 's'} waiting to be settled`, 'The next agent session settles these with cortex_settle.');
-  for (const { memory, post } of state.vault.broken ?? []) add('broken-pointer', `${memory} points at missing post ${post}`, `Ask the agent to rewrite or forget ${memory}, or restore post ${post} in the vault.`);
-  for (const section of state.vault.sections ?? []) if (!section.meaning) add('undescribed-section', section.section, `Ask the agent to describe ${section.section} with cortex_describe_section, or write its Meaning: in vault.md.`);
-  for (const section of state.vault.gone ?? []) add('gone-section', section, `Delete the ${section} block from vault.md (keep a copy in .cortex/history/).`);
+  for (const { memory, block } of state.vault.broken ?? []) add('broken-pointer', `${memory} points at missing block ${block}`, `Ask the agent to rewrite or forget ${memory}, or restore block ${block} in the vault.`);
+  for (const channel of state.vault.channels ?? []) if (!channel.meaning) add('undescribed-channel', channel.channel, `Ask the agent to describe ${channel.channel} with cortex_describe_channel, or write its Meaning: in vault.md.`);
+  for (const channel of state.vault.gone ?? []) add('gone-channel', channel, `Delete the ${channel} heading and what is under it from vault.md (keep a copy in .cortex/history/).`);
   // Said once in what; clear says only what to do about it.
   const remedy = problem => {
     // While the vault cannot be reached, its only problem is that it cannot be reached.

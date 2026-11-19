@@ -6,7 +6,7 @@
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
 import { checkField, checkSource, FIELDS, forAgent, IDENTITY, proposalForAgent, readIdentity, shownValue, statesValue, writeIdentity } from './identity.mjs';
-import { sectionOf, vaultFrom } from './vault.mjs';
+import { vaultFrom } from './vault.mjs';
 import { checkWords, gone, parseMap, writeMap } from './vaultmap.mjs';
 import { createHash } from 'node:crypto';
 import { actorOf, openJournal, order, PEOPLE } from './journal.mjs';
@@ -205,7 +205,8 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     const last = new Map();
     for (const line of ((await text(meaningsLog)) ?? '').split('\n')) {
       if (!line.trim()) continue;
-      try { const entry = JSON.parse(line); last.set(`${entry.section}\u0000${entry.field}`, entry.text); } catch {}
+      // Lines from before channels name the channel `section`.
+      try { const entry = JSON.parse(line); last.set(`${entry.channel ?? entry.section}\u0000${entry.field}`, entry.text); } catch {}
     }
     return last;
   }
@@ -501,11 +502,11 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
           vault = { connected: Boolean(connected) };
           if (connected) {
             const shape = await connected.shape();
-            const map = parseMap(await text(at('vault.md')), new Set(shape.sections.map(item => item.section)));
+            const map = parseMap(await text(at('vault.md')), new Set(shape.channels.map(item => item.channel)));
             const { memories } = await all();
-            const pointed = memories.flatMap(({ memory }) => memory.posts ?? []);
+            const pointed = memories.flatMap(({ memory }) => memory.blocks ?? []);
             const where = pointed.length ? await connected.exists(pointed) : {};
-            vault = { connected: true, sections: shape.sections.map(item => ({ ...item, meaning: map.get(item.section)?.meaning, conventions: map.get(item.section)?.conventions })), gone: gone(shape, map), broken: memories.flatMap(({ memory }) => (memory.posts ?? []).filter(id => !where[id]?.exists).map(post => ({ memory: memory.name, post }))), problems: shape.problems };
+            vault = { connected: true, channels: shape.channels.map(item => ({ ...item, meaning: map.get(item.channel)?.meaning, conventions: map.get(item.channel)?.conventions })), gone: gone(shape, map), broken: memories.flatMap(({ memory }) => (memory.blocks ?? []).filter(id => !where[id]?.exists).map(block => ({ memory: memory.name, block }))), problems: shape.problems };
           }
         } catch (problem) {
           vault = { connected: true, reachable: false, problem: problem.message };
@@ -518,7 +519,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       return {
         rules: await cortex.rules(),
         identity: forAgent(identity),
-        vault: vault.connected && vault.reachable !== false ? { connected: true, sections: vault.sections, ...(vault.broken.length ? { broken: vault.broken } : {}), ...(vault.gone?.length ? { gone: vault.gone } : {}) } : { connected: vault.connected, ...(vault.reachable === false ? { reachable: false } : {}) },
+        vault: vault.connected && vault.reachable !== false ? { connected: true, channels: vault.channels, ...(vault.broken.length ? { broken: vault.broken } : {}), ...(vault.gone?.length ? { gone: vault.gone } : {}) } : { connected: vault.connected, ...(vault.reachable === false ? { reachable: false } : {}) },
         always: memories.filter(({ memory }) => memory.always),
         memories: memories.filter(({ memory }) => !memory.always).map(({ memory: { name, description, kind } }) => ({ name, description, kind })),
         // Only what the person has approved or switched on is handed over as usable.
@@ -556,7 +557,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     },
 
     // Brings the cortex in step with the vault: the structure and counts in vault.md, notes for the
-    // changes an agent has to act on, and the memories that point at posts no longer there.
+    // changes an agent has to act on, and the memories that point at blocks no longer there.
     async syncVault() {
       const vault = await theVault();
       if (!vault) return { connected: false };
@@ -568,66 +569,72 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const { changes, cursor } = await vault.changes(before);
       const shape = await vault.shape();
       const content = await text(at('vault.md'));
-      const known = new Set(shape.sections.map(item => item.section));
+      const known = new Set(shape.channels.map(item => item.channel));
       const written = parseMap(content, known);
       const next = writeMap(shape, written);
       if (next !== content) await putMap(content, next, 'counts from the vault');
 
       const { memories } = await all();
-      const pointing = id => memories.filter(({ memory }) => memory.posts?.includes(id)).map(({ memory }) => memory.name);
+      const pointing = id => memories.filter(({ memory }) => memory.blocks?.includes(id)).map(({ memory }) => memory.name);
       const noted = [];
       const note = async (key, line) => {
         const id = `vault-${short(key)}`;
         if (!(await notes()).has(id)) { await recordNote({ id, text: line.slice(0, 500), session: 'vault', source: 'vault' }); noted.push(id); }
       };
-      // Only what an agent has to act on becomes a note. A post saved in a known section needs nothing.
+      // Only what an agent has to act on becomes a note. A block saved in a known channel needs nothing.
+      // A note's ID is made from what it is about, and kept from before channels, so nothing is noted twice.
       for (const change of changes) {
         const names = pointing(change.id);
-        if (change.type === 'removed' && names.length) await note([change.type, change.id], `Post "${change.title}" (${change.id}) was removed from ${sectionOf(change)}. These memories pointed at it: ${names.join(', ')}`);
-        if (change.type === 'moved' && names.length) await note([change.type, change.id, sectionOf(change)], `Post "${change.title}" (${change.id}) moved from ${change.from} to ${sectionOf(change)}. These memories point at it: ${names.join(', ')}`);
+        if (change.type === 'removed' && names.length) await note([change.type, change.id], `Block "${change.title}" (${change.id}) was removed from ${change.channel}. These memories pointed at it: ${names.join(', ')}`);
+        if (change.type === 'moved' && names.length) await note([change.type, change.id, change.channel], `Block "${change.title}" (${change.id}) moved from ${change.from} to ${change.channel}. These memories point at it: ${names.join(', ')}`);
       }
-      for (const { section } of shape.sections) if (!written.has(section)) await note(['section', section], `The vault has a section, ${section}, that vault.md does not describe yet`);
-      for (const key of gone(shape, written)) await note(['gone', key], `The section ${key} is no longer in the vault. What vault.md said about it is kept`);
+      for (const { channel } of shape.channels) if (!written.has(channel)) await note(['section', channel], `The vault has a channel, ${channel}, that vault.md does not describe yet`);
+      for (const key of gone(shape, written)) await note(['gone', key], `The channel ${key} is no longer in the vault. What vault.md said about it is kept`);
 
-      const pointed = memories.flatMap(({ memory }) => memory.posts ?? []);
+      const pointed = memories.flatMap(({ memory }) => memory.blocks ?? []);
       const where = pointed.length ? await vault.exists(pointed) : {};
-      const broken = memories.flatMap(({ memory }) => (memory.posts ?? []).filter(id => !where[id]?.exists).map(id => ({ memory: memory.name, post: id })));
+      const broken = memories.flatMap(({ memory }) => (memory.blocks ?? []).filter(id => !where[id]?.exists).map(id => ({ memory: memory.name, block: id })));
       if (JSON.stringify(before) !== JSON.stringify(cursor)) await put(cursorPath, JSON.stringify(cursor));
       const map = parseMap(next, known);
       return {
         connected: true,
-        sections: shape.sections.map(({ section, posts }) => ({ section, posts, ...(map.get(section)?.meaning ? { meaning: map.get(section).meaning } : {}), ...(map.get(section)?.conventions ? { conventions: map.get(section).conventions } : {}) })),
+        channels: shape.channels.map(({ channel, blocks }) => ({ channel, blocks, ...(map.get(channel)?.meaning ? { meaning: map.get(channel).meaning } : {}), ...(map.get(channel)?.conventions ? { conventions: map.get(channel).conventions } : {}) })),
         changes: changes.length, noted, broken, gone: gone(shape, map), ...(shape.problems?.length ? { problems: shape.problems } : {}),
       };
     },
 
-    // The agent writes what a section means and how posts there are filed, without asking. Once the
+    // The agent writes what a channel means and how blocks there are filed, without asking. Once the
     // person has written over it by hand, theirs stands, and the agent's write is refused.
-    async describeSection({ section, meaning, conventions } = {}) {
+    async describeChannel({ channel, meaning, conventions } = {}) {
       const vault = await theVault();
       if (!vault) throw new Refused('NoVault', 'No vault is connected to this cortex');
       const shape = await vault.shape();
       const content = await text(at('vault.md'));
-      const written = parseMap(content, new Set(shape.sections.map(item => item.section)));
-      if (typeof section !== 'string' || !section || (!shape.sections.some(item => item.section === section) && !written.has(section))) throw new Refused('NotFound', `There is no section ${section} in the vault`);
+      const written = parseMap(content, new Set(shape.channels.map(item => item.channel)));
+      if (typeof channel !== 'string' || !channel || (!shape.channels.some(item => item.channel === channel) && !written.has(channel))) throw new Refused('NotFound', `There is no channel ${channel} in the vault`);
       const given = Object.entries({ meaning, conventions }).filter(([, value]) => value !== undefined);
       if (!given.length) throw new Refused('InvalidRequest', 'Give a meaning, conventions, or both');
-      const words = written.get(section) ?? { meaning: '', conventions: '', extra: [] };
+      const words = written.get(channel) ?? { meaning: '', conventions: '', extra: [] };
       const last = await agentWords();
       const changes = [];
       for (const [field, value] of given) {
         const checked = checkWords(field, value);
         const current = words[field];
-        if (current && current !== last.get(`${section}\u0000${field}`)) throw new Refused('PersonWrote', `The person wrote the ${field} of ${section} themselves, and what they wrote stands. Suggest a change to them instead`, { current });
+        if (current && current !== last.get(`${channel}\u0000${field}`)) throw new Refused('PersonWrote', `The person wrote the ${field} of ${channel} themselves, and what they wrote stands. Suggest a change to them instead`, { current });
         if (current !== checked) changes.push([field, checked]);
       }
-      if (!changes.length) return { section, unchanged: true };
+      if (!changes.length) return { channel, unchanged: true };
       for (const [field, value] of changes) words[field] = value;
-      written.set(section, words);
-      await putMap(content, writeMap(shape, written), `${changes.map(([field]) => field).join(' and ')} of ${section}`);
+      written.set(channel, words);
+      await putMap(content, writeMap(shape, written), `${changes.map(([field]) => field).join(' and ')} of ${channel}`);
       await mkdir(dirname(meaningsLog), { recursive: true });
-      for (const [field, value] of changes) await appendFile(meaningsLog, `${JSON.stringify({ section, field, text: value, by: actor, when: now().toISOString() })}\n`);
-      return { section, ...Object.fromEntries(changes) };
+      for (const [field, value] of changes) await appendFile(meaningsLog, `${JSON.stringify({ channel, field, text: value, by: actor, when: now().toISOString() })}\n`);
+      return { channel, ...Object.fromEntries(changes) };
+    },
+    // The name from before channels. It answers as it did, with `section`.
+    async describeSection({ section, ...rest } = {}) {
+      const { channel, ...done } = await cortex.describeChannel({ channel: section, ...rest });
+      return { section: channel, ...done };
     },
 
     // The playbook, as the person keeps it, their own rules included.
@@ -661,14 +668,14 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const evidence = checkSource(field, source);
       const checked = checkField(field, value);
       if (!statesValue(field, checked, evidence.quote ?? evidence.passage)) throw new Refused('NoEvidence', `The ${evidence.kind === 'person' ? 'quote' : 'passage'} does not say ${JSON.stringify(checked)}. Quote where it is stated`);
-      // With a vault connected, the post must be there and must say what is quoted from it.
+      // With a vault connected, the block must be there and must say what is quoted from it.
       if (evidence.kind === 'vault') {
         const vault = await theVault();
         if (vault) {
-          const post = await vault.read(evidence.post);
-          if (!post) throw new Refused('NoEvidence', `There is no post ${evidence.post} in the vault`);
+          const block = await vault.read(evidence.block);
+          if (!block) throw new Refused('NoEvidence', `There is no block ${evidence.block} in the vault`);
           const plain = words => words.toLowerCase().replace(/\s+/g, ' ').trim();
-          if (!plain(`${post.title}\n${post.body}`).includes(plain(evidence.passage))) throw new Refused('NoEvidence', `Post ${evidence.post} does not say what is quoted from it. Quote the passage as it is written`);
+          if (!plain(`${block.title}\n${block.body}`).includes(plain(evidence.passage))) throw new Refused('NoEvidence', `Block ${evidence.block} does not say what is quoted from it. Quote the passage as it is written`);
         }
       }
       const id = `i${(await cortexVersion({ field, value: checked, source: evidence })).slice(1, 13)}`;

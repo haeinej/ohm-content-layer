@@ -16,7 +16,7 @@ export function createResources(cortex) {
         { uri: 'cortex://memory/MEMORY.md', name: 'Memory index', description: 'One line for every memory', mimeType: 'text/markdown' },
         { uri: 'cortex://tools', name: 'Tools', description: 'What the person has switched on', mimeType: 'application/json' },
       ];
-      if (await cortex.vaultMap() !== null) listed.splice(2, 0, { uri: 'cortex://vault.md', name: 'How to read the vault', description: 'Each section, what it means, and what goes where', mimeType: 'text/markdown' });
+      if (await cortex.vaultMap() !== null) listed.splice(2, 0, { uri: 'cortex://vault.md', name: 'How to read the vault', description: 'Each channel, what it means, and what goes where', mimeType: 'text/markdown' });
       for (const memory of (await cortex.list()).memories) listed.push({ uri: `cortex://memory/${memory.name}`, name: memory.name, description: memory.description, mimeType: 'text/markdown' });
       const { mine, others } = await cortex.working();
       for (const item of [mine, ...others].filter(item => item.version)) listed.push({ uri: `cortex://working/${item.agent}`, name: `Working memory: ${item.agent}`, description: `What ${item.agent} was working on, and left open`, mimeType: 'text/markdown' });

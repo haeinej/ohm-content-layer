@@ -20,14 +20,14 @@ const fresh = async (options = {}) => {
 };
 const refused = code => problem => problem.code === code;
 const said = quote => ({ kind: 'person', quote });
-const post = (id, passage) => ({ kind: 'vault', post: id, passage });
+const fromBlock = (id, passage) => ({ kind: 'vault', block: id, passage });
 const file = dir => readFile(join(dir, 'identity.md'), 'utf8');
 
 test('a proposal without evidence is refused', async () => {
   const { agent } = await fresh();
   await assert.rejects(agent.proposeIdentity({ field: 'city', value: 'Lisbon' }), refused('NoEvidence'));
   await assert.rejects(agent.proposeIdentity({ field: 'city', value: 'Lisbon', source: { kind: 'guess' } }), refused('NoEvidence'));
-  await assert.rejects(agent.proposeIdentity({ field: 'city', value: 'Lisbon', source: { kind: 'vault', post: 'p1' } }), refused('NoEvidence'));
+  await assert.rejects(agent.proposeIdentity({ field: 'city', value: 'Lisbon', source: { kind: 'vault', block: 'p1' } }), refused('NoEvidence'));
   await assert.rejects(agent.proposeIdentity({ field: 'city', value: 'Lisbon', source: said('') }), refused('NoEvidence'));
   await assert.rejects(agent.proposeIdentity({ field: 'favouriteColour', value: 'green', source: said('green') }), refused('InvalidIdentity'));
   await assert.rejects(agent.proposeIdentity({ field: 'account', value: 'did:plc:abc', source: said('my DID is did:plc:abc') }), refused('InvalidIdentity'));
@@ -44,7 +44,7 @@ test('the evidence must say the value itself', async () => {
 
 test('pronouns come only from the person, never from the vault', async () => {
   const { agent } = await fresh();
-  await assert.rejects(agent.proposeIdentity({ field: 'pronouns', value: 'she/her', source: post('p1', 'Sam Rivera wrote this') }), refused('NoEvidence'));
+  await assert.rejects(agent.proposeIdentity({ field: 'pronouns', value: 'she/her', source: fromBlock('p1', 'Sam Rivera wrote this') }), refused('NoEvidence'));
   assert.equal((await agent.proposeIdentity({ field: 'pronouns', value: 'they/them', source: said('I use they/them') })).waiting, true);
 });
 
@@ -71,7 +71,7 @@ test('a value that is not of its type is refused', async () => {
 test('a proposal leaves identity.md unchanged, and confirming writes it and keeps the earlier file', async () => {
   const { dir, agent, person } = await fresh();
   const before = await file(dir);
-  const { id } = await agent.proposeIdentity({ field: 'city', value: 'Lisbon', source: post('p7', 'I moved to Lisbon last spring.') });
+  const { id } = await agent.proposeIdentity({ field: 'city', value: 'Lisbon', source: fromBlock('p7', 'I moved to Lisbon last spring.') });
   assert.equal(await file(dir), before);
   assert.deepEqual((await agent.start()).waiting.identity.map(item => [item.id, item.field, item.value]), [[id, 'city', 'Lisbon']]);
 
@@ -89,7 +89,7 @@ test('a confirmed field is not overwritten by a later proposal', async () => {
   const { dir, agent, person } = await fresh();
   await agent.proposeIdentity({ field: 'occupation', value: 'Illustrator', source: said('I am an illustrator') });
   await person.confirmIdentity('occupation');
-  const later = await agent.proposeIdentity({ field: 'occupation', value: 'Art director', source: post('p9', 'Now art director at a small studio.') });
+  const later = await agent.proposeIdentity({ field: 'occupation', value: 'Art director', source: fromBlock('p9', 'Now art director at a small studio.') });
   assert.deepEqual([later.waiting, later.current], [true, 'Illustrator']);
   assert.equal((await readIdentity(await file(dir))).fields.occupation, 'Illustrator');
   assert.equal((await agent.proposeIdentity({ field: 'occupation', value: 'Illustrator', source: said('still an illustrator') })).confirmed, true);
@@ -103,14 +103,14 @@ test('a confirmed field is not overwritten by a later proposal', async () => {
 
 test('a rejected fact is not proposed again, whatever the evidence', async () => {
   const { agent, person } = await fresh();
-  const proposal = { field: 'city', value: 'Porto', source: post('p2', 'A weekend in Porto.') };
+  const proposal = { field: 'city', value: 'Porto', source: fromBlock('p2', 'A weekend in Porto.') };
   await agent.proposeIdentity(proposal);
   assert.equal((await agent.proposeIdentity(proposal)).unchanged, true, 'sent twice, it is kept once');
   assert.equal((await agent.identityProposals()).length, 1);
   await person.rejectIdentity('city');
   await assert.rejects(agent.proposeIdentity(proposal), refused('AlreadyRejected'));
   await assert.rejects(agent.proposeIdentity({ ...proposal, source: said('Porto.') }), refused('AlreadyRejected'), 'rewording the quote does not bring it back');
-  await assert.rejects(agent.proposeIdentity({ ...proposal, source: post('p3', 'Back in Porto again.') }), refused('AlreadyRejected'));
+  await assert.rejects(agent.proposeIdentity({ ...proposal, source: fromBlock('p3', 'Back in Porto again.') }), refused('AlreadyRejected'));
   assert.equal((await agent.proposeIdentity({ field: 'city', value: 'Braga', source: said('I moved to Braga') })).waiting, true, 'another value may be proposed');
 });
 
@@ -158,7 +158,7 @@ test('no tool an agent is given can confirm, reject or clear', async () => {
   assert.equal((await call('cortex_identity', { text: 'x', version: 'y' })).isError, true);
   const proposed = await call('cortex_propose_identity', { field: 'name', value: 'Sam Rivera', source: { kind: 'person', quote: 'I am Sam Rivera' } });
   assert.equal(JSON.parse(proposed.content[0].text).waiting, true);
-  const pronouns = await call('cortex_propose_identity', { field: 'pronouns', value: 'he/him', source: { kind: 'vault', post: 'p1', passage: 'Sam' } });
+  const pronouns = await call('cortex_propose_identity', { field: 'pronouns', value: 'he/him', source: { kind: 'vault', block: 'p1', passage: 'Sam' } });
   assert.equal(JSON.parse(pronouns.content[0].text).error, 'NoEvidence');
 });
 
