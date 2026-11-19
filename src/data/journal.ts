@@ -1,6 +1,6 @@
-// Version history, as ohm-cortex's journal has it (docs/journal-and-history.md in ohm-cortex): one
+// Version history, as the cortex's journal has it (cortex/docs/journal-and-history.md in ohmmmm): one
 // append-only journal of lines, and every version of every block kept by its hash. Cortex pages
-// (memories, notes, skills, tools) are blocks here too. History is never rewritten: restoring or
+// (memories, observations, skills, tools) are blocks here too. History is never rewritten: restoring or
 // reverting is a new change. Synthetic, in memory, like the rest of data/.
 //
 // You and agents both edit directly. Every change says who made it, so an agent's edits are marked

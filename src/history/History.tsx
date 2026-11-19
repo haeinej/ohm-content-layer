@@ -252,7 +252,7 @@ function Timeline({ lines, inPage, picked, setPicked, onDone }: {
 // ─── The Days layer: one autosave per day ───────────────────────────────────────
 
 /**
- * Each day with changes has an autosave: every page as it was at the end of that day. ohm-cortex
+ * Each day with changes has an autosave: every page as it was at the end of that day. the cortex
  * writes it as a save when the day closes; here it is read from the day's changes. Opening a day
  * shows its changes as the same lines as the other tabs, newest first.
  */

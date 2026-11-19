@@ -2,7 +2,7 @@
 
 You see everything that happened in your repository: what you did and what agents did, each change marked with who made it. You revert what you don't want, restore any earlier version, and save a point to come back to. When an agent finishes a task it says what it did and where it got stuck. History only grows: nothing in it is rewritten.
 
-This is ohm-cortex's journal ([docs/journal-and-history.md](https://github.com/haeinej/ohm-cortex/blob/main/docs/journal-and-history.md) in ohm-cortex) as a person and an agent use it. Keeping an agent's dead ends follows [ANVC](https://github.com/yodering/anvc). The wireframe keeps the journal in memory, in `src/data/journal.ts`.
+This is the cortex's journal ([cortex/docs/journal-and-history.md](https://github.com/haeinej/ohmmmm/blob/main/cortex/docs/journal-and-history.md) in ohmmmm) as a person and an agent use it. Keeping an agent's dead ends follows [ANVC](https://github.com/yodering/anvc). The wireframe keeps the journal in memory, in `src/data/journal.ts`.
 
 - **Flow id:** `history`. It prefixes every tool name.
 - **Starts from:** the history button in the repository's header (the whole repository), or the clock in a page's toolbar (that page).
@@ -15,7 +15,7 @@ This is ohm-cortex's journal ([docs/journal-and-history.md](https://github.com/h
 - **Typing makes one change, not one per key.** Edits to the text by the same person or agent within five minutes join one line.
 - **Sessions are for agents, written when a task is done.** In one line, the session says what the agent did. It groups the changes the agent made since its last session, and lists its **dead ends**: what it tried and dropped, why, and how to recheck. A later agent reads them before it starts, so it doesn't retry them.
 - **A save names a point.** It changes nothing.
-- **Daily autosaves are a layer of their own.** Each day with changes has an autosave: every page as it was at the end of that day. ohm-cortex writes it when the day closes; the wireframe reads it from the day's changes.
+- **Daily autosaves are a layer of their own.** Each day with changes has an autosave: every page as it was at the end of that day. The cortex writes it when the day closes; the wireframe reads it from the day's changes.
 - **There are no traces.** What an agent reads is not recorded; only what it changes, and what it says it did.
 - **Pages others can see are not changed from here.** Changing what others see asks first, which is not part of this wireframe yet; their history is read-only here.
 - **Organising is not changing what others see.** Moving a block between channels, adding it to one, and reordering are yours, on any page: they reach your site only when you publish, and moving a page out of its first channel says its address will change then. Its text, its connections, and restoring or reverting it are its content, so for a page others can see they ask first.
@@ -121,7 +121,7 @@ Reverting and restoring are new changes, so either can itself be reverted.
 
 ## Not yet
 
-- **The whole repository as of a save or a day.** One page's version at a save or a day is readable now; the whole tree as it was is ohm-cortex's `cortex_as_of`, not drawn here yet.
+- **The whole repository as of a save or a day.** One page's version at a save or a day is readable now; the whole tree as it was is the cortex's `cortex_as_of`, not drawn here yet.
 - **What changed since a save**, as one comparison.
 - **Changing a page others can see**, which needs the approval step.
 
