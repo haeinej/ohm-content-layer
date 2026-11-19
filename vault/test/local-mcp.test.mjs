@@ -65,6 +65,25 @@ test('local MCP scans and searches, reads journal history, follows evidence, cap
   ]);
 });
 
+test('a competing local collection refuses while the vault lock is held and can be retried', async t => {
+  const vault = await mkdtemp(join(tmpdir(), 'ohm-local-collect-'));
+  t.after(() => rm(vault, { recursive: true, force: true }));
+  const first = createLocalTools({ vault, by: 'agent:first', DatabaseSync });
+  const second = createLocalTools({ vault, by: 'agent:second', DatabaseSync });
+  const captured = await first.call('vault_capture', { source: 'https://example.test/reading' });
+  const lock = new DatabaseSync(join(vault, '.vault', 'collect.sqlite'));
+  try {
+    lock.exec('BEGIN IMMEDIATE');
+    await assert.rejects(second.call('vault_collect', { block: captured.node, channel: 'stories' }), /Another collection is running/);
+    assert.deepEqual((await first.call('vault_local_read', { ref: captured.node })).node.channels, []);
+  } finally {
+    lock.close();
+  }
+  await first.call('vault_collect', { block: captured.node, channel: 'reading' });
+  await second.call('vault_collect', { block: captured.node, channel: 'stories' });
+  assert.deepEqual((await second.call('vault_local_read', { ref: captured.node })).node.channels, ['reading', 'stories']);
+});
+
 test('ohm vault mcp serves only local tools over stdio', async t => {
   const vault = await mkdtemp(join(tmpdir(), 'ohm-local-stdio-'));
   t.after(() => rm(vault, { recursive: true, force: true }));

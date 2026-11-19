@@ -181,7 +181,7 @@ Configure a trusted MCP client to launch `ohm vault mcp --vault /path/to/vault -
 
 Ask the agent to run `vault_index`, then search for a block, open it with its history, or follow connections from it. Refresh the index after editing files outside the tools.
 
-To try a capture, ask it to save `https://example.test/reading` to the Inbox. You get a proposed block and a source reference in your folder. Ask it to collect the block in `reading` to make it appear there too. The journal records both actions under the agent name you chose.
+To try a capture, ask it to save `https://example.test/reading` to the Inbox. You get a proposed block and a source reference in your folder. Ask it to collect the block in `reading` to make it appear there too. The journal records both actions under the agent name you chose. If another collection is running in the same vault, try again once it finishes.
 
 ## Using the vault from the cortex
 

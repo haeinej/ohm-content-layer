@@ -129,6 +129,23 @@ async function replaceFile(path, before, after) {
   }
 }
 
+// SQLite releases this lock even if a local MCP process exits during collection.
+async function withCollectLock(vault, DatabaseSync, collect) {
+  const path = await ordinaryFile(vault, ['.vault', 'collect.sqlite']);
+  const lock = new DatabaseSync(path);
+  try {
+    try {
+      lock.exec('BEGIN IMMEDIATE');
+    } catch (problem) {
+      if (problem.errcode === 5) refuse('Another collection is running in this vault. Try again.');
+      throw problem;
+    }
+    return await collect();
+  } finally {
+    lock.close();
+  }
+}
+
 export function createLocalTools({ vault, by, DatabaseSync }) {
   const rescan = db => scan({ vault, db });
   const recordChange = async (path, before, after) => {
@@ -199,7 +216,8 @@ export function createLocalTools({ vault, by, DatabaseSync }) {
         if (['vault_local_search', 'vault_local_read', 'vault_neighbors', 'vault_collect'].includes(name) && !summary(db).scanned) {
           refuse('Run vault_index to scan this vault first.');
         }
-        return await calls[name](db, args);
+        const invoke = () => calls[name](db, args);
+        return await (name === 'vault_collect' ? withCollectLock(vault, DatabaseSync, invoke) : invoke());
       } finally {
         db.close();
       }
