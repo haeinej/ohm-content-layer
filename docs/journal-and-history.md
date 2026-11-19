@@ -1,6 +1,6 @@
 # Cortex and history: one path
 
-Written 19 November 2026 as a proposal, and changed the same day as the owner decided its details. It joins what were separate: the cortex, version history, and what agents did. It goes with [the personal brain plan](https://github.com/haeinej/ohm-content-layer/blob/main/plans/personal-brain.md) in ohm-content-layer. Steps 2 and 3 of the order below are built in ohm-cortex, with evidence from step 4, every edit going through the person, and sessions with dead ends; see "Built" at the end. [The guide](guide.md) explains the result for people and agents.
+Written 19 November 2026 as a proposal, and changed the same day as the owner decided its details. It joins what were separate: the cortex, version history, and what agents did. It goes with the personal brain plan for ohm-content-layer, which is not published yet. Steps 2 and 3 of the order below are built in ohm-cortex, with evidence from step 4, every edit going through the person, and sessions with dead ends; see "Built" at the end. [The guide](guide.md) explains the result for people and agents.
 
 One thing here differs from an earlier decision in [plan.md](plan.md), and is now decided:
 
@@ -15,7 +15,7 @@ Two earlier decisions still hold:
 
 There were two cortexes. **ohm-cortex (B) is the cortex.** The one in ohm-content-layer (A) was the first MVP and will not be used; it is listed only so nothing in it is mistaken for current.
 
-| | A · ohm-content-layer cortex | B · ohm-cortex (`~/development/cortex`) |
+| | A · ohm-content-layer cortex | B · ohm-cortex (this repository) |
 | --- | --- | --- |
 | Where it keeps things | D1 tables on the vault service (`cortex_*` in `service/schema.sql`) | A folder of Markdown the person can open |
 | Built | Memories with versions and history, context, notes and settlement (server checks two-session evidence), skills with approval, proposed tools | Identity with proposals, `vault.md`, memories, **working memory per agent**, **distill**, notes and settlement, skill and tool proposals, filing advice, `.cortex/history/`, MCP over stdio and HTTP, **hooks for Claude Code and Codex** |
