@@ -2,7 +2,7 @@ import { AgentStatus } from "@/components/agent-status"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { notify } from "@/components/ui/notice"
-import { isBlock, byId, inbox, sees, titleOf } from "@/data/sample"
+import { isBlock, byId, inbox, sees, titleOf } from "@/data/workspace-data"
 import { PageEditor } from "@/editor/PageEditor"
 import { cn } from "@/lib/cn"
 import { SettingsView } from "./Settings"
@@ -10,7 +10,7 @@ import { surface } from "./Surface"
 import { openDropped, opensOnDrop } from "./drop"
 import { closeSettings, createDraft, setAudience, setSearchOpen, showGraph, useWorkspace } from "./store"
 
-/** Where things open: a page in the editor, an inbox item, or settings. A card of its own, apart from the rack. */
+/** Where things open: a block in the editor, an inbox item, or settings. A card of its own, apart from the rack. */
 export function MainPanel() {
   const { view, agent, audience, restored } = useWorkspace()
   const doc = view.kind === "doc" ? byId(view.id) : undefined
@@ -37,7 +37,7 @@ export function MainPanel() {
           </EmptyContent>
         </Empty>
       ) : doc ? (
-        // A restore or revert of this page re-reads it; one of another page leaves this editor alone.
+        // A restore or revert of this block re-reads it; one of another block leaves this editor alone.
         <PageEditor key={`${doc.id}:${restored?.id === doc.id ? restored.n : 0}`} doc={doc} />
       ) : view.kind === "settings" ? (
         <>

@@ -15,23 +15,23 @@ A light, Obsidian-like home for one person's vault and cortex: find something, r
 │ rack │ side panel     │ main panel                              │
 │ (on  │ (a card, shade │ (a card, shade 2)                       │
 │ the  │  3)            │  post · editor · inbox item · settings  │
-│ page)│ repo · visib-  │                                         │
+│ block)│ repo · visib-  │                                         │
 │      │ ility · inbox  │                                         │
 │      │ · you          │                                         │
 └──────┴────────────────┴────────────────────────────────────────┘
           Search: a sheet over the dimmed workspace (⌘K)
 ```
 
-The rack sits on the page itself. The side panel and the main panel are separate cards beside it. After agentic-twitter's directory and centre, they are lifted by shade in light and by tone in dark. Their corners use the item radius (12), not the card radius (24).
+The rack sits on the block itself. The side panel and the main panel are separate cards beside it. After agentic-twitter's directory and centre, they are lifted by shade in light and by tone in dark. Their corners use the item radius (12), not the card radius (24).
 
 | Rack | Side panel becomes |
 | --- | --- |
 | ohm dot | Nothing. The brand mark, at icon size |
 | Search (⌘K) | Unchanged. Search opens over everything |
 | New block (⌘N) | Unchanged. A private draft opens in the editor |
-| **Home** | The home, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders, **cortex** (a minimal brain) and **vault** (a minimal box), are bold forest rows that open in place. Their icons are outlines when closed and filled when open. The header has the eye (click: who each page is for; hover: View as), a filter (platform, type, who it is for, edited, status), **history** (Dates, You and Agents on a vertical timeline; every change marked with who made it, and reverted from there: [flows/history.md](history.md)), and one switch between list and graph. The vault's folders are **channels**: a block is listed in every channel it is in, its home channel first (`photos › tokyo`) and any channel of your own (`slowness`) as well. **Dragging moves things, as in a file manager:** drag a block's row onto a channel to move it there, or above or below another block to move it to that place (each channel keeps its own order, so a block can be first in one and last in another). Hold ⌥ to add it to the other channel and keep it where it was. Drag a channel's row onto another channel to put it inside, or onto the vault row to bring it to the top; a channel that holds channels cannot go inside another yet. Drag a page onto the main panel to open it. A block's **home channel** is the one its published address comes from (`/posts/<channel>/<slug>`), so moving it out of that one changes its address on the next publish, and the notice says so. **The dot** at the right end of a block's row, on hover: click it for the block's connections card, or press it and pull a line to another block's row, a graph node or the open page to connect the two. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device. Hover a page for its **⋯** (right-click opens the same menu): **Open in ›** (this window, a new tab, the graph), **Pin** (P: pinned pages show on top), **Mark as unread** (U: a bold title until opened), **Rename** (R: in place on the row, the name selected; Enter or leaving keeps it, Escape puts it back), **Move to ›** (moves this row, as dragging does), **Channels ›** (check the channels it is in; its home channel is always checked), **Remove from <channel>** (on a row in a channel that is not its first), **Archive** (A: out of the tree, into Archived at the bottom, with Restore), **Delete** (D, red, asks first). The letters work while the menu is open or the row has focus. A channel has its own **⋯**: **New block here** (N: filed in that home channel), **New channel inside** (C, for a top-level channel), **Rename** (R, in place) and **Delete channel** (D, only when it is empty). The vault row's ⋯ adds **New channel** (C). Channels are records: an empty one stays, and is offered in Move to › and Channels ›. Renaming a channel renames it wherever a block was collected into it, refiles every page whose home channel it is and keeps it open. Published pages get the new address when you next publish, and the notice says how many. The cortex and vault rows have a ⋯ too: **Expand all / Collapse all** (E), **Show only cortex / vault** (O), and for the vault, **New block** (N). The folders inside the cortex are fixed categories and have no menu. **Visibility lives here:** the eye in the header shows who each page is for. Every page gets a small round icon at its end (a globe for Everyone, tinted forest; people for Friends; a lock for Only you), labelled on hover, that changes it in place; showing a page to more people asks first, and marking is not publishing. Cortex items always read Only you. **View as** (You, Friends or Public) is in the eye's hover menu, and turning visibility off returns to You |
+| **Home** | The home, read-only. Its heading is you (picture and name) in a pill. Its menu chooses what shows: **All**, then a divider, then **Cortex** and **Vault**, any combination (checks, not checkboxes; All is both). The two top-level folders, **cortex** (a minimal brain) and **vault** (a minimal box), are bold forest rows that open in place. Their icons are outlines when closed and filled when open. The header has the eye (click: who each block is for; hover: View as), a filter (platform, type, who it is for, edited, status), **history** (Dates, You and Agents on a vertical timeline; every change marked with who made it, and reverted from there: [flows/history.md](history.md)), and one switch between list and graph. The vault groups blocks into **channels**: a block is listed in every channel it is in, its home channel first (`photos › tokyo`) and any channel of your own (`slowness`) as well. **Dragging moves things, as in a file manager:** drag a block's row onto a channel to move it there, or above or below another block to move it to that place (each channel keeps its own order, so a block can be first in one and last in another). Hold ⌥ to add it to the other channel and keep it where it was. Drag a channel's row onto another channel to put it inside, or onto the vault row to bring it to the top; a channel that holds channels cannot go inside another yet. Drag a block onto the main panel to open it. A block's **home channel** is the one its published address comes from (`/posts/<channel>/<slug>`), so moving it out of that one changes its address on the next publish, and the notice says so. **The dot** at the right end of a block's row, on hover: click it for the block's connections card, or press it and pull a line to another block's row, a graph node or the open block to connect the two. Drag the panel's right edge to resize it (220 to 640 px; double-click resets it, arrow keys nudge it). The width is remembered on this device. Hover a block for its **⋯** (right-click opens the same menu): **Open in ›** (this window, a new tab, the graph), **Pin** (P: pinned blocks show on top), **Mark as unread** (U: a bold title until opened), **Rename** (R: in place on the row, the name selected; Enter or leaving keeps it, Escape puts it back), **Move to ›** (moves this row, as dragging does), **Channels ›** (check the channels it is in; its home channel is always checked), **Remove from <channel>** (on a row in a channel that is not its first), **Archive** (A: out of the tree, into Archived at the bottom, with Restore), **Delete** (D, red, asks first). The letters work while the menu is open or the row has focus. A channel has its own **⋯**: **New block here** (N: filed in that home channel), **New channel inside** (C, for a top-level channel), **Rename** (R, in place) and **Delete channel** (D, only when it is empty). The vault row's ⋯ adds **New channel** (C). Channels are records: an empty one stays, and is offered in Move to › and Channels ›. Renaming a channel renames it wherever a block was collected into it, refiles every block whose home channel it is and keeps it open. Posts get the new address when you next publish, and the notice says how many. The cortex and vault rows have a ⋯ too: **Expand all / Collapse all** (E), **Show only cortex / vault** (O), and for the vault, **New block** (N). The folders inside the cortex are fixed categories and have no menu. **Visibility lives here:** the eye in the header shows who each block is for. Every block gets a small round icon at its end (a globe for Everyone, tinted forest; people for Friends; a lock for Only you), labelled on hover, that changes it in place; showing a block to more people asks first, and marking is not publishing. Cortex items always read Only you. **View as** (You, Friends or Public) is in the eye's hover menu, and turning visibility off returns to You |
 | **Inbox** | Replies, mentions, friend requests and cortex observations, newest first, with new ones marked. One about a post opens that post; the others open in the main panel |
-| **Notifications** (bell) | Unchanged. A panel opens beside the rack, after agentic-twitter's notification center. **Agent** shows what an agent is doing now (its status), then what agents did through the page's WebMCP tools. **System** shows the workspace's notices. Each item shows how long ago it happened, can be removed on hover, and opens the page it is about. Clear all empties the list. A dot on the bell means something is unread; it pulses light green while an agent is working. Opening a tab marks it read |
+| **Notifications** (bell) | Unchanged. A panel opens beside the rack, after agentic-twitter's notification center. **Agent** shows what an agent is doing now (its status), then what agents did through the block's WebMCP tools. **System** shows the workspace's notices. Each item shows how long ago it happened, can be removed on hover, and opens the block it is about. Clear all empties the list. A dot on the bell means something is unread; it pulses light green while an agent is working. Opening a tab marks it read |
 | You (avatar) | Your picture, then your name with your handle under it. Below that, the settings sections: Your profile, Identity, Agents, Vault, Cortex, Appearance, and Sign out |
 
 ## The graph
@@ -58,19 +58,19 @@ How it looks and behaves, as Obsidian's graph view does:
 - **Code:** built in `src/graph/model.ts` (blocks, channels, edges and their strength) and `src/workspace/GraphView.tsx` (forces, areas, interaction, drawing).
 - **Private blocks** (see ohmmmm's [`vault/plans/encryption.md`](https://github.com/haeinej/ohmmmm/blob/main/vault/plans/encryption.md)): their channels and connections are inside the encrypted files, so this graph is built on the device from decrypted blocks, never by the server.
 
-## The page editor
+## The block editor
 
-Every page opens in the main panel in one block editor, built after the reference recordings (Tiptap underneath, so the page is Markdown).
+Every block opens in the main panel in one block editor, built after the reference recordings (Tiptap underneath, so the block is Markdown).
 
-- **Path.** The toolbar starts with the page's path in a pill, such as `vault / writing / journal / Monday, rain`.
-  - **Rename:** click the page's name to rename it in place, with a forest ring around it and the text selected.
-  - **Save by dragging:** drag the pill out of the window to save the page as a `.md` file, or onto a channel in the side panel to move it there.
-  - **The ⌄ beside it** opens the page's menu, as a session list has it: Open in › (new tab, graph), Rename (R), Open file…, Save as Markdown, Move to › (from its home channel), Archive (A), Delete (D, asks first).
-- **Toolbar.** After the path, a pill of inserts: Text, Image, Table, and + for everything. On the right: the connections button (with its count), History (the page's versions) and you. Toolbar inserts go after the block the caret is in, never inside a table or list.
+- **Path.** The toolbar starts with the block's path in a pill, such as `vault / writing / journal / Monday, rain`.
+  - **Rename:** click the block's name to rename it in place, with a forest ring around it and the text selected.
+  - **Save by dragging:** drag the pill out of the window to save the block as a `.md` file, or onto a channel in the side panel to move it there.
+  - **The ⌄ beside it** opens the block's menu, as a session list has it: Open in › (new tab, graph), Rename (R), Open file…, Save as Markdown, Move to › (from its home channel), Archive (A), Delete (D, asks first).
+- **Toolbar.** After the path, a pill of inserts: Text, Image, Table, and + for everything. On the right: the connections button (with its count), History (the block's versions) and you. Toolbar inserts go after the block the caret is in, never inside a table or list.
 - **Dropping.**
-  - **Images** dropped or pasted onto the page go in where they land. Image in the toolbar or `/` opens a file picker.
-  - **Pages and files:** dropping a `.md` or `.txt` file, or a page from the tree, opens it. A veil says what the drop will do.
-- **Title.** "Untitled page" until it has one; Enter moves into the page. Hover it to add an emoji icon.
+  - **Images** dropped or pasted onto the block go in where they land. Image in the toolbar or `/` opens a file picker.
+  - **Blocks and files:** dropping a `.md` or `.txt` file, or a block from the tree, opens it. A veil says what the drop will do.
+- **Title.** "Untitled block" until it has one; Enter moves into the block. Hover it to add an emoji icon.
 - **Writing.** The empty line says "Type / for commands or @ for mentions". `/` opens the insert menu at the caret, grouped (Generate, Create, Media, Basic) and filtered as you type, with arrows and Enter.
 - **Block handle.** Each block has a handle on hover. Drag it to move the block. Click it for its menu:
   - **Any block:** Insert below, Duplicate, Copy as Markdown, Delete.
@@ -83,25 +83,25 @@ Every page opens in the main panel in one block editor, built after the referenc
   - Columns resize by dragging their edges.
   - **Cells:** the cell with the caret is outlined in forest, and a selection of cells is tinted. Over a cell selection, the floating bar keeps only Ask for change and the marks.
 - **Selected text** brings up the floating bar: **Ask for change** (an inline prompt; it arrives once an agent is connected through WebMCP), **Connect** (shown when the selection is inside one paragraph, heading or item: find a block, and the words become a link to it, `[[slug|the words]]`), Bold, Italic, Underline, Strikethrough, Code, and **Text ▾** to turn the block into another kind (with a check on the current one).
-- **Links.** A `[[slug]]` reads as a chunk of green text: the linked page's title, with the brackets hidden. While the caret is inside it, it shows as written, so it can be edited, as in Obsidian's live preview.
-  - **Hover:** a card shows the linked page (its path, title and opening lines), and the page is shaded green in the side panel's tree.
-  - **Click:** opens the page.
-  - **Your own words:** `[[slug|the words]]` reads as your words, linked to the page, with its title on hover. Connect in the floating bar writes it.
-- **The connections card.** A block's connections open as a card beside it, like an info panel. Two ways in: the connections button (with a count) in the page's toolbar, and a button that shows next to the **⋯** at the right end of a block's row in the side panel when you hover it. The card holds, top to bottom:
+- **Links.** A `[[slug]]` reads as a chunk of green text: the linked block's title, with the brackets hidden. While the caret is inside it, it shows as written, so it can be edited, as in Obsidian's live preview.
+  - **Hover:** a card shows the linked block (its path, title and opening lines), and the block is shaded green in the side panel's tree.
+  - **Click:** opens the block.
+  - **Your own words:** `[[slug|the words]]` reads as your words, linked to the block, with its title on hover. Connect in the floating bar writes it.
+- **The connections card.** A block's connections open as a card beside it, like an info panel. Two ways in: the connections button (with a count) in the block's toolbar, and a button that shows next to the **⋯** at the right end of a block's row in the side panel when you hover it. The card holds, top to bottom:
   - **The graph around the block**, still and small, in the main graph's colours: its channels in ink, blocks it connects with in grey, cortex items drawn from it in green. Click a node to open it.
   - **In channels:** the part of the tree the block sits in, each of its channels with it (selected) and up to four neighbours, and "more…" to show the rest in the tree.
-  - **Connections:** what it connects to (↗) and what connects to it (↙). Each row says where the connection was read: *in the text*, with the linked words, or a connection on the whole block with its line on why. **+ Connect** finds a block and connects the whole page to it; its *Why?* field and its ✕ are on its row.
+  - **Connections:** what it connects to (↗) and what connects to it (↙). Each row says where the connection was read: *in the text*, with the linked words, or a connection on the whole block with its line on why. **+ Connect** finds a block and connects the whole block to it; its *Why?* field and its ✕ are on its row.
   - **Open in the graph.**
 
-  On a private page you change connections; on a page others see they are read-only, as the text is. These are evidence: you made them and they are in the content, so they show in the graph as grey `links`. No agent tool makes one; the cortex can only point at them.
-  - **Missing pages:** a link to a page that doesn't exist reads muted and struck through.
+  On a private block you change connections; on a block others see they are read-only, as the text is. These are evidence: you made them and they are in the content, so they show in the graph as grey `links`. No agent tool makes one; the cortex can only point at them.
+  - **Missing blocks:** a link to a block that doesn't exist reads muted and struck through.
   - **Mentions:** an `@handle` reads as a link; ⌘-click follows it while editing.
   - **Markdown:** both stay plain text, so search and the graph still find them.
-- **Saving.** A private page saves as you type, and it stays private. A page other people can see opens read-only, with "changing it asks first". The `workspace.save-draft` tool takes Markdown and writes into the open page.
+- **Saving.** A private block saves as you type, and it stays private. A block other people can see opens read-only, with "changing it asks first". The `workspace.save-draft` tool takes Markdown and writes into the open block.
 - **Motion.** Menus, handles and the floating bar fade and scale in on ohm's durations and easing. Reduced motion turns this off.
-- **Not in the editor:** templates, the image placeholder with Generate and Attach, comments, Share, and Fork. All were removed on request; who a page is for is set in Visibility.
+- **Not in the editor:** templates, the image placeholder with Generate and Attach, comments, Share, and Fork. All were removed on request; who a block is for is set in Visibility.
 - **Code:** in `src/editor/`.
-  - `PageEditor.tsx`: the page, the path pill and the block menu.
+  - `PageEditor.tsx`: the block, the path pill and the block menu.
   - `TableControls.tsx`: row and column handles and the add bars.
   - The rest of the parts: `SelectionToolbar.tsx`, `InsertMenu.tsx` (the + and / menus), and `IconPicker.tsx`.
   - `commands.ts`: inserts and turn-into.
@@ -171,8 +171,8 @@ Publishing is not part of this flow. It will be its own flow, with `consequentia
 | Rack | `src/workspace/Rack.tsx`; the bell: `NotificationCenter.tsx`, `notifications.ts` |
 | Side panel: repo, visibility, inbox, you | `src/workspace/SidePanel.tsx`, `Surface.tsx`; the ⋯ menu: `RowMenu.tsx`; rename in place and delete: `PageActions.tsx` |
 | Main panel and settings | `src/workspace/MainPanel.tsx`, `Settings.tsx`, `settings-tabs.ts` |
-| The page editor | `src/editor/` |
-| Search sheet and the one search path (vault, cortex, entities, settings) | `src/workspace/SearchOverlay.tsx`, `src/data/search.ts` (`setSearchProvider`) |
+| The block editor | `src/editor/` |
+| Search sheet and the one search path (vault, cortex, entities, settings) | `src/workspace/SearchOverlay.tsx`, `src/data/search.ts` (selected `HomeSource`) |
 | Tools | `src/workspace/tools.ts`; `workspace.save-draft` in `src/editor/PageEditor.tsx` |
 | Synthetic data | `src/data/sample.ts` |
 

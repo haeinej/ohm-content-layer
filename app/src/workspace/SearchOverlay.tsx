@@ -1,7 +1,7 @@
 // Search, after agentic-twitter's lookup: a sheet centred over the dimmed workspace, category
 // filters on top, an input shaped like a composer, and matches grouped by kind below. It searches
 // through `search`, the same path as the workspace.search WebMCP tool.
-import { isBlockKind } from "@/data/sample"
+import { isBlockKind } from "@/data/block-kind"
 import { useEffect, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import { ArrowUpIcon, BrainIcon, ChevronRightIcon, FileTextIcon, SettingsIcon, UserIcon } from "lucide-react"

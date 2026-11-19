@@ -1,5 +1,5 @@
 // Filters for the home: they narrow the tree and the graph alike.
-import { isBlock, type Doc, type Platform, type Visibility, type Kind } from "@/data/sample"
+import { isBlock, type Doc, type Platform, type Visibility, type Kind } from "@/data/workspace-data"
 
 export type PageType = Kind
 export type Edited = "any" | "week" | "month" | "year"
@@ -48,7 +48,7 @@ export const EDITED: { id: Edited; label: string; days: number }[] = [
 export const activeCount = (f: Filters) =>
   f.platform.size + f.type.size + f.visibility.size + f.status.size + (f.edited === "any" ? 0 : 1)
 
-/** Whether a page passes the filters. `marks` says which pages are unread or pinned. */
+/** Whether a block passes the filters. `marks` says which blocks are unread or pinned. */
 export function passes(f: Filters, d: Doc, marks: { unread: Set<string>; pinned: Set<string> }, today = new Date()) {
   if (f.platform.size && !(isBlock(d) && f.platform.has(d.platform ?? "own"))) return false
   if (f.type.size && !f.type.has(d.kind)) return false

@@ -8,7 +8,7 @@ import { ArrowDownLeftIcon, ArrowUpRightIcon, PlusIcon, XIcon } from "lucide-rea
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { bySlug, incoming, outgoing, titleOf, type Doc, type Outgoing } from "@/data/sample"
+import { bySlug, incoming, outgoing, titleOf, type Doc, type Outgoing } from "@/data/workspace-data"
 import { connectDocs, disconnect, open, setWhy, useWorkspace } from "@/workspace/store"
 import { ConnectPicker } from "./ConnectPicker"
 
@@ -89,7 +89,7 @@ export function ConnectionList({ doc, editable, onOpen }: { doc: Doc; editable: 
 
       {!out.length && !into.length && (
         <p className="px-2 py-1 text-small text-muted-foreground">
-          Nothing connected yet.{editable ? " Select words and choose Connect, or connect the whole page." : ""}
+          Nothing connected yet.{editable ? " Select words and choose Connect, or connect the whole block." : ""}
         </p>
       )}
 

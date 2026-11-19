@@ -1,4 +1,4 @@
-// The ⋯ on a page in the repository, as a session list has it: it shows on hover (and right-click opens
+// The ⋯ on a block in the home, as a session list has it: it shows on hover (and right-click opens
 // the same menu), and its single-key shortcuts work while the menu is open or the row has focus.
 // Open in ›, Pin, Mark as unread, Rename (in place), Move to ›, Channels ›, Archive, Delete.
 // Beside it on a block, a dot: click it for the block's connections card, or pull a line from it to
@@ -11,17 +11,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { isBlock, locationOf, byId, channelRecords, channelsOf, docIdOf, placedIn, blocks, titleOf } from "@/data/sample"
+import { isBlock, locationOf, byId, channelRecords, channelsOf, docIdOf, placedIn, blocks, titleOf } from "@/data/workspace-data"
 import {
   collect, createDraft, deleteChannel, marks, moveBlock, open, uncollect, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
 } from "./store"
-import { InlineRename, InlineRenameFolder, requestDelete, startChannel } from "./PageActions"
+import { InlineRename, InlineRenameChannel, requestDelete, startChannel } from "./PageActions"
 import { useLinkedHover } from "@/editor/LinkPreview"
 import { ConnectionsButton } from "@/editor/ConnectionsCard"
 
 type Row = { id: string; top: number; height: number; textLeft: number }
 const isPage = (id?: string) => !!id && !id.includes(":") && !!byId(docIdOf(id))
-/** A vault channel row: `vault:channel` or `vault:channel/inner`. Cortex folders are fixed. */
+/** A vault channel row: `vault:channel` or `vault:channel/inner`. Cortex categories are fixed. */
 const folderPath = (id?: string) => (id?.startsWith("vault:") ? id.slice(6) : null)
 const isTarget = (id?: string) => isPage(id) || !!folderPath(id)
 /** Whether a channel holds no blocks and no channels. */
@@ -72,7 +72,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     return () => window.removeEventListener("ohm:rename-row", rename)
   }, [container, place])
 
-  // Follow the pointer over page rows; hold still while the menu is open.
+  // Follow the pointer over block rows; hold still while the menu is open.
   useEffect(() => {
     if (!container) return
     const rowOf = (t: EventTarget | null) => (t as HTMLElement | null)?.closest<HTMLElement>("[data-row-id], [data-slot=file-tree-item]")
@@ -113,12 +113,12 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     }
   }) // re-binds with the latest state
 
-  // Unread pages show in weight; the tree is ohm-ui's, so the mark goes on by attribute.
+  // Unread blocks show in weight; the tree is ohm-ui's, so the mark goes on by attribute.
   useEffect(() => {
     container?.querySelectorAll<HTMLElement>("[data-slot=file-tree-item]").forEach(el => {
       const id = docIdOf(el.dataset.id ?? "")
       el.toggleAttribute("data-unread", marks.unread.has(id))
-      // The page a hovered [[link]] points to, shaded green, in every channel it is in.
+      // The block a hovered [[link]] points to, shaded green, in every channel it is in.
       el.toggleAttribute("data-linked", !!linked && id === linked)
     })
   })
@@ -180,7 +180,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
       <div data-row-menu className="pointer-events-none absolute inset-x-0 z-10" style={{ top: row.top, height: row.height }}>
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger render={
-            <button type="button" aria-label={`More for folder “${folder.split("/").at(-1)}”`}
+            <button type="button" aria-label={`More for channel “${folder.split("/").at(-1)}”`}
               className="pointer-events-auto absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-(--ohm-duration-press) animate-in fade-in-0 hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground" />
           }>
             <Icon icon={EllipsisIcon} size="sm" />
@@ -270,7 +270,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     {renaming && row && row.id === renaming && (
       <div className="absolute inset-x-0 z-20 flex items-center" style={{ top: row.top, height: row.height, paddingInlineStart: row.textLeft - 7 }}>
         {folderPath(renaming)
-          ? <InlineRenameFolder path={folderPath(renaming)!} className="me-1 h-7 flex-1 text-body" onDone={() => setRenaming(null)} />
+          ? <InlineRenameChannel path={folderPath(renaming)!} className="me-1 h-7 flex-1 text-body" onDone={() => setRenaming(null)} />
           : <InlineRename id={docIdOf(renaming)} className="me-1 h-7 flex-1 text-body" onDone={() => setRenaming(null)} />}
       </div>
     )}

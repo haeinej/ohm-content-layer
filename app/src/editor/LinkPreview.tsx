@@ -1,12 +1,12 @@
-// Hovering a [[link]] shows the page it points to, as Obsidian's page preview does, and shades that
-// page green in the side panel's tree while the pointer stays.
+// Hovering a [[link]] shows the block it points to, as Obsidian’s link preview does, and shades that
+// block green in the side panel's tree while the pointer stays.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 import { FileTextIcon } from "lucide-react"
 import { Icon } from "@/components/ui/icon"
-import { isBlock, locationOf, bySlug, titleOf, type Doc } from "@/data/sample"
+import { isBlock, locationOf, bySlug, titleOf, type Doc } from "@/data/workspace-data"
 
-// The page under the pointer, for anything that shades it (the tree reads this).
+// The block under the pointer, for anything that shades it (the tree reads this).
 let linked: string | null = null
 const listeners = new Set<() => void>()
 const setLinked = (id: string | null) => { if (id !== linked) { linked = id; listeners.forEach(l => l()) } }

@@ -8,8 +8,7 @@
 // Every edge is the person's own: a link they wrote in a block's text (`[[slug]]`), or a connection
 // they made between whole blocks. Both are evidence, rebuilt from the content. What agents work out
 // about the person stays in the cortex and is not drawn here.
-import { blockKey, blocks, byId, channelRecords, channelsOf, entityByHandle, mentions, owner, sees, type Audience, type Doc, type Entity } from "@/data/sample"
-import { sampleSource } from "@/data/sample-source"
+import { blockKey, blocks, docForEvidence, evidenceKey, workspaceEvidence, channelRecords, channelsOf, entityByHandle, mentions, owner, sees, type Audience, type Doc, type Entity } from "@/data/workspace-data"
 import type { VaultEvidence } from "@/data/source"
 
 export type GraphNode = {
@@ -38,7 +37,7 @@ export type Graph = { center: Entity; nodes: GraphNode[]; edges: GraphEdge[]; ch
 export type GraphFilters = {
   /** Handle or DID. Defaults to the owner; anyone else shows the owner's blocks that mention them. */
   center?: string
-  /** The repo's prime folders. The graph draws the vault's blocks only; without the vault it is empty. */
+  /** Whether the home scope includes the vault. The graph draws vault blocks. */
   vault?: boolean
   /** Links written in the text. */
   links?: boolean
@@ -46,7 +45,7 @@ export type GraphFilters = {
   connections?: boolean
   /** Who is looking: only what they can see is drawn. */
   audience?: Audience
-  /** The repository's filters, as a test each page must pass. */
+  /** The home's filters, as a test each block must pass. */
   keep?: (d: Doc) => boolean
 }
 export const DEFAULT_FILTERS = { vault: true, links: true, connections: true, audience: "private" as Audience }
@@ -58,7 +57,10 @@ export function buildGraph(filters: GraphFilters = {}): Graph {
 
   const docs = !f.vault ? [] : (isOwner ? blocks : blocks.filter(p => mentions(p).includes(center.handle)))
     .filter(d => sees(f.audience, d) && (!filters.keep || filters.keep(d)))
-  const nodes = new Map<string, GraphNode>(docs.map(d => [blockKey(d.id), { id: blockKey(d.id), name: d.title, doc: d, channels: channelsOf(d), degree: 0 }]))
+  const nodes = new Map<string, GraphNode>(docs.map(doc => {
+    const id = evidenceKey(doc.id) ?? blockKey(doc.id)
+    return [id, { id, name: doc.title, doc, channels: channelsOf(doc), degree: 0 }]
+  }))
 
   // Channels, with every channel above them: `a/b` is b inside a.
   const channels = new Map<string, GraphChannel>()
@@ -95,10 +97,10 @@ export function buildGraph(filters: GraphFilters = {}): Graph {
     if (why && !held.why) held.why = why
     edges.set(key, held)
   }
-  for (const edge of sampleSource.workspace.evidence()) {
+  for (const edge of workspaceEvidence()) {
     const wholeBlock = edge.kind === "links" && edge.at === "connect"
     if (wholeBlock ? !f.connections : !f.links) continue
-    const target = byId(edge.to.slice("block:".length))
+    const target = docForEvidence(edge.to)
     const why = wholeBlock && target
       ? nodes.get(edge.from)?.doc.connect?.find(each => each.to === target.slug)?.why
       : undefined

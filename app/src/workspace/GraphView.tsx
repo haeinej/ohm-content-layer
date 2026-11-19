@@ -71,10 +71,10 @@ function areaOf(channel: GraphChannel, at: Map<string, SimNode>) {
 /** A floating control over the graph: the popover surface, solid in dark. */
 const floating = "rounded-2xl bg-popover text-popover-foreground shade-3"
 
-/** Lives in the side panel, in the home. What it draws follows the repository's scope and who you are looking as. */
+/** Lives in the side panel, in the home. What it draws follows the home's scope and who you are looking as. */
 export function GraphView() {
   const { rev, scope, audience, graphCenter: center, view, filters: repoFilters } = useWorkspace()
-  // The open page is ringed in the graph too: one active page, everywhere.
+  // The open block is ringed in the graph too: one active block, everywhere.
   const activeId = view.kind === "doc" ? view.id : null
   const include = useMemo(() => scopeFolders(scope), [scope])
   const [filters, setFilters] = useState({ links: DEFAULT_FILTERS.links, connections: DEFAULT_FILTERS.connections, areas: true })

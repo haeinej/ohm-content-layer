@@ -1,17 +1,19 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { sampleSource } from "../src/data/sample-source"
-import { currentVersion, historyLines, snapshotAt } from "../src/data/journal"
-import { blockKey, byId, channelRowId, docIdOf, fixtureIds, placedIn } from "../src/data/sample"
+import { createSampleSource } from "../src/data/sample-source"
+import { blockKey, byId, channelRowId, demoJournal, docIdOf, placedIn } from "../src/data/workspace-data"
+import { fixtureIds } from "../src/data/sample"
+import { buildGraph } from "../src/graph/model"
+import { isPostId } from "../../vault/vault/file.mjs"
 import { search } from "../src/data/search"
 import { createServiceSource } from "../src/data/service-source"
 import { blockOf, type BlockRef, type HomeFile } from "../src/data/source"
-import { collect, createDraft, deleteDoc, moveBlock, restoreVersion, saveDraft } from "../src/workspace/store"
-import { buildGraph } from "../src/graph/model"
+import { collect, createDraft, deleteDoc, moveBlock, restoreVersion, saveDraft, setSource } from "../src/workspace/store"
 import { newNodeId } from "../../vault/vault/node.mjs"
-import { isPostId } from "../../vault/vault/file.mjs"
 
 test("the sample workspace edits and collects blocks through the same data source search reads", async () => {
+  const sampleSource = createSampleSource()
+  await setSource(sampleSource)
   const draft = createDraft({ title: "A synthetic reading list" })
   try {
     saveDraft({ body: "Alder lantern." })
@@ -28,21 +30,25 @@ test("the sample workspace edits and collects blocks through the same data sourc
     const change = { path: file.path, text: file.text.replace("Alder lantern.", "Alder lantern and river.") }
     const { version } = await sampleSource.saveBlock(ref, change, file.version)
     assert.notEqual(version, file.version)
-    await assert.rejects(sampleSource.saveBlock(ref, file, file.version), /changed/)
-    await assert.rejects(sampleSource.deleteBlock(ref, file.version), /changed/)
+    assert.throws(() => sampleSource.saveBlock(ref, file, file.version), /changed/)
+    assert.throws(() => sampleSource.deleteBlock(ref, file.version), /changed/)
     assert.equal((await search({ query: "Alder lantern and river" }))[0].id, draft.id)
   } finally {
+    await setSource(sampleSource)
     deleteDoc(draft.id)
+    assert.deepEqual(await search({ query: "Alder lantern" }), [])
+    await setSource()
   }
-  assert.deepEqual(await search({ query: "Alder lantern" }), [])
 })
 
 test("draft kinds, history and channel moves use the same TID across placements", async () => {
+  const sampleSource = createSampleSource()
+  await setSource(sampleSource)
   const draft = createDraft({ homeChannel: "writing/journal", title: "Alder lantern" })
   try {
     assert.ok(isPostId(draft.id))
     assert.equal(byId(draft.id)?.kind, "text")
-    const initial = currentVersion(draft.id)!
+    const initial = demoJournal().currentVersion(draft.id)!
     saveDraft({ body: "https://example.test/alder-lantern" })
     assert.equal(byId(draft.id)?.kind, "link")
     const row = channelRowId(draft.id, "projects/tools")
@@ -56,28 +62,34 @@ test("draft kinds, history and channel moves use the same TID across placements"
     assert.equal(byId(draft.id)?.homeChannel, "writing/journal")
     assert.equal(byId(draft.id)?.kind, "text")
   } finally {
-    deleteDoc(draft.id)
+    await setSource()
   }
 })
 
 test("vault evidence and cortex inference refer to the same block keys and keep separate histories", async () => {
-  const evidence = await sampleSource.connections()
-  const garden = blockKey(fixtureIds.garden)
-  assert.ok(evidence.some(edge => edge.from === garden && edge.to === blockKey(fixtureIds.slow) && edge.kind === "links"))
-  assert.ok(evidence.some(edge => edge.from === garden && edge.kind === "mentions" && edge.to.startsWith("entity:")))
-  const graph = buildGraph()
-  assert.ok(graph.nodes.some(node => node.id === garden))
-  const inference = byId(fixtureIds.slowness)!
-  assert.equal(inference.kind, "inference")
-  assert.ok(inference.evidence?.length)
-  for (const pointer of inference.evidence) {
-    assert.ok(pointer.node.startsWith("block:"))
-    assert.ok(snapshotAt(pointer.version))
+  const sampleSource = createSampleSource()
+  await setSource(sampleSource)
+  try {
+    const evidence = await sampleSource.connections()
+    const garden = blockKey(fixtureIds.garden)
+    assert.ok(evidence.some(edge => edge.from === garden && edge.to === blockKey(fixtureIds.slow) && edge.kind === "links"))
+    assert.ok(evidence.some(edge => edge.from === garden && edge.kind === "mentions" && edge.to.startsWith("entity:")))
+    const graph = buildGraph()
+    assert.ok(graph.nodes.some(node => node.id === garden))
+    const inference = byId(fixtureIds.slowness)!
+    assert.equal(inference.kind, "inference")
+    assert.ok(inference.evidence?.length)
+    for (const pointer of inference.evidence) {
+      assert.ok(pointer.node.startsWith("block:"))
+      assert.ok(demoJournal().snapshotAt(pointer.version))
+    }
+    assert.ok(demoJournal().historyLines("cortex").some(line => line.type === "change" && line.node === inference.id))
+    assert.ok(demoJournal().historyLines("vault").some(line => line.type === "change" && line.node === fixtureIds.garden))
+    assert.ok(demoJournal().historyLines("vault").every(line => line.type !== "change" || line.node !== inference.id))
+    assert.equal((await search({ query: "June", scope: "entities" }))[0]?.kind, "entity")
+  } finally {
+    await setSource()
   }
-  assert.ok(historyLines("cortex").some(line => line.type === "change" && line.node === inference.id))
-  assert.ok(historyLines("vault").some(line => line.type === "change" && line.node === fixtureIds.garden))
-  assert.ok(historyLines("vault").every(line => line.type !== "change" || line.node !== inference.id))
-  assert.equal((await search({ query: "June", scope: "entities" }))[0]?.kind, "entity")
 })
 
 test("member service reads use the signed-in DID and shared reads request a scoped service token", async () => {

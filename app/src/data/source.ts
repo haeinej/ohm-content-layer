@@ -1,6 +1,7 @@
 import { evidence, nodeFile, readNode, readVault } from "../../../vault/vault/node.mjs"
 import { isPostId, setProperty } from "../../../vault/vault/file.mjs"
 import type { SearchInput, SearchProvider } from "./search"
+import type { ChannelRecord } from "./workspace-model"
 
 export type Layer = "public" | "friends" | "private"
 export type BlockRef = { id: string; layer: Layer; store: "post" | "block" | "sealed" }
@@ -36,17 +37,21 @@ export type VaultContents = ReturnType<typeof readVault>
 export type VaultEvidence = ReturnType<typeof evidence>
 
 /** The member-side data boundary. Calling a mutation presupposes consent in its UI flow. */
-export interface HomeSource {
-  account(): Promise<Account>
-  listBlocks(layers?: readonly Layer[]): Promise<BlockHead[]>
-  readBlock(ref: BlockRef): Promise<BlockFile>
-  saveBlock(ref: BlockRef, file: HomeFile, replaces: string | null): Promise<{ version: string }>
-  deleteBlock(ref: BlockRef, replaces: string): Promise<void>
-  vault(layers?: readonly Layer[]): Promise<VaultContents>
-  connections(layers?: readonly Layer[]): Promise<VaultEvidence>
+export interface HomeSource<Mode extends "async" | "sync" = "async"> {
+  account(): Result<Mode, Account>
+  listBlocks(layers?: readonly Layer[]): Result<Mode, BlockHead[]>
+  readBlock(ref: BlockRef): Result<Mode, BlockFile>
+  saveBlock(ref: BlockRef, file: HomeFile, replaces: string | null, change?: { op: "restore" | "revert"; reason: string }): Result<Mode, { version: string }>
+  deleteBlock(ref: BlockRef, replaces: string): Result<Mode, void>
+  vault(layers?: readonly Layer[]): Result<Mode, VaultContents>
+  connections(layers?: readonly Layer[]): Result<Mode, VaultEvidence>
+  /** Channel records are editable in the sample workspace. The service has no channel write API. */
+  saveChannels?(channels: readonly ChannelRecord[]): Result<Mode, void>
+  /** Changes the sample's visibility marker for previewing the audiences. */
+  markVisibility?(ref: BlockRef, layer: Layer, replaces: string): Result<Mode, void>
   search: SearchProvider
-  history(ref: BlockRef): Promise<HistoryVersion[]>
-  readVersion(ref: BlockRef, rev: HistoryVersion["rev"]): Promise<HomeFile>
+  history(ref: BlockRef): Result<Mode, HistoryVersion[]>
+  readVersion(ref: BlockRef, rev: HistoryVersion["rev"]): Result<Mode, HomeFile>
   visibilityMove(ref: BlockRef, to: Layer): VisibilityMove
   moveVisibility(ref: BlockRef, to: MoveTarget, version: string): Promise<MoveResult>
   listFriends(): Promise<Friend[]>
@@ -55,6 +60,8 @@ export interface HomeSource {
   readShared(owner: string, id: string): Promise<BlockFile>
   publishPlan(prepare?: boolean): Promise<PublishPlan>
 }
+
+type Result<Mode, Value> = Mode extends "sync" ? Value : Promise<Value>
 
 export const emptyPlan = (): PublishPlan => ({
   changes: 0, create: [], replace: [], remove: [], unchanged: [], cannot: [], notInVault: [],

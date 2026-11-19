@@ -1,5 +1,5 @@
-// Dropping onto the main panel: a page from the tree opens it; a Markdown or text file opens as a new
-// private page. Images are the editor's own (they go into the page where they are dropped).
+// Dropping onto the main panel: a block from the tree opens it; a Markdown or text file opens as a new
+// private block. Images are the editor's own (they go into the block where they are dropped).
 import { notify } from "@/components/ui/notice"
 import { open, openFile } from "./store"
 
@@ -17,24 +17,24 @@ export async function openDropped(dt: DataTransfer): Promise<boolean> {
   const files = [...dt.files].filter(f => TEXT_FILE.test(f.name))
   if (!files.length) return false
   for (const f of files) openFile(f.name, await f.text())
-  notify({ message: files.length === 1 ? `Opened “${files[0].name}” as a private page` : `Opened ${files.length} files as private pages`, tone: "info" })
+  notify({ message: files.length === 1 ? `Opened “${files[0].name}” as a private block` : `Opened ${files.length} files as private blocks`, tone: "info" })
   return true
 }
 
-/** Saving by dragging out: the page as a .md file, wherever the browser lets it land. */
+/** Saving by dragging out: the block as a .md file, wherever the browser lets it land. */
 export function dragOutAsMarkdown(dt: DataTransfer, id: string, name: string, markdown: string) {
-  const file = `${(name || "Untitled page").replace(/[\\/:*?"<>|]/g, "-")}.md`
+  const file = `${(name || "Untitled block").replace(/[\\/:*?"<>|]/g, "-")}.md`
   dt.setData(DOC_DRAG, id)
   dt.setData("text/plain", markdown)
   dt.setData("DownloadURL", `text/markdown:${file}:data:text/markdown;charset=utf-8,${encodeURIComponent(markdown)}`)
   dt.effectAllowed = "copyMove"
 }
 
-/** Saving by menu: downloads the page as a .md file. */
+/** Saving by menu: downloads the block as a .md file. */
 export function saveAsMarkdown(name: string, markdown: string) {
   const a = document.createElement("a")
   a.href = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }))
-  a.download = `${(name || "Untitled page").replace(/[\\/:*?"<>|]/g, "-")}.md`
+  a.download = `${(name || "Untitled block").replace(/[\\/:*?"<>|]/g, "-")}.md`
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }

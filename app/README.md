@@ -13,15 +13,15 @@ An agent that clicks through pixels is slow and fragile. It can also do things t
 A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/workspace.md)):
 
 - A **rack** on the page: search, new block, **home** (a pill with your picture and name; All, Cortex, Vault; visibility inside it), **inbox**, notifications, and you.
-- A **side panel** card that becomes what the rack chose. The home has cortex and vault as checkable top-level folders, and a **graph** inside it. The graph shows your blocks and how they connect: each block a node, each channel a soft area around its blocks, links in the text grey and whole-block links forest, thicker the more two blocks share. It behaves like Obsidian's: springy, with hover highlighting and drag.
-- A **main panel** card where every page opens in a block editor:
-  - **Path:** the page's path sits in a pill. Drag it out to save the page as `.md`, or onto a channel to move it there.
+- A **side panel** card that becomes what the rack chose. The home has cortex and vault as checkable top-level rows, and a **graph** inside it. The graph shows your blocks and how they connect: each block a node, each channel a soft area around its blocks, links in the text grey and whole-block links forest, thicker the more two blocks share. It behaves like Obsidian's: springy, with hover highlighting and drag.
+- A **main panel** card where blocks and cortex files open in the editor:
+  - **Path:** the block's path sits in a pill. Drag it out to save the block as `.md`, or onto a channel to move it there.
   - **Editing:** a `/` menu, a floating selection toolbar, and block handles with menus.
   - **Tables:** row and column handles.
-  - **Dropping:** images go into the page; Markdown files open as new pages.
+  - **Dropping:** images go into the open block and Markdown files open as new blocks.
 
   Inbox items and settings open here too.
-- **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, so a real service can be connected behind it with `setSearchProvider`.
+- **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, and uses the same sample home as the editor and graph.
 
 All data is synthetic. Run the app to explore a sample vault and cortex. Reloading restores the sample.
 
@@ -44,7 +44,8 @@ Choose **Home**, then **History**, to see sample changes by date or author. A bl
 
 - [flows/paths.md](flows/paths.md): every interaction path, what it is for, its end state, and the WebMCP tool for it
 - [AGENTS.md](AGENTS.md): the rules every flow follows
-- [Data sources](docs/agents/home-source.md) describes the sample and service contracts.
+- Build the app on its own from the repository root with `npm ci --prefix app` and `npm --prefix app run build`. The app install includes what the shared vault reader needs.
+- The editor, tree, graph, connections and search use the same sample home. Create a private draft and add it to a channel to see it in the tree and find it in search. Sample changes live in memory and reset on reload. [Data sources](docs/agents/home-source.md) describes the sample and service contracts.
 - [docs/design.md](docs/design.md): ohm-ux's design layer: one radius for every surface, density, compact menus
 - [docs/webmcp.md](docs/webmcp.md): the WebMCP API as of the 13 November 2026 draft, and what changed from earlier guides
 - [flows/TEMPLATE.md](flows/TEMPLATE.md): start a new flow by copying this

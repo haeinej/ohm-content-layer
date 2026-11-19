@@ -1,4 +1,4 @@
-// The repository's filter: narrow the tree and the graph by where a page came from, what it is,
+// The home's filter: narrow the tree and the graph by where a block came from, what it is,
 // who it is for, when it was edited, and whether it is unread or pinned.
 import { FilterIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"

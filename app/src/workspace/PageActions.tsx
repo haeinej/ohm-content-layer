@@ -1,16 +1,16 @@
-// What a page can do, shared by the tree's ⋯ and the editor's path: renaming in place, and deleting
-// after asking. Both menus call these, so a page behaves the same wherever you reach it.
+// What a block can do, shared by the tree's ⋯ and the editor's path: renaming in place, and deleting
+// after asking. Both menus call these, so a block behaves the same wherever you reach it.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { notify } from "@/components/ui/notice"
-import { byId, titleOf } from "@/data/sample"
+import { byId, titleOf } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
-import { createChannel, deleteDoc, renameDoc, renameFolder, revealFolder } from "./store"
+import { createChannel, deleteDoc, renameDoc, renameChannel, revealFolder } from "./store"
 
 /**
  * A name edited in place: the text selected, a forest ring. Enter or leaving keeps it; Escape puts
- * it back. Nothing is saved when it is empty or unchanged. Pages and folders both use it.
+ * it back. Nothing is saved when it is empty or unchanged. Block titles and channel names both use it.
  */
 export function InlineField({ initial, onCommit, onDone, className, label = "Name" }: {
   initial: string; onCommit: (next: string) => void; onDone: () => void; className?: string; label?: string
@@ -45,7 +45,7 @@ export function InlineField({ initial, onCommit, onDone, className, label = "Nam
   )
 }
 
-/** A page's name, in place. */
+/** A block's name, in place. */
 export function InlineRename({ id, className, onDone }: { id: string; className?: string; onDone: () => void }) {
   const doc = byId(id)
   if (!doc) return null
@@ -62,15 +62,15 @@ export function startChannel(inside?: string) {
 }
 
 /** A channel's name, in place: `channel` or `channel/inner`. */
-export function InlineRenameFolder({ path, className, onDone }: { path: string; className?: string; onDone: () => void }) {
+export function InlineRenameChannel({ path, className, onDone }: { path: string; className?: string; onDone: () => void }) {
   const name = path.split("/").at(-1)!
-  return <InlineField initial={name} label="Folder name" className={className} onDone={onDone} onCommit={next => {
+  return <InlineField initial={name} label="Channel name" className={className} onDone={onDone} onCommit={next => {
     let moved: { published: number }
-    try { moved = renameFolder(path, next) } catch (err) { notify({ message: (err as Error).message }); return }
+    try { moved = renameChannel(path, next) } catch (err) { notify({ message: (err as Error).message }); return }
     const to = [...path.split("/").slice(0, -1), next.trim().toLowerCase().replace(/\s+/g, "-")].join("/")
-    window.dispatchEvent(new CustomEvent("ohm:folder-renamed", { detail: { from: path, to } }))
+    window.dispatchEvent(new CustomEvent("ohm:channel-renamed", { detail: { from: path, to } }))
     notify({ message: moved.published
-      ? `Renamed to “${next}”. ${moved.published} published ${moved.published === 1 ? "page gets" : "pages get"} the new address when you publish.`
+      ? `Renamed to “${next}”. ${moved.published} ${moved.published === 1 ? "post gets" : "posts get"} the new address when you publish.`
       : `Renamed to “${next}”`, tone: "info" })
   }} />
 }
@@ -94,7 +94,7 @@ export function DeleteDialog() {
           <DialogDescription>
             {doc?.visibility === "private"
               ? "It is removed from your vault. This cannot be undone."
-              : "It is removed from your vault. If it is published, taking it down from your repository is its own step, and copies others made stay where they are."}
+              : "It is removed from your vault. If it is published, taking down the post is its own step, and copies others made stay where they are."}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

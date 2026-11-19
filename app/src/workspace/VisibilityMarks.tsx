@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { isBlock, byId, docIdOf, titleOf, type Doc, type Visibility } from "@/data/sample"
+import { isBlock, byId, docIdOf, titleOf, type Doc, type Visibility } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { setVisibility, useWorkspace } from "./store"
 
@@ -26,7 +26,7 @@ export function VisibilityMarks({ container }: { container: HTMLElement | null }
   const [asking, setAsking] = useState<{ doc: Doc; to: Visibility } | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
 
-  // Measure every page row, again whenever the tree changes shape.
+  // Measure every block row, again whenever the tree changes shape.
   useLayoutEffect(() => {
     if (!container || !showVisibility) return setMarks([])
     const measure = () => {

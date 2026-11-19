@@ -5,20 +5,20 @@ You see everything that happened in your home: what you did and what agents did,
 The vault keeps versions of blocks and channels. Cortex keeps versions of its own files and records agent sessions. The sample home shows these histories together, using in-memory fixtures in `src/data/journal.ts`.
 
 - **Flow id:** `history`. It prefixes every tool name.
-- **Starts from:** the history button in the home’s header (the whole home), or the clock in a page's toolbar (that page).
+- **Starts from:** the history button in the home’s header (the whole home), or the clock in a block's toolbar (that block).
 - **Ends in:** a change read; a change reverted or a version restored; a save made; an agent's session recorded; or nothing changed.
 
 ## How history is kept
 
-- **Every page is a block, cortex pages too.** Memories, notes, skills and tools have versions and history like any block.
-- **You and agents both edit directly.** Every change is a line that says what was done, to which page, by whom (you, or an agent by name), when, the versions before and after, and any reason the agent gave. An agent's edits are its versions; you revert the ones you don't want. `withAgent` in `src/workspace/tools.ts` runs every agent tool as that agent, so what it changes is marked as its.
+- **Every block is a block, cortex items too.** Memories, notes, skills and tools have versions and history like any block.
+- **You and agents both edit directly.** Every change is a line that says what was done, to which block, by whom (you, or an agent by name), when, the versions before and after, and any reason the agent gave. An agent's edits are its versions; you revert the ones you don't want. `withAgent` in `src/workspace/tools.ts` runs every agent tool as that agent, so what it changes is marked as its.
 - **Typing makes one change, not one per key.** Edits to the text by the same person or agent within five minutes join one line.
 - **Sessions are for agents, written when a task is done.** In one line, the session says what the agent did. It groups the changes the agent made since its last session, and lists its **dead ends**: what it tried and dropped, why, and how to recheck. A later agent reads them before it starts, so it doesn't retry them.
 - **A save names a point.** It changes nothing.
 - **Dates groups sample changes by day.** Vault block and channel autosave is planned for the vault. Cortex owns daily states for its own files.
 - **There are no traces.** What an agent reads is not recorded; only what it changes, and what it says it did.
-- **Pages others can see are not changed from here.** Changing what others see asks first, which is not part of this wireframe yet; their history is read-only here.
-- **Organising is not changing what others see.** Moving a block between channels, adding it to one, and reordering are yours, on any page: they reach your site only when you publish, and moving a page out of its home channel says its address will change then. Its text, its connections, and restoring or reverting it are its content, so for a page others can see they ask first.
+- **Blocks others can see are not changed from here.** Changing what others see asks first, which is not part of this wireframe yet; their history is read-only here.
+- **Organising is not changing what others see.** Moving a block between channels, adding it to one, and reordering are yours, on any block: they reach your site only when you publish, and moving a block out of its home channel says its address will change then. Its text, its connections, and restoring or reverting it are its content, so for a block others can see they ask first.
 
 ## How it looks
 
@@ -31,7 +31,7 @@ A minimal timeline drawn vertically, as VS Code's Timeline is: one thin line dow
 | A flag | A save |
 | A calendar | A day's autosave |
 
-**Each line says what was done as a verb, then the page:** Created, Edited, Moved, Filed (changed its channels), Connected, Restored, Reverted, Deleted. For example, "Edited **Monday, rain**". An agent's session reads "Muse: Looked for pages that belong together · 1 dead end".
+**Each line says what was done as a verb, then the block:** Created, Edited, Moved, Filed (changed its channels), Connected, Restored, Reverted, Deleted. For example, "Edited **Monday, rain**". An agent's session reads "Muse: Looked for blocks that belong together · 1 dead end".
 
 **The home’s history has three tabs: Dates, You, Agents.**
 
@@ -43,13 +43,13 @@ A minimal timeline drawn vertically, as VS Code's Timeline is: one thin line dow
 
 | What you open | What it shows | What you can do |
 | --- | --- | --- |
-| A change | Who made it, when and why, what it touched as a small tree (title, text +words −words, first channel, channels, connections) and the words it changed; *Against now* compares that version with the page today | **Revert this change** (undo only what it touched, as `git revert` does; refused if a later change touched the same part), **Restore this version** (the whole page as it was right after), **Open page** |
+| A change | Who made it, when and why, what it touched as a small tree (title, text +words −words, home channel, channels, connections) and the words it changed; *Against now* compares that version with the block today | **Revert this change** (undo only what it touched, as `git revert` does; refused if a later change touched the same part), **Restore this version** (the whole block as it was right after), **Open in editor** |
 | A session | The changes it made, each one opening like any change, and its dead ends | — |
 | A save | Who saved it, when, and its note | — |
 
 Reverting and restoring are new changes, so either can itself be reverted.
 
-**A page's versions**, from its toolbar's clock, are the same for one page: its changes, with saves between.
+**A block's versions**, from its toolbar's clock, are the same for one block: its changes, with saves between.
 
 ## Steps
 
@@ -57,27 +57,27 @@ Reverting and restoring are new changes, so either can itself be reverted.
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The home’s history | Side panel: Dates / You / Agents and a quiet Save, then the timeline | Save | `history.save` | none: it changes nothing | none |
 | 1a | Read it | the same | (reading) | `history.list` | `readOnlyHint`, `untrustedContentHint` | none |
-| 1b | Finish a task (agents) | none: an agent's step | (Finish task) | `history.session` | none: it changes no page | none |
-| 1c | A change, opened (here or in a page's versions) | Its details | Revert this change | `history.revert` | none: private pages only, and a revert can itself be reverted | none |
-| 1d | the same | the same | Restore this version | `history.restore` | none: private pages only, and a restore can itself be reverted | none |
-| 2 | A page's versions | `Popover` from the page toolbar's clock | (opening a change, 1c and 1d) | — | — | — |
+| 1b | Finish a task (agents) | none: an agent's step | (Finish task) | `history.session` | none: it changes no block | none |
+| 1c | A change, opened (here or in a block's versions) | Its details | Revert this change | `history.revert` | none: private blocks only, and a revert can itself be reverted | none |
+| 1d | the same | the same | Restore this version | `history.restore` | none: private blocks only, and a restore can itself be reverted | none |
+| 2 | A block's versions | `Popover` from the block toolbar's clock | (opening a change, 1c and 1d) | — | — | — |
 | 2a | Read them | the same | (reading) | `history.versions` | `readOnlyHint`, `untrustedContentHint` | none |
 
 ## Tools
 
-`history.revert` and `history.restore` exist while the home’s history or a page's versions is on screen, since both show those buttons: the first view to open registers them, the last to close withdraws them. `history.session` is the one tool without a button: finishing a task is an agent's step, and a person's work needs no session.
+`history.revert` and `history.restore` exist while the home’s history or a block's versions is on screen, since both show those buttons: the first view to open registers them, the last to close withdraws them. `history.session` is the one tool without a button: finishing a task is an agent's step, and a person's work needs no session.
 
 ### `history.list`
 
 - **title:** History
-- **description:** Lists the home’s history, newest first: changes (what was done, to which page, by whom, why), agents' sessions with the changes they made and their dead ends, and saves. Filter by who, page id or a since date. Returns the lines and the dead ends a new task should not retry.
+- **description:** Lists the home’s history, newest first: changes (what was done, to which block, by whom, why), agents' sessions with the changes they made and their dead ends, and saves. Filter by who, block id or a since date. Returns the lines and the dead ends a new task should not retry.
 - **inputSchema:** `{ "who"?: "all" | "human" | "agent", "node"?: string, "since"?: date, "limit"?: 1–100 }`
 - **outputSchema:** `{ "lines": [...], "deadEnds": [...], "next": "history.session" }`
 
 ### `history.session`
 
 - **title:** Finish task
-- **description:** Records that the agent finished a task: one line of what it did, and its dead ends (what it tried and dropped, why, and how to recheck), so a later agent does not retry them. Groups the changes it made since its last session. Changes no page. Returns the session.
+- **description:** Records that the agent finished a task: one line of what it did, and its dead ends (what it tried and dropped, why, and how to recheck), so a later agent does not retry them. Groups the changes it made since its last session. Changes no block. Returns the session.
 - **inputSchema:** `{ "done": string (1–200), "deadEnds"?: [{ "tried", "why", "recheck"? }] (≤10) }`
 - **outputSchema:** `{ "session": ..., "changes": n, "deadEnds": n, "next": "history.list" }`
 - **Handler:** `src/workspace/store.ts#finishSession`
@@ -86,28 +86,28 @@ Reverting and restoring are new changes, so either can itself be reverted.
 ### `history.revert`
 
 - **title:** Revert this change
-- **description:** Undoes one change to a private page, as git revert does: only the parts that change touched go back, and later changes to other parts stay. Refused if a later change touched the same part. The revert is a new change, marked as the agent's. Returns the page id and the parts reverted.
+- **description:** Undoes one change to a private block, as git revert does: only the parts that change touched go back, and later changes to other parts stay. Refused if a later change touched the same part. The revert is a new change, marked as the agent's. Returns the block id and the parts reverted.
 - **inputSchema:** `{ "change": string }`: a change id from `history.list` or `history.versions`
 - **Handler:** `src/workspace/store.ts#revertChange`, the same one the button calls
 
 ### `history.save`
 
 - **title:** Save
-- **description:** Names the sample vault as it is now, so it can be found and compared later. It changes no page. Returns the save's name and its place in the history.
+- **description:** Names the sample vault as it is now, so it can be found and compared later. It changes no block. Returns the save's name and its place in the history.
 - **inputSchema:** `{ "name": string (1–80), "note"?: string (≤300) }`
 - **Handler:** `src/workspace/store.ts#saveNow`
 
 ### `history.versions`
 
 - **title:** Versions
-- **description:** Lists the versions of the page open in the editor, newest first, with who made each.
+- **description:** Lists the versions of the block open in the editor, newest first, with who made each.
 - **outputSchema:** `{ "current": "v…", "versions": [...], "next": "history.restore" }`
 
 ### `history.restore`
 
 - **title:** Restore this version
-- **description:** Brings a private page back to one of its earlier versions. History is kept: the restore is a new change, marked as the agent's, with the reason given, which the person can revert.
-- **inputSchema:** `{ "page": string, "version": "v" + 8 hex, "reason"?: string }`: the reason is kept on the change
+- **description:** Brings a private block back to one of its earlier versions. History is kept: the restore is a new change, marked as the agent's, with the reason given, which the person can revert.
+- **inputSchema:** `{ "block": string, "version": "v" + 8 hex, "reason"?: string }`: the reason is kept on the change
 - **Handler:** `src/workspace/store.ts#restoreVersion`, the same one the button calls
 
 ## States
@@ -116,14 +116,14 @@ Reverting and restoring are new changes, so either can itself be reverted.
 | --- | --- |
 | Agent working | `AgentStatus` ("Reverting a change", "Finishing a task", …) |
 | Done | `notify()`: "Reverted: …", "Restored …", "Saved …" |
-| Can't be done | `notify()` with the reason: a later change touched the same part; others can see the page |
-| Empty | "Nothing by agents yet", "Nothing by you yet"; "No history yet" for a new page |
+| Can't be done | `notify()` with the reason: a later change touched the same part; others can see the block |
+| Empty | "Nothing by agents yet", "Nothing by you yet"; "No history yet" for a new block |
 
 ## Not yet
 
-- **The whole home as of a save or a day.** One page's version at a save or a day is readable now; the whole tree as it was is the cortex's `cortex_as_of`, not drawn here yet.
+- **The whole home as of a save or a day.** One block's version at a save or a day is readable now; the whole tree as it was is the cortex's `cortex_as_of`, not drawn here yet.
 - **What changed since a save**, as one comparison.
-- **Changing a page others can see**, which needs the approval step.
+- **Changing a block others can see**, which needs the approval step.
 
 ## Cross-origin
 

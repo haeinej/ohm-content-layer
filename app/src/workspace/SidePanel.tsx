@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { isBlock, locationOf, channelRowId, byId, channelRecords, channelsOf, cortex, docIdOf, inbox, inOrder, placedIn, blocks, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
+import { isBlock, locationOf, channelRowId, byId, channelRecords, channelsOf, cortex, docIdOf, inbox, inOrder, placedIn, blocks, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
@@ -116,10 +116,10 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
     let over: HTMLElement | null = null
     const clear = () => { over?.removeAttribute("data-drop"); over = null }
     const rowOf = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>("[data-slot=file-tree-item], [data-drop-prime]")
-    // The channel a block's row sits in: the one in its id, or its section for its own row.
+    // The channel a block's row sits in: the one in its id, or its home channel for its own row.
     const channelOfRow = (id: string) => placedIn(id) ?? (byId(docIdOf(id)) ? locationOf(byId(docIdOf(id))!) : null)
 
-    // What is being dragged: a row of this tree, or a page from elsewhere (its path pill), read fresh
+    // What is being dragged: a row of this tree, or a block from elsewhere (its path pill), read fresh
     // from each event so a drag that ended outside the tree leaves nothing behind.
     const current = (e: DragEvent) => dragging ?? (e.dataTransfer?.types.includes(DOC_DRAG) ? { kind: "block" as const, id: "", from: null } : null)
     const targetOf = (e: DragEvent): Target | null => {
@@ -151,7 +151,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
       }
     }
     const dragover = (e: DragEvent) => {
-      // A page dragged in from elsewhere (its path pill) moves from its section.
+      // A block dragged in from elsewhere (its path pill) moves from its home channel.
       const t = targetOf(e)
       if (!t) return clear()
       e.preventDefault()
@@ -168,7 +168,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
       try {
         if (was.kind === "channel") {
           const { path, published } = moveChannel(was.path, t.channel)
-          if (path !== was.path) window.dispatchEvent(new CustomEvent("ohm:folder-renamed", { detail: { from: was.path, to: path } }))
+          if (path !== was.path) window.dispatchEvent(new CustomEvent("ohm:channel-renamed", { detail: { from: was.path, to: path } }))
           notify({ message: `Moved ${shown(was.path.split("/").at(-1)!)} to ${t.channel ? shown(t.channel) : "the top"}${published ? `. ${published} ${published === 1 ? "post gets" : "posts get"} a new address when you publish` : ""}`, tone: "info" })
           return
         }
@@ -198,7 +198,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
 }
 
 /**
- * One of the repo's two prime folders: its own icon (PrimeIcon) and its name, bold forest. The icon is an
+ * One of the home’s two parts: its own icon (PrimeIcon) and its name, bold forest. The icon is an
  * outline when closed and filled when open, so open and closed read at a glance.
  */
 function PrimeRow({ prime, open: isOpen, onOpen, locked, onExpandAll, allOpen, onOnly, onNew, onNewChannel }: {
@@ -267,7 +267,7 @@ function RepoPanel() {
     ...(showVault ? ["prime:vault", ...folderIds(vaultTree)] : []),
   ], [cortexTree, vaultTree, showCortex, showVault])
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["prime:cortex", "prime:vault", ...folderIds(vaultTree)]))
-  // The tree follows the open page: when something asks to be revealed (a page opened from anywhere,
+  // The tree follows the open block: when something asks to be revealed (a block opened from anywhere,
   // or a folder from the path pill), the way to it opens, it scrolls into view and flashes once.
   const { reveal } = useWorkspace()
   useEffect(() => {
@@ -292,14 +292,14 @@ function RepoPanel() {
   // Filtering opens every folder, so what matches is in view.
   useEffect(() => { if (filtering) setExpanded(new Set(allFolders)) }, [filters]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A renamed folder stays as open as it was, with its subfolders.
+  // A renamed channel stays open along with any nested channels.
   useEffect(() => {
     const moved = (e: Event) => {
       const { from, to } = (e as CustomEvent<{ from: string; to: string }>).detail
       setExpanded(s => new Set([...s].map(id => (id === `vault:${from}` || id.startsWith(`vault:${from}/`) ? `vault:${to}${id.slice(6 + from.length)}` : id))))
     }
-    window.addEventListener("ohm:folder-renamed", moved)
-    return () => window.removeEventListener("ohm:folder-renamed", moved)
+    window.addEventListener("ohm:channel-renamed", moved)
+    return () => window.removeEventListener("ohm:channel-renamed", moved)
   }, [])
   // One prime folder's own expand-all, from its ⋯.
   const primeFolders = (p: "cortex" | "vault") => [`prime:${p}`, ...folderIds(p === "cortex" ? cortexTree : vaultTree)]

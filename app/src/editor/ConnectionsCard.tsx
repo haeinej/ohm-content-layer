@@ -1,7 +1,7 @@
 // A block's connections as a card that opens beside it, like an info panel: the graph around it, the
-// part of the tree it sits in, and the list of its connections. It opens from the page's toolbar, and
+// part of the tree it sits in, and the list of its connections. It opens from the block's toolbar, and
 // from the dot that shows at the right end of a block's row when you hover it. Pull a line from that
-// dot to another block (in the tree, the graph or the open page) to connect the two.
+// dot to another block (in the tree, the graph or the open block) to connect the two.
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { NetworkIcon, WaypointsIcon } from "lucide-react"
@@ -10,8 +10,7 @@ import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { notify } from "@/components/ui/notice"
-import { blockKey, isBlock, channelRowId, byId, channelsOf, cortex, blocks, docIdOf, titleOf, type Doc } from "@/data/sample"
-import { sampleSource } from "@/data/sample-source"
+import { blockKey, isBlock, channelRowId, byId, channelsOf, docForEvidence, evidenceKey, workspaceEvidence, cortex, blocks, docIdOf, titleOf, type Doc } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { connectDocs, open, revealFolder, setRepoMode, showGraph, useWorkspace } from "@/workspace/store"
 import { connectionCount, ConnectionList } from "./Connected"
@@ -21,7 +20,7 @@ type MiniEdge = { to: string; inferred: boolean }
 
 /** Everything one step from the block: its channels, the blocks it connects with, and the cortex items drawn from it. */
 function neighbourhood(doc: Doc, go: (id: string) => void, reveal: (path: string) => void) {
-  const self = blockKey(doc.id)
+  const self = evidenceKey(doc.id) ?? blockKey(doc.id)
   const nodes: MiniNode[] = [{ id: self, name: titleOf(doc), kind: "self" }]
   const edges: MiniEdge[] = []
   const add = (n: MiniNode, inferred = false) => {
@@ -30,10 +29,10 @@ function neighbourhood(doc: Doc, go: (id: string) => void, reveal: (path: string
     edges.push({ to: n.id, inferred })
   }
   for (const path of channelsOf(doc)) add({ id: `channel:${path}`, name: path.split("/").at(-1)!, kind: "channel", go: () => reveal(path) })
-  for (const edge of sampleSource.workspace.evidence()) {
+  for (const edge of workspaceEvidence()) {
     const other = edge.from === self ? edge.to : edge.to === self ? edge.from : ""
     if (!other.startsWith("block:")) continue
-    const neighbour = byId(other.slice("block:".length))
+    const neighbour = docForEvidence(other)
     if (neighbour) add({ id: other, name: titleOf(neighbour), kind: "block", go: () => go(neighbour.id) })
   }
   for (const c of cortex) {
@@ -88,7 +87,7 @@ function MiniGraph({ doc, go, reveal }: { doc: Doc; go: (id: string) => void; re
   )
 }
 
-/** The part of the repository tree the block sits in: each of its channels, with it and its neighbours there. */
+/** The part of the home tree the block sits in: each of its channels, with it and its neighbours there. */
 function partialTree(doc: Doc): FileTreeNode[] {
   return channelsOf(doc).map((path, i) => {
     const inChannel = blocks.filter(p => channelsOf(p).includes(path))
@@ -148,7 +147,7 @@ export function ConnectionsCard({ doc, editable, onClose }: { doc: Doc; editable
   )
 }
 
-/** The block a connecting line is over: a block's row in the tree, a graph node, or the open page. */
+/** The block a connecting line is over: a block's row in the tree, a graph node, or the open block. */
 function blockAt(x: number, y: number, from: string): { el: HTMLElement; id: string } | null {
   const el = document.elementFromPoint(x, y) as HTMLElement | null
   const row = el?.closest<HTMLElement>("[data-slot=file-tree-item]")
@@ -224,7 +223,7 @@ function useConnectLine(doc: Doc, onLinking?: (on: boolean) => void) {
 /**
  * The button that opens a block's connections card, and the card. `variant` picks how the button
  * looks: a dot on a tree row, which also pulls a line to connect, or a pill button with a count in
- * the page's toolbar.
+ * the block's toolbar.
  */
 export function ConnectionsButton({ doc, editable, variant, open: openProp, onOpenChange, onLinking, side = "right", className }: {
   doc: Doc

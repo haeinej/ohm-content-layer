@@ -6,7 +6,7 @@ import {
   type Account, type BlockFile, type BlockHead, type BlockRef, type Friend, type HistoryVersion,
   type HomeFile, type HomeSource, type Layer, type PublishPlan,
 } from "./source"
-import { isBlockKind } from "./sample"
+import { isBlockKind } from "./block-kind"
 import type { SearchHit } from "./search"
 
 type RemoteBlock = { id: string; path: string; title?: string; version: string; kind: string }
@@ -23,7 +23,7 @@ type Keys<Master, Sealed> = {
   sealFile(master: Master, did: string, id: string, plain: Uint8Array<ArrayBuffer>): Promise<Sealed>
 }
 
-type ServiceOptions<Master, Sealed> = {
+export type ServiceOptions<Master, Sealed> = {
   origin: string
   did: string
   fetch?: typeof fetch
@@ -215,10 +215,10 @@ export function createServiceSource<Master, Sealed>(options: ServiceOptions<Mast
       const queryWords = [...new Set(words(query))]
       const matches = ({ id, file }: { id: string; file: HomeFile }): SearchHit[] => {
         const node = blockOf(file)
-        if (!node) return []
+        if (!node || !isBlockKind(node.kind)) return []
         const tokens = new Set(words([node.title, node.home, ...node.channels, node.body].join(" ")))
         if (!queryWords.length || !queryWords.every(word => tokens.has(word))) return []
-        return [{ id, title: node.title ?? node.slug, kind: isBlockKind(node.kind) ? node.kind : "text", location: node.home, excerpt: node.body.slice(0, 120) }]
+        return [{ id, title: node.title ?? node.slug, kind: node.kind, location: node.home, excerpt: node.body.slice(0, 120) }]
       }
       if (privateSession?.unlocked()?.did === did) {
         const [shared, sealed] = await Promise.all([source.listBlocks(), unlocked().files.list()])

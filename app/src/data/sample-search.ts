@@ -1,4 +1,4 @@
-import { all, entities, isBlock, locationOf, type Doc } from "./sample"
+import { isBlock, locationOf, type Doc, type Entity } from "./workspace-model"
 import { SETTINGS_TABS } from "@/workspace/settings-tabs"
 import { searchInput } from "./source"
 import type { SearchHit, SearchProvider, SearchScope } from "./search"
@@ -14,7 +14,7 @@ const excerpt = (body: string, q: string) => {
 }
 
 /** In memory, over the synthetic data. */
-export const sampleSearch: SearchProvider = async (input, signal) => {
+export const createSampleSearch = (all: Doc[], entities: Entity[]): SearchProvider => async (input, signal) => {
   signal?.throwIfAborted()
   const { query, limit } = searchInput(input)
   const scope = input.scope ?? "all"
