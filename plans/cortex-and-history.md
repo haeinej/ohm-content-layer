@@ -1,5 +1,7 @@
 # Cortex, history and traces: one path
 
+> **Superseded.** This was the first proposal. The decided design is in ohm-cortex (`docs/journal-and-history.md`, built in its journal): no traces; agents edit directly, every change is marked with who made it, and the person reverts; a named point is a save; sessions record dead ends. Read this file as history.
+
 Written 19 November 2026. A proposal, nothing here is built. It joins three things that are now separate: the cortex, version history, and agent traces. It goes with [the personal brain plan](personal-brain.md).
 
 ## What exists today
