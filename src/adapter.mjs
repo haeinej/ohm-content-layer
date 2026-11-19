@@ -2,11 +2,12 @@
 // moment of a session. It reads the cortex folder directly and never waits on the network, so it
 // answers fast whatever the model does. A hook must never break the session it runs in: whatever
 // goes wrong, the command writes nothing and exits 0.
-import { appendFile, mkdir, readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readMemoryFile } from './core.mjs';
 import { agentName, openCortex } from './folder.mjs';
 import { forAgent } from './identity.mjs';
+import { openJournal } from './journal.mjs';
 import { INSTRUCTIONS } from './tools.mjs';
 
 export const MOMENTS = ['session-start', 'prompt', 'stop', 'session-end'];
@@ -34,22 +35,29 @@ async function cortexAt(dir) {
   if (!found.isFile()) throw new Error(`${dir} is not a cortex`);
 }
 
-const logPath = dir => join(dir, '.cortex', 'sessions.jsonl');
+// Session lines are in the journal. A cortex made before the journal kept them in
+// .cortex/sessions.jsonl, which is still read, first, and never written again. Both are read into
+// the old shape: { agent, session, started | asked | distilled | ended, version }.
+const SESSION_EVENTS = { start: 'started', ask: 'asked', distill: 'distilled', end: 'ended' };
 async function sessions(dir) {
-  const content = await readFile(logPath(dir), 'utf8').catch(problem => { if (problem.code === 'ENOENT') return ''; throw problem; });
+  const content = await readFile(join(dir, '.cortex', 'sessions.jsonl'), 'utf8').catch(problem => { if (problem.code === 'ENOENT') return ''; throw problem; });
   const lines = [];
   for (const line of content.split('\n')) {
     if (!line.trim()) continue;
     try { const entry = JSON.parse(line); if (entry && typeof entry === 'object') lines.push(entry); } catch {}
   }
+  for (const entry of await openJournal(dir).read()) {
+    if (entry.type !== 'session' || !Object.hasOwn(SESSION_EVENTS, entry.event)) continue;
+    const line = { agent: entry.actor?.name, session: entry.session ?? null, [SESSION_EVENTS[entry.event]]: entry.at };
+    if (Object.hasOwn(entry, 'version')) line.version = entry.version;
+    if (entry.event === 'end') line.distilled = entry.distilled === true;
+    lines.push(line);
+  }
   return lines;
 }
-// .cortex/ may not exist, say after a git clone, since git keeps no empty folders.
-async function record(dir, entry) {
-  await mkdir(join(dir, '.cortex'), { recursive: true });
-  await appendFile(logPath(dir), `${JSON.stringify(entry)}\n`);
-}
-const tryRecord = (dir, entry) => record(dir, entry).then(() => true, () => false);
+// The journal makes .cortex/ if it is missing, say after a git clone, since git keeps no empty folders.
+const record = (dir, agent, event, fields, session, now) => openJournal(dir, { now }).append(agent, 'session', { event, ...fields }, { session });
+const tryRecord = (...args) => record(...args).then(() => true, () => false);
 
 async function alwaysMemories(dir) {
   const found = [];
@@ -200,7 +208,7 @@ export async function hook(moment, { dir, agent: given, input = {}, now = () => 
     const after = async () => {
       const lines = await sessions(dir).catch(() => []);
       if (session && lines.some(entry => same(entry.agent) === who && entry.session === session && typeof entry.started === 'string')) return;
-      await tryRecord(dir, { agent, session, started: now().toISOString(), version: mine.version ?? null });
+      await tryRecord(dir, agent, 'start', { version: mine.version ?? null }, session, now);
     };
     return { output, after };
   }
@@ -213,17 +221,17 @@ export async function hook(moment, { dir, agent: given, input = {}, now = () => 
     if (input.stop_hook_active === true) return { output: '' };
     // A session with no start line, say one begun before the hooks were installed, starts now.
     if (!state.start) {
-      await tryRecord(dir, { agent, session, started: now().toISOString(), version: mine.version ?? null });
+      await tryRecord(dir, agent, 'start', { version: mine.version ?? null }, session, now);
       return { output: '' };
     }
     if (!state.changed) return { output: '' };
     // The same state is never asked about twice: the ask is a checkpoint with this version.
-    if (!(await tryRecord(dir, { agent, session, asked: now().toISOString(), version: mine.version ?? null }))) return { output: '' };
+    if (!(await tryRecord(dir, agent, 'ask', { version: mine.version ?? null }, session, now))) return { output: '' };
     return { output: JSON.stringify({ decision: 'block', reason: ASK }) };
   }
 
   // session-end: only what happened.
-  await record(dir, { agent, session, ended: now().toISOString(), distilled: state.distilled });
+  await record(dir, agent, 'end', { distilled: state.distilled }, session, now);
   return { output: '' };
 }
 

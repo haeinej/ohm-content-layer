@@ -9,6 +9,7 @@ import { checkField, checkSource, FIELDS, forAgent, IDENTITY, proposalForAgent, 
 import { sectionOf, vaultFrom } from './vault.mjs';
 import { checkWords, gone, parseMap, writeMap } from './vaultmap.mjs';
 import { createHash } from 'node:crypto';
+import { openJournal, PEOPLE } from './journal.mjs';
 import { cleanMemory, cortexVersion, InvalidMemory, KINDS, memoryFile, memoryVersion, NAME, readMemoryFile, Refused, splitFront, writeFront } from './core.mjs';
 
 const bytes = text => new TextEncoder().encode(text).length;
@@ -37,7 +38,7 @@ function checkNote({ id, note, session, project } = {}) {
 }
 
 // Names that mean the person, or the signed-in account. An agent never writes under one of them.
-export const RESERVED = ['member', 'account'];
+export const RESERVED = PEOPLE;
 export const agentName = given => {
   const name = typeof given === 'string' && given.trim() ? given.trim().slice(0, 100) : 'agent';
   return RESERVED.includes(name.toLowerCase()) ? `agent:${name}` : name;
@@ -59,6 +60,7 @@ export async function initCortex(dir, template, { account } = {}) {
 // `vault`, when given, is the vault this cortex reads; otherwise it is the one .cortex/vault.json names.
 export function openCortex(dir, { actor = 'member', now = () => new Date(), vault: givenVault } = {}) {
   const at = (...parts) => join(dir, ...parts);
+  const journal = openJournal(dir, { now });
   const memoryPath = name => at('memory', `${name}.md`);
 
   // Every replaced or removed file is kept, named by when it was replaced and the version it was.
@@ -107,20 +109,31 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     await put(at('memory', 'MEMORY.md'), `<!-- Generated from each memory's description. Do not edit. -->\n${lines.join('\n')}${lines.length ? '\n' : ''}`);
   }
 
-  // Observations and host events are one append-only log. A line records a note, or what became of one.
-  const log = at('.cortex', 'notes.jsonl');
+  // Observations and host events are note lines in the journal, and what became of each is a
+  // decision line. A cortex made before the journal kept them in .cortex/notes.jsonl: that file is
+  // still read, first, and never written again.
+  const oldNotes = at('.cortex', 'notes.jsonl');
   async function notes() {
     const found = new Map();
-    for (const line of ((await text(log)) ?? '').split('\n')) {
+    for (const line of ((await text(oldNotes)) ?? '').split('\n')) {
       if (!line.trim()) continue;
       let entry;
       try { entry = JSON.parse(line); } catch { continue; }
       if (entry.type === 'note') found.set(entry.id, { id: entry.id, text: entry.text, session: entry.session, ...(entry.project ? { project: entry.project } : {}), source: entry.source, writtenBy: entry.writtenBy, when: entry.when });
       else if (entry.type === 'settled' && found.has(entry.id)) Object.assign(found.get(entry.id), { outcome: entry.outcome, settledAt: entry.when });
     }
+    for (const entry of await journal.read()) {
+      // Two machines may both hold a note after a merge. The first one stands.
+      if (entry.type === 'note' && typeof entry.note === 'string' && !found.has(entry.note)) {
+        found.set(entry.note, { id: entry.note, text: entry.text, session: entry.session, ...(entry.project ? { project: entry.project } : {}), source: entry.source, writtenBy: entry.actor?.name, when: entry.at, ...(entry.evidence ? { evidence: entry.evidence } : {}) });
+      } else if (entry.type === 'decision' && typeof entry.note === 'string' && found.has(entry.note)) {
+        Object.assign(found.get(entry.note), { outcome: entry.outcome, settledAt: entry.at });
+      }
+    }
     return found;
   }
-  const record = async entry => { await mkdir(dirname(log), { recursive: true }); await appendFile(log, `${JSON.stringify(entry)}\n`); };
+  const recordNote = ({ id, text: said, session, project, source, evidence }) =>
+    journal.append(actor, 'note', { note: id, text: said, ...(project ? { project } : {}), source, ...(evidence ? { evidence } : {}) }, { session });
 
   async function folderOf(root) {
     const files = [];
@@ -281,11 +294,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       // the version of working memory it left. The stop hook asks whether the working memory it sees
       // is one a distill left, since its session started.
       // The notes and working memory are already saved, so a failed record never fails the distill.
-      const sessions = at('.cortex', 'sessions.jsonl');
-      try {
-        await mkdir(dirname(sessions), { recursive: true });
-        await appendFile(sessions, `${JSON.stringify({ agent: actor, distilled: now().toISOString(), version: left.version ?? null })}\n`);
-      } catch {}
+      try { await journal.append(actor, 'session', { event: 'distill', version: left.version ?? null }, { session }); } catch {}
       return { session, noted: recorded.map(item => item.id), working: left };
     },
 
@@ -385,7 +394,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
       const noted = [];
       const note = async (key, line) => {
         const id = `vault-${short(key)}`;
-        if (!(await notes()).has(id)) { await record({ type: 'note', id, text: line.slice(0, 500), session: 'vault', source: 'vault', writtenBy: 'vault', when: now().toISOString() }); noted.push(id); }
+        if (!(await notes()).has(id)) { await recordNote({ id, text: line.slice(0, 500), session: 'vault', source: 'vault' }); noted.push(id); }
       };
       // Only what an agent has to act on becomes a note. A post saved in a known section needs nothing.
       for (const change of changes) {
@@ -606,7 +615,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         if (before.text !== note) throw new Refused('Changed', 'Another note already has this ID');
         return { id, unchanged: true };
       }
-      await record({ type: 'note', id, text: note, session, ...(project ? { project } : {}), source: source ?? actor, writtenBy: actor, when: now().toISOString() });
+      await recordNote({ id, text: note, session, project, source: source ?? actor });
       return { id };
     },
 
@@ -643,7 +652,7 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
         const memory = { ...live.memory, seen: { count: (live.memory.seen?.count ?? 0) + count, last: when } };
         await put(memoryPath(name), memoryFile(memory));
       }
-      for (const item of outcomes) await record({ type: 'settled', id: item.id, outcome: item.outcome, when });
+      for (const item of outcomes) await journal.append(actor, 'decision', { note: item.id, outcome: item.outcome });
       const memories = [];
       for (const name of targets.keys()) { const { memory, version } = await held(name); memories.push({ name, version, seen: memory.seen }); }
       const remaining = (await cortex.listNotes()).notes;
