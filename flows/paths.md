@@ -46,7 +46,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | B4 | Expand one side | Cortex or vault ⋯ → Expand all / Collapse all (E) | Everything inside that one opens or closes | Survey one side at once | *UI only* |
 | B5 | Show only one side | Cortex or vault ⋯ → Show only… (O) | The scope becomes that one | Same as B2, from the row | *UI only* |
 | B6 | List or graph | Header: one switch, showing the view it goes to (graph icon in the list, list icon in the graph) | The panel shows the list or the graph of the same scope and filters | Switch between where and how things connect | `workspace.graph` opens the graph |
-| B6a | **Filter** | Header funnel → Platform (your site, Bluesky, Instagram, X), Type (text, photo, table, checklist; memory, note, skill, tool), Who it is for, Edited (any time, past week, month, year), Status (unread, pinned); Clear | The list and the graph show only matching pages; folders open so matches are in view; a dot on the funnel while any filter is on; "Nothing matches" with Clear when empty | Find a kind of page across folders | *UI only* |
+| B6a | **Filter** | Header funnel → Platform (your site, Bluesky, Instagram, X), Type (text, photo, table, checklist; memory, observation, skill, tool), Who it is for, Edited (any time, past week, month, year), Status (unread, pinned); Clear | The list and the graph show only matching pages; folders open so matches are in view; a dot on the funnel while any filter is on; "Nothing matches" with Clear when empty | Find a kind of page across folders | *UI only* |
 | B7 | Resize the panel | Drag its right edge (or arrows on the handle; double-click resets) | Width 220–640 px, remembered on this device | More room for names or the graph | *UI only* |
 | B8 | **New page** | Rack New post, ⌘N, vault ⋯ → New page (N), or folder ⋯ → New page here (N) | A new **private** page open in the editor, title focused, in that folder if chosen | Start writing | `workspace.create` |
 | B9 | Pin | Row ⋯ → Pin (P) | The page shows under Pinned at the top; press again to unpin | Keep what you return to close | *UI only* |
@@ -77,13 +77,13 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 
 | # | Path | Entry → steps | End state | For | Agent |
 | --- | --- | --- | --- | --- | --- |
-| D1 | **See your graph** | Repository → graph icon, or ⌘G | You at the centre, the cortex close around you, then channels and blocks, with evidence (links, mentions, sources) in grey and the cortex's inferences in green | See how what you know and what you wrote connect | `workspace.graph` |
-| D2 | Explore | Hover a node | It and its edges light up; the rest fades | Read one node's neighbourhood | *UI only* |
+| D1 | **See your graph** | Repository → graph icon, or ⌘G | Your blocks as nodes, each channel a soft area around its blocks, links in the text grey and connections forest, thicker the more two blocks share | See how what you wrote connects | `workspace.graph` |
+| D2 | Explore | Hover a block | It, its edges and its channels' names light up; the rest fades | Read one node's neighbourhood | *UI only* |
 | D3 | Rearrange | Drag a node | Its neighbours follow on soft springs and settle back | Untangle a part to look at | *UI only* |
-| D4 | Zoom and pan | Wheel or pinch, drag the background, or + / − / fit | The view moves; block and cortex names fade in as you zoom; fit returns to all | Read detail or the whole | *UI only* |
-| D5 | **Centre on a person** | Click an entity node (or a search result, or an inbox mention) | The graph is centred on them: blocks that mention them, and you | See everything around someone | `workspace.graph` with `center` |
-| D6 | Back to you | Back to me | Centred on you again | Return | `workspace.graph` |
-| D7 | Filter the graph | Graph settings → Links between blocks, Entities mentioned, Sources; Lay out again | Those edges or nodes show or hide; the layout restarts | Simplify or refresh | *UI only* |
+| D4 | Zoom and pan | Wheel or pinch, drag the background, or + / − / fit | The view moves; names of blocks and of channels inside channels fade in as you zoom; fit returns to all | Read detail or the whole | *UI only* |
+| D5 | **Centre on a person** | A person in search results, or an inbox mention | The graph shows only your blocks that mention them | See everything around someone | `workspace.graph` with `center` |
+| D6 | Back to you | Back to me | All your blocks again | Return | `workspace.graph` |
+| D7 | Filter the graph | Graph settings → Links in the text, Connections, Channel areas; Lay out again | Those edges or nodes show or hide; the layout restarts | Simplify or refresh | *UI only* |
 
 ## E. The page editor (main panel)
 
@@ -131,7 +131,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | G3 | Identity | Settings → Identity | Your DID (copy), handle, server | Know and share your root identity | *UI only* |
 | G4 | **Agents** | Settings → Agents → Let agents use this page; one switch per tool | Tools are offered to an agent, or withdrawn, at once | Control what an agent can do here | Governs every tool |
 | G5 | Vault | Settings → Vault | New posts start private (always); your labels | Review how your vault is organised | *UI only* |
-| G6 | Cortex | Settings → Cortex | Memories, notes waiting, skills | Review what your agents remember | *UI only* |
+| G6 | Cortex | Settings → Cortex | Memories, observations waiting, skills | Review what your agents remember | *UI only* |
 | G7 | Appearance | Settings → Appearance → System / Light / Dark; Density Compact / Comfortable / Rounded | Theme and how round and tight things are, on this device | Comfort | *UI only* |
 | G8 | Sign out | Settings → Sign out | A notice (not in the wireframe) | Leave | *Not yet* |
 

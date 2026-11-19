@@ -1,176 +1,119 @@
-// The graph's data: one person's knowledge graph, centred on them. Positions come from the force
-// layout in GraphView; this file says what the nodes are, which layer each belongs to, and every edge.
+// The graph's data: one person's blocks and how they connect. Positions come from the force layout
+// in GraphView; this file says what the nodes are and every edge.
 //
-//   0 you ─ 1 cortex (memories, notes, skills, tools) ─ 2 channels ─ 3 channels inside them
-//         ─ 4 blocks ─ 5 sources and entities
+// Only blocks are nodes. A channel is not a node but a dimension of the blocks in it: GraphView
+// draws each channel as a soft area around its blocks, a channel inside it as an area inside that,
+// and a block in several channels sits where their areas meet.
 //
-// Edges come in two families, and the difference is the point:
-//
-// - Evidence is what the content itself shows, so anyone can check it and it can be rebuilt from
-//   the files: a channel contains a block, a block links to another, mentions an entity, or was
-//   captured from a source. No model writes evidence.
-// - Inference is what the cortex concluded from evidence. A model never draws an edge between two
-//   blocks; it writes a memory, note, skill or tool, and that node points at the things it was
-//   drawn from. Remove the inference and the evidence is untouched.
-import { bySlug, channelRecords, channelsOf, cortex, mentions, outgoing, owner, personByHandle, posts, sees, type Audience, type Doc, type Person } from "@/data/sample"
+// Every edge is the person's own: a link they wrote in a block's text (`[[slug]]`), or a connection
+// they made between whole blocks. Both are evidence, rebuilt from the content. What agents work out
+// about the person stays in the cortex and is not drawn here.
+import { bySlug, channelRecords, channelsOf, mentions, outgoing, owner, personByHandle, posts, sees, type Audience, type Doc, type Person } from "@/data/sample"
 
-export type Layer = 0 | 1 | 2 | 3 | 4 | 5
-export type NodeType = "person" | "memory" | "note" | "skill" | "tool" | "channel" | "block" | "source" | "entity"
 export type GraphNode = {
   id: string
-  layer: Layer
-  type: NodeType
   name: string
-  /** The top-level branch it belongs to: "cortex" or a top-level channel. Empty for you, sources and entities. */
-  branch: string
-  doc?: Doc
-  person?: Person
+  doc: Doc
+  /** Every channel the block is in, as paths (`writing/journal`). The first is its home. */
+  channels: string[]
   degree: number
 }
 
-/** Evidence: shown by the content, checkable, rebuilt from files. */
-export type EvidenceKind = "contains" | "links" | "mentions" | "from"
-/** Inference: a cortex node pointing at what it was drawn from. */
-export type InferenceKind = "grounds" | "observes" | "learned" | "acts"
-/** Structure: you hold your top-level channels and your cortex. */
-export type EdgeKind = EvidenceKind | InferenceKind | "holds"
-export type EdgeFamily = "evidence" | "inference" | "structure"
-export const familyOf = (kind: EdgeKind): EdgeFamily =>
-  kind === "holds" ? "structure" : kind === "grounds" || kind === "observes" || kind === "learned" || kind === "acts" ? "inference" : "evidence"
+/** A link written in the text, or a connection made between whole blocks. */
+export type EdgeKind = "links" | "connects"
+/**
+ * One edge per pair of blocks. `kinds` says which ways they are joined; `weight` is how strongly:
+ * one for each way they are joined, and one for each channel they share. GraphView draws it as
+ * the line's thickness.
+ */
+export type GraphEdge = { source: string; target: string; kinds: EdgeKind[]; weight: number; why?: string }
 
-export type GraphEdge = { source: string; target: string; kind: EdgeKind }
-export type Graph = { center: Person; nodes: GraphNode[]; edges: GraphEdge[] }
+/** A channel, as the area its blocks are drawn in. */
+export type GraphChannel = { path: string; name: string; parent?: string; depth: number; members: string[] }
+
+export type Graph = { center: Person; nodes: GraphNode[]; edges: GraphEdge[]; channels: GraphChannel[] }
 
 export type GraphFilters = {
-  /** Handle or DID. Defaults to the owner. */
+  /** Handle or DID. Defaults to the owner; anyone else shows the owner's blocks that mention them. */
   center?: string
-  /** The repo's prime folders, checked in or out. */
-  cortex?: boolean
+  /** The repo's prime folders. The graph draws the vault's blocks only; without the vault it is empty. */
   vault?: boolean
-  /** Entities: people a block mentions. */
-  people?: boolean
-  /** Blocks linking to blocks. */
+  /** Links written in the text. */
   links?: boolean
-  /** The originals imported blocks were captured from. */
-  sources?: boolean
-  /** Who is looking: only what they can see is drawn. The cortex is yours alone. */
+  /** Connections made between whole blocks. */
+  connections?: boolean
+  /** Who is looking: only what they can see is drawn. */
   audience?: Audience
   /** The repository's filters, as a test each page must pass. */
   keep?: (d: Doc) => boolean
 }
-export const DEFAULT_FILTERS = { cortex: true, vault: true, people: true, links: true, sources: true, audience: "personal" as Audience }
-
-/** What each kind of cortex item says about the things it points at. */
-const INFERENCE: Record<string, InferenceKind> = { memory: "grounds", note: "observes", skill: "learned", tool: "acts" }
-const PLATFORM_NAME: Record<string, string> = { x: "X", bluesky: "Bluesky", instagram: "Instagram" }
-
-const channelId = (path: string) => `channel:${path}`
+export const DEFAULT_FILTERS = { vault: true, links: true, connections: true, audience: "personal" as Audience }
 
 export function buildGraph(filters: GraphFilters = {}): Graph {
   const f = { ...DEFAULT_FILTERS, ...filters }
   const center = (f.center && personByHandle(f.center)) || owner
   const isOwner = center.did === owner.did
 
-  const nodes = new Map<string, GraphNode>()
-  const edges: GraphEdge[] = []
-  const add = (n: Omit<GraphNode, "degree">) => (nodes.has(n.id) ? nodes.get(n.id)! : (nodes.set(n.id, { ...n, degree: 0 }), nodes.get(n.id)!))
-  const edge = (source: string, target: string, kind: EdgeKind) => {
-    if (source !== target && nodes.has(source) && nodes.has(target)) edges.push({ source, target, kind })
-  }
-
-  add({ id: center.did, layer: 0, type: "person", name: `@${center.handle}`, branch: "", person: center })
-
-  // Someone else at the centre: the owner's blocks that mention them, and the owner as an entity.
   const docs = !f.vault ? [] : (isOwner ? posts : posts.filter(p => mentions(p).includes(center.handle)))
     .filter(d => sees(f.audience, d) && (!filters.keep || filters.keep(d)))
+  const nodes = new Map<string, GraphNode>(docs.map(d => [d.id, { id: d.id, name: d.title, doc: d, channels: channelsOf(d), degree: 0 }]))
 
-  // 2–4 · Channels and blocks. A block can be in any number of channels; a path `a/b` is channel b
-  // inside channel a. Containment is evidence: you put it there.
-  for (const d of docs) {
-    add({ id: d.id, layer: 4, type: "block", name: d.title, branch: channelsOf(d)[0].split("/")[0], doc: d })
-    for (const path of channelsOf(d)) {
-      const [top, inner] = path.split("/")
-      add({ id: channelId(top), layer: 2, type: "channel", name: top, branch: top })
-      if (inner) {
-        add({ id: channelId(path), layer: 3, type: "channel", name: inner, branch: top })
-        edge(channelId(top), channelId(path), "contains")
-      }
-      edge(channelId(path), d.id, "contains")
+  // Channels, with every channel above them: `a/b` is b inside a.
+  const channels = new Map<string, GraphChannel>()
+  const channel = (path: string) => {
+    const parts = path.split("/")
+    for (let at = 1; at <= parts.length; at++) {
+      const p = parts.slice(0, at).join("/")
+      if (!channels.has(p)) channels.set(p, { path: p, name: parts[at - 1], parent: at > 1 ? parts.slice(0, at - 1).join("/") : undefined, depth: at - 1, members: [] })
     }
+    return channels.get(path)!
   }
-  // Channels are records: yours show even when empty.
-  if (isOwner && f.vault && f.audience === "personal") {
-    for (const { path } of channelRecords) {
-      const [top, inner] = path.split("/")
-      add({ id: channelId(top), layer: 2, type: "channel", name: top, branch: top })
-      if (inner) {
-        add({ id: channelId(path), layer: 3, type: "channel", name: inner, branch: top })
-        edge(channelId(top), channelId(path), "contains")
+  for (const n of nodes.values()) {
+    for (const path of n.channels) {
+      channel(path)
+      // A block in a channel is in every channel around it too, so the outer area holds it.
+      const parts = path.split("/")
+      for (let at = 1; at <= parts.length; at++) {
+        const members = channels.get(parts.slice(0, at).join("/"))!.members
+        if (!members.includes(n.id)) members.push(n.id)
       }
     }
   }
-  for (const n of nodes.values()) if (n.type === "channel" && n.layer === 2) edge(center.did, n.id, "holds")
+  // Channels are records: yours show even when empty, as a label with no area yet.
+  if (isOwner && f.vault && f.audience === "personal") for (const { path } of channelRecords) channel(path)
 
-  // 1 · The cortex: the owner's alone. Each item points at the channels and blocks it was drawn from.
-  if (isOwner && f.cortex && f.audience === "personal") {
-    for (const c of cortex.filter(c => !filters.keep || filters.keep(c))) {
-      add({ id: c.id, layer: 1, type: c.kind as NodeType, name: c.title, branch: "cortex", doc: c })
-      edge(center.did, c.id, "holds")
-      for (const a of c.about ?? []) {
-        const target = nodes.has(channelId(a)) ? channelId(a) : bySlug(a)?.id
-        if (target) edge(c.id, target, INFERENCE[c.kind] ?? "grounds")
-      }
+  // Edges: what each block points at, merged into one per pair.
+  const edges = new Map<string, GraphEdge>()
+  const join = (a: string, b: string, kind: EdgeKind, why?: string) => {
+    if (a === b || !nodes.has(a) || !nodes.has(b)) return
+    const key = [a, b].sort().join("|")
+    const held = edges.get(key) ?? { source: a, target: b, kinds: [], weight: 0 }
+    if (!held.kinds.includes(kind)) held.kinds.push(kind)
+    if (why && !held.why) held.why = why
+    edges.set(key, held)
+  }
+  for (const n of nodes.values()) {
+    for (const out of outgoing(n.doc)) {
+      const target = bySlug(out.slug)
+      if (!target) continue
+      if (out.inText && f.links) join(n.id, target.id, "links")
+      const whole = (n.doc.connect ?? []).some(c => c.to === out.slug)
+      if (whole && f.connections) join(n.id, target.id, "connects", out.why)
     }
   }
-
-  // Evidence across the hierarchy: links between blocks, the people they mention, where they came from.
-  const blockNodes = [...nodes.values()].filter(n => n.type === "block")
-  if (f.links) {
-    // Links in the text and connections you made on the whole block: both are yours, both evidence.
-    for (const n of blockNodes) for (const { slug } of outgoing(n.doc!)) {
-      const target = bySlug(slug)
-      if (target) edge(n.id, target.id, "links")
-    }
-  }
-  if (f.people) {
-    for (const n of blockNodes) {
-      const who = new Set(mentions(n.doc!))
-      if (!isOwner) who.add(owner.handle)
-      who.delete(center.handle)
-      for (const h of who) {
-        const person = personByHandle(h) ?? { did: `handle:${h}`, handle: h, name: h }
-        add({ id: person.did, layer: 5, type: "entity", name: `@${person.handle}`, branch: "", person })
-        edge(n.id, person.did, "mentions")
-      }
-    }
-  }
-  if (f.sources) {
-    for (const n of blockNodes) {
-      const platform = n.doc!.platform
-      if (!platform || platform === "own") continue
-      const id = `source:${n.doc!.id}`
-      add({ id, layer: 5, type: "source", name: `${PLATFORM_NAME[platform] ?? platform} original`, branch: "" })
-      edge(n.id, id, "from")
-    }
+  // How strongly: each way they are joined, and each channel they share.
+  for (const e of edges.values()) {
+    const a = nodes.get(e.source)!, b = nodes.get(e.target)!
+    const shared = a.channels.filter(c => b.channels.includes(c)).length
+    e.weight = e.kinds.length + shared
+    a.degree++
+    b.degree++
   }
 
-  dedupe(edges)
-  for (const e of edges) {
-    nodes.get(e.source)!.degree++
-    nodes.get(e.target)!.degree++
+  return {
+    center,
+    nodes: [...nodes.values()],
+    edges: [...edges.values()],
+    channels: [...channels.values()].sort((a, b) => a.depth - b.depth || a.path.localeCompare(b.path)),
   }
-  return { center, nodes: [...nodes.values()], edges }
-}
-
-/** One edge per pair. Evidence wins over inference, so a fact is never shown as a guess. */
-function dedupe(edges: GraphEdge[]) {
-  const rank: Record<EdgeFamily, number> = { evidence: 0, structure: 1, inference: 2 }
-  const best = new Map<string, number>()
-  edges.forEach((e, i) => {
-    const key = [e.source, e.target].sort().join("|")
-    const held = best.get(key)
-    if (held === undefined || rank[familyOf(e.kind)] < rank[familyOf(edges[held].kind)]) best.set(key, i)
-  })
-  const keep = new Set(best.values())
-  for (let i = edges.length - 1; i >= 0; i--) if (!keep.has(i)) edges.splice(i, 1)
 }

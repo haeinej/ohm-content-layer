@@ -1,7 +1,7 @@
 // Filters for the personal repository: they narrow the tree and the graph alike.
 import type { Doc, Platform, Visibility } from "@/data/sample"
 
-export type PageType = "text" | "photo" | "table" | "checklist" | "memory" | "note" | "skill" | "tool"
+export type PageType = "text" | "photo" | "table" | "checklist" | "memory" | "observation" | "skill" | "tool"
 export type Edited = "any" | "week" | "month" | "year"
 export type Status = "unread" | "pinned"
 
@@ -27,7 +27,7 @@ export const TYPES: { id: PageType; label: string; cortex?: boolean }[] = [
   { id: "table", label: "Table" },
   { id: "checklist", label: "Checklist" },
   { id: "memory", label: "Memory", cortex: true },
-  { id: "note", label: "Note", cortex: true },
+  { id: "observation", label: "Observation", cortex: true },
   { id: "skill", label: "Skill", cortex: true },
   { id: "tool", label: "Tool", cortex: true },
 ]

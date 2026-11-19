@@ -249,7 +249,7 @@ function RepoPanel() {
   const { view, rev, repoMode, scope, audience, showVisibility } = useWorkspace()
   const { filters } = useWorkspace()
   const filtering = activeCount(filters) > 0
-  const cortexTree = useMemo(() => toTree("cortex", cortex.filter(kept), ["memories", "notes", "skills", "tools"]), [rev, filters]) // eslint-disable-line react-hooks/exhaustive-deps
+  const cortexTree = useMemo(() => toTree("cortex", cortex.filter(kept), ["memories", "observations", "skills", "tools"]), [rev, filters]) // eslint-disable-line react-hooks/exhaustive-deps
   const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p) && !marks.archived.has(p.id) && kept(p)), [rev, audience, filters]) // eslint-disable-line react-hooks/exhaustive-deps
   const pinned = posts.concat(cortex).filter(d => marks.pinned.has(d.id) && (d.kind !== "post" || sees(audience, d)) && kept(d))
   const archived = posts.filter(d => marks.archived.has(d.id) && kept(d))
@@ -440,7 +440,7 @@ const KIND: Record<InboxItem["kind"], { icon: LucideIcon; label: string }> = {
   reply: { icon: MessageCircleIcon, label: "Replied" },
   mention: { icon: AtSignIcon, label: "Mentioned you" },
   friend: { icon: UserPlusIcon, label: "Friend request" },
-  note: { icon: BrainIcon, label: "Cortex" },
+  observation: { icon: BrainIcon, label: "Cortex" },
 }
 
 function InboxPanel() {
