@@ -25,6 +25,8 @@ A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/wor
 
 All data is synthetic. Run the app to explore a sample vault and cortex. Reloading restores the sample.
 
+To try saving and searching, create a block titled “Alder lantern”, add a line of text, and open Search. Search for “Alder lantern” to find the same block you just edited. This workspace uses the sample adapter, so those edits last for the current session. The service adapter is available for integrating signed-in vault access in the app. Private service files require an unlocked device and reach the service as ciphertext.
+
 ```sh
 npm ci --prefix app
 npm --prefix app run dev   # http://localhost:5190
@@ -34,6 +36,7 @@ npm --prefix app run dev   # http://localhost:5190
 
 - [flows/paths.md](flows/paths.md): every interaction path, what it is for, its end state, and the WebMCP tool for it
 - [AGENTS.md](AGENTS.md): the rules every flow follows
+- [Data sources](docs/agents/home-source.md) describes the sample and service contracts.
 - [docs/design.md](docs/design.md): ohm-ux's design layer: one radius for every surface, density, compact menus
 - [docs/webmcp.md](docs/webmcp.md): the WebMCP API as of the 13 November 2026 draft, and what changed from earlier guides
 - [flows/TEMPLATE.md](flows/TEMPLATE.md): start a new flow by copying this

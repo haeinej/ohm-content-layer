@@ -1,11 +1,16 @@
 // Workspace state, and the handlers both the UI and the WebMCP tools call (AGENTS.md rule 2).
 import { useSyncExternalStore } from "react"
-import { all, byId, channelByPath, channelRecords, channelsOf, ensureChannel, inbox, inOrder, owner, posts, sectionOf, type Audience, type Doc, type Visibility } from "@/data/sample"
+import { channelsOf, sectionOf, type Audience, type Doc, type Visibility } from "@/data/sample"
+import { sampleSource } from "@/data/sample-source"
 import { buildGraph } from "@/graph/model"
 import type { AgentState } from "@/components/agent-status"
 import type { SettingsTab } from "./settings-tabs"
 import { NO_FILTERS, passes, type Filters } from "./filters"
-import { actor, applySnapshot, changeById, recordSession, save as saveJournal, snap, snapshotAt, syncJournal, type DeadEnd, type Snapshot } from "@/data/journal"
+import type { DeadEnd, Snapshot } from "@/data/journal"
+
+const data = sampleSource.workspace
+const { getDoc: byId, getChannel: channelByPath, ensureChannel, inOrder, owner } = data
+const { actor, applySnapshot, changeById, recordSession, save: saveJournal, snap, snapshotAt, syncJournal } = data.journal
 
 /** What the side panel shows. The rack chooses it. */
 export type Side = "repo" | "visibility" | "inbox" | "profile" | null
@@ -170,7 +175,7 @@ export function setVisibility(id: string, visibility: Visibility) {
 
 // Inbox
 export function openInbox(id: string) {
-  const item = inbox.find(i => i.id === id)
+  const item = data.inbox().find(i => i.id === id)
   if (!item) throw new DOMException(`Nothing in the inbox with id ${id}`, "NotFoundError")
   item.unread = false
   set({ view: item.ref ? { kind: "doc", id: item.ref, mode: "read" } : { kind: "inbox", id }, ...bump(), ...sideAfterOpen() })
@@ -230,8 +235,7 @@ export function createDraft(input: { label?: string; sublabel?: string; channels
     updated: new Date().toISOString().slice(0, 10), body: "",
   }
   for (const c of channelsOf(doc)) ensureChannel(c)
-  posts.push(doc)
-  all.push(doc)
+  data.addDoc(doc)
   set({ view: { kind: "doc", id: doc.id, mode: "edit" }, ...bump(), searchOpen: false, ...sideAfterOpen() })
   return { id: doc.id, slug, view: "edit", next: "workspace.save-draft" }
 }
@@ -290,7 +294,7 @@ export function collect(id: string, path: string) {
 
 /** Puts a block before or after another in one channel's own order. */
 function place(path: string, id: string, at: { before?: string; after?: string }) {
-  const list = inOrder(path, posts.filter(p => channelsOf(p).includes(path))).map(d => d.id).filter(x => x !== id)
+  const list = inOrder(path, data.posts().filter(p => channelsOf(p).includes(path))).map(d => d.id).filter(x => x !== id)
   const i = at.before ? list.indexOf(at.before) : at.after ? list.indexOf(at.after) + 1 : -1
   list.splice(i < 0 ? list.length : i, 0, id)
   ensureChannel(path).order = list
@@ -335,10 +339,10 @@ export function moveChannel(path: string, into: string | null) {
   const next = into ? `${into}/${name}` : name
   if (into && into.includes("/")) throw new DOMException("A channel inside a channel can't hold channels yet", "DataError")
   if (into && (into === path || into.startsWith(`${path}/`))) throw new DOMException("A channel can't go inside itself", "DataError")
-  if (into && channelRecords.some(c => c.path.startsWith(`${path}/`))) throw new DOMException(`“${name}” holds channels of its own, so it can't go inside another yet`, "DataError")
+  if (into && data.channels().some(c => c.path.startsWith(`${path}/`))) throw new DOMException(`“${name}” holds channels of its own, so it can't go inside another yet`, "DataError")
   if (next === path) return { path, published: 0 }
   let published = 0
-  for (const p of posts) {
+  for (const p of data.posts()) {
     if (sectionOf(p) === path) {
       const [label, sublabel] = next.split("/")
       p.label = label
@@ -351,7 +355,7 @@ export function moveChannel(path: string, into: string | null) {
   // only blocks name (say, brought back by a restore) gets its record now.
   const record = ensureChannel(path)
   const there = channelByPath(next)
-  if (there) { there.order = [...there.order, ...record.order.filter(id => !there.order.includes(id))]; channelRecords.splice(channelRecords.indexOf(record), 1) }
+  if (there) { there.order = [...there.order, ...record.order.filter(id => !there.order.includes(id))]; data.removeChannel(path) }
   else record.path = next
   if (into) ensureChannel(into)
   set(bump())
@@ -373,10 +377,9 @@ export function createChannel(inside?: string) {
 
 /** Removes an empty channel. One with blocks or channels in it is refused: move them out first. */
 export function deleteChannel(path: string) {
-  if (posts.some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) || channelRecords.some(c => c.path.startsWith(`${path}/`)))
+  if (data.posts().some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) || data.channels().some(c => c.path.startsWith(`${path}/`)))
     throw new DOMException(`“${path.replace("/", " › ")}” is not empty: move what is in it out first`, "DataError")
-  const i = channelRecords.findIndex(c => c.path === path)
-  if (i >= 0) channelRecords.splice(i, 1)
+  data.removeChannel(path)
   set(bump())
 }
 
@@ -457,10 +460,7 @@ export function renameDoc(id: string, title: string) {
 
 /** Removes a page from the vault. Taking a published one down from the repository is its own step. */
 export function deleteDoc(id: string) {
-  for (const list of [posts, all]) {
-    const i = list.findIndex(d => d.id === id)
-    if (i >= 0) list.splice(i, 1)
-  }
+  data.removeDoc(id)
   for (const s of Object.values(marks)) s.delete(id)
   const wasOpen = state.view.kind === "doc" && state.view.id === id
   // Take it out of history; the position moves back one if it was at or before where we are.
@@ -489,8 +489,8 @@ export function renameFolder(path: string, name: string) {
   const to = [...path.split("/").slice(0, -1), next].join("/")
   if (to !== path && channelByPath(to)) throw new DOMException(`There is already a channel “${to.replace("/", " › ")}”`, "DataError")
   // The record keeps its id; the channels inside it follow.
-  for (const c of channelRecords) if (c.path === path || c.path.startsWith(`${path}/`)) c.path = to + c.path.slice(path.length)
-  for (const p of posts) {
+  for (const c of data.channels()) if (c.path === path || c.path.startsWith(`${path}/`)) c.path = to + c.path.slice(path.length)
+  for (const p of data.posts()) {
     // A channel of your own is renamed wherever a block was collected into it.
     if (p.channels) p.channels = p.channels.map(c => (c === path ? to : c.startsWith(`${path}/`) ? to + c.slice(path.length) : c))
     if (p.label !== label || (sublabel !== undefined && p.sublabel !== sublabel)) continue
@@ -568,4 +568,3 @@ export function finishSession(done: string, deadEnds: DeadEnd[] = []) {
   set(bump())
   return { session: line.id, changes: line.changes.length, deadEnds: line.deadEnds.length }
 }
-

@@ -10,7 +10,7 @@
     "ohmmmm": "bin/ohmmmm.mjs"
   },
   "scripts": {
-    "test": "npm run test:home && npm --prefix vault test && npm --prefix cortex test && npm --prefix app run typecheck && npm --prefix app run build",
+    "test": "npm run test:home && npm --prefix vault test && npm --prefix cortex test && npm --prefix app run typecheck && npm --prefix app run build && npm --prefix app test",
     "test:home": "node --experimental-sqlite --no-warnings=ExperimentalWarning --test test/*.test.mjs"
   },
   "engines": {

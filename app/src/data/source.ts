@@ -1,0 +1,114 @@
+import { evidence, nodeFile, readNode, readVault } from "../../../vault/vault/node.mjs"
+import type { SearchInput, SearchProvider } from "./search"
+
+export type Layer = "public" | "friends" | "private"
+export type BlockRef = { id: string; layer: Layer; store: "post" | "block" | "sealed" }
+export type BlockHead = BlockRef & { path?: string; title?: string; version?: string }
+export type HomeFile = { path: string; text: string }
+export type BlockFile = HomeFile & { version: string }
+export type Account = { did: string | null; user: { name: string }; mirrored: boolean; service: string | null }
+export type Friend = { did: string; added: string }
+export type PublishPlan = {
+  changes: number
+  create: unknown[]
+  replace: unknown[]
+  remove: unknown[]
+  unchanged: unknown[]
+  cannot: unknown[]
+  notInVault: unknown[]
+  repository?: string
+  pds?: string
+  collection?: string
+  writes?: unknown
+  plan?: string
+}
+export type HistoryVersion = { rev: number | string; version: string; created: string }
+export type VisibilityMove = {
+  from: Layer
+  to: Layer
+  action: "publish" | "copy" | "copy-and-remove"
+  warning: string
+}
+export type MoveResult = { version: string; cleanupPending: boolean }
+export type VaultContents = ReturnType<typeof readVault>
+export type VaultEvidence = ReturnType<typeof evidence>
+
+/** The member-side data boundary. Calling a mutation presupposes consent in its UI flow. */
+export interface HomeSource {
+  account(): Promise<Account>
+  listBlocks(layers?: readonly Layer[]): Promise<BlockHead[]>
+  readBlock(ref: BlockRef): Promise<BlockFile>
+  saveBlock(ref: BlockRef, file: HomeFile, replaces: string | null): Promise<{ version: string }>
+  deleteBlock(ref: BlockRef, replaces: string): Promise<void>
+  vault(layers?: readonly Layer[]): Promise<VaultContents>
+  connections(layers?: readonly Layer[]): Promise<VaultEvidence>
+  search: SearchProvider
+  history(ref: BlockRef): Promise<HistoryVersion[]>
+  readVersion(ref: BlockRef, rev: HistoryVersion["rev"]): Promise<HomeFile>
+  visibilityMove(ref: BlockRef, to: Layer): VisibilityMove
+  moveVisibility(ref: BlockRef, to: Exclude<Layer, "public">, version: string): Promise<MoveResult>
+  listFriends(): Promise<Friend[]>
+  removeFriend(did: string): Promise<void>
+  listShared(owner: string): Promise<BlockHead[]>
+  readShared(owner: string, id: string): Promise<BlockFile>
+  publishPlan(prepare?: boolean): Promise<PublishPlan>
+}
+
+export const emptyPlan = (): PublishPlan => ({
+  changes: 0, create: [], replace: [], remove: [], unchanged: [], cannot: [], notInVault: [],
+})
+
+/** Explicitly describe the move so the UI can ask before calling any write. */
+export function visibilityMove(ref: BlockRef, to: Layer): VisibilityMove {
+  if (ref.layer === to || ref.layer === "public") {
+    throw new DOMException("Choose another layer. A published copy is taken down through publishing.", "NotSupportedError")
+  }
+  const move = { from: ref.layer, to }
+  if (to === "public") return { ...move, action: "publish", warning: "Publishing makes a public copy and keeps the original." }
+  if (to === "friends") return { ...move, action: "copy", warning: "The vault service and your friends can read the shared copy." }
+  return { ...move, action: "copy-and-remove", warning: "Backups made while the block was shared may still hold a readable copy." }
+}
+
+/** The caller confirms disclosure or removal before invoking this operation. */
+export async function moveVisibility(
+  source: Pick<HomeSource, "readBlock" | "saveBlock" | "deleteBlock">,
+  from: BlockRef,
+  layer: Exclude<Layer, "public">,
+  version: string,
+): Promise<MoveResult> {
+  const move = visibilityMove(from, layer)
+  const file = await source.readBlock(from)
+  if (file.version !== version) throw new DOMException("The block changed. Review it again before moving it.", "InvalidStateError")
+  const block = blockOf(file)
+  if (!block) throw new DOMException("Only a block can move between layers.", "DataError")
+  const next = "post" in block
+    ? { ...block, visibility: layer, post: { ...block.post, visibility: layer } }
+    : { ...block, visibility: layer, visibilityGiven: true }
+  const ref: BlockRef = { id: from.id, layer, store: layer === "private" ? "sealed" : "post" in next ? "post" : "block" }
+  const result = await source.saveBlock(ref, nodeFile(next), null)
+  if (move.action === "copy-and-remove") {
+    // Separate stores have no joint transaction. A failed deletion leaves both versions intact.
+    try { await source.deleteBlock(from, version) }
+    catch { return { ...result, cleanupPending: true } }
+  }
+  return { ...result, cleanupPending: false }
+}
+
+export async function loadVault(source: Pick<HomeSource, "listBlocks" | "readBlock">, layers?: readonly Layer[]) {
+  const heads = await source.listBlocks(layers)
+  return readVault(await Promise.all(heads.map(head => source.readBlock(head))))
+}
+
+export const readEvidence = async (source: Pick<HomeSource, "vault">, layers?: readonly Layer[]) => evidence(await source.vault(layers))
+
+export function blockOf(file: HomeFile) {
+  const node = readNode(file.path, file.text)?.node
+  return node?.type === "block" && "visibility" in node ? node : undefined
+}
+
+export const searchInput = ({ query, limit = 20 }: SearchInput) => {
+  if (!query || query.length > 200 || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+    throw new DOMException("Give up to 200 characters of search text and a limit from 1 to 50.", "DataError")
+  }
+  return { query: query.trim(), limit }
+}

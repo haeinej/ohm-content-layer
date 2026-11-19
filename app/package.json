@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5190",
+    "test": "node --import tsx --test test/*.test.ts",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b"
   },
@@ -50,6 +51,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "tailwindcss": "^4.3.5",
+    "tsx": "4.20.6",
     "typescript": "5.9",
     "vite": "^7.3.8"
   }
