@@ -67,6 +67,16 @@ export const TOOLS = [
   { name: 'cortex_file_advice', description: 'Ask how to file a source the person handed you: up to three likely sections from vault.md, each with what it means, its conventions and why it fits; the approved skill for that kind of source, if one fits; up to five related posts; and one question to put to them. It writes nothing. Propose once, and on their yes save through the vault\'s own tools, with their words as given.',
     inputSchema: object({ kind: { type: 'string', maxLength: 200, description: 'What the source is, in your words: "meeting transcript", "reading note", "link"' }, title: { type: 'string', maxLength: 500 }, text: { type: 'string', description: 'The source as given, or enough of it to tell what it is about' } }, ['kind']),
     annotations: { readOnlyHint: true } },
+  { name: 'cortex_history', description: 'List what changed in the cortex, oldest first: each change\'s seq, time, who made it (the person or which agent), the node (its path, such as memory/<name>.md), what was done, and its versions before and after; and the stamps. Filter by node (a path, or a folder ending in /), since (a seq, or a date), or actor (a name, or human or agent). It writes nothing.',
+    inputSchema: object({ node: text, since: { type: ['string', 'integer'], description: 'A seq: changes after it. A date such as 2026-11-19, or a time: changes from then on' }, actor: text, limit: { type: 'integer', minimum: 1, maximum: 500 } }),
+    annotations: { readOnlyHint: true } },
+  { name: 'cortex_as_of', description: 'Read one node of the cortex as it was at a point: a stamp\'s name, a date such as 2026-11-19 (the end of that day), a time, or a seq. Returns its version and text then, or says it did not exist, or that that version was not kept. It writes nothing.',
+    inputSchema: object({ node: { type: 'string', description: 'A path, as cortex_history lists it, such as memory/<name>.md' }, at: { type: ['string', 'integer'] } }, ['node', 'at']),
+    annotations: { readOnlyHint: true } },
+  { name: 'cortex_stamp', description: 'Name this point in the cortex\'s history with a note, such as before a large change, so it can be read back with cortex_as_of. The name is lowercase words or digits joined by hyphens.',
+    inputSchema: object({ name: { type: 'string', maxLength: 100 }, note: { type: 'string', maxLength: 500 } }, ['name', 'note']) },
+  { name: 'cortex_restore', description: 'Bring a memory, or your own working memory, back to an earlier version. It is a new change: what it replaces is kept, and nothing in the history is rewritten. Find the version with cortex_history or cortex_recall, and pass the version you read now. identity.md, vault.md and skills are restored only by the person.',
+    inputSchema: object({ node: { type: 'string', description: 'A path, such as memory/<name>.md' }, to: { type: 'string', description: 'The earlier version to bring back' }, version, reason: { type: 'string', maxLength: 500 } }, ['node', 'to']) },
 ];
 
 const refuse = (message, code = 'InvalidRequest') => { throw new Refused(code, message); };
@@ -125,6 +135,10 @@ export function createTools(cortex) {
     cortex_propose_skill: args => cortex.proposeSkill(args),
     cortex_propose_tool: args => cortex.proposeTool(args),
     cortex_file_advice: args => adviseFiling(cortex, args),
+    cortex_history: args => cortex.history(args),
+    cortex_as_of: args => cortex.asOf(args),
+    cortex_stamp: args => cortex.stamp(args),
+    cortex_restore: ({ node, to, version, reason }) => cortex.restore({ node, version: to, replaces: version ?? null, reason }),
   };
 
   return {

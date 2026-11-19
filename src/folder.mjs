@@ -9,7 +9,7 @@ import { checkField, checkSource, FIELDS, forAgent, IDENTITY, proposalForAgent, 
 import { sectionOf, vaultFrom } from './vault.mjs';
 import { checkWords, gone, parseMap, writeMap } from './vaultmap.mjs';
 import { createHash } from 'node:crypto';
-import { openJournal, PEOPLE } from './journal.mjs';
+import { actorOf, openJournal, order, PEOPLE } from './journal.mjs';
 import { cleanMemory, cortexVersion, InvalidMemory, KINDS, memoryFile, memoryVersion, NAME, readMemoryFile, Refused, splitFront, writeFront } from './core.mjs';
 
 const bytes = text => new TextEncoder().encode(text).length;
@@ -268,8 +268,144 @@ export function openCortex(dir, { actor = 'member', now = () => new Date(), vaul
     return { agent: fileName(actor), version };
   }
 
+  // A node is a file of the cortex, named by its path in the folder, as change lines name it. Each
+  // says where its earlier versions are kept, how to read it now, and who may restore it.
+  const SLUG = '[a-z]+(?:-[a-z]+)*';
+  function nodeOf(node) {
+    if (typeof node !== 'string' || !node || node.length > 300) throw new Refused('InvalidRequest', 'Name a node by its path, as cortex_history lists it, such as memory/<name>.md');
+    const file = async path => { const content = await text(path); return content === null ? null : { content, version: await fileVersion(content) }; };
+    const skill = async root => { const found = await skillAt(root); return found && { content: found.skill.text, version: found.version }; };
+    let found;
+    if (node === 'identity.md') return { node, kept: ['identity', 'identity'], path: at('identity.md'), personOnly: true, live: async () => { const content = await text(at('identity.md')); return content === null ? null : { content, version: (await readIdentity(content)).version }; } };
+    if (node === 'vault.md') return { node, kept: ['vault-map', 'vault'], path: at('vault.md'), personOnly: true, live: () => file(at('vault.md')) };
+    if ((found = new RegExp(`^memory/(${SLUG})\\.md$`).exec(node))) {
+      const name = found[1];
+      return { node, kept: ['memory', name], path: memoryPath(name), memory: name, live: async () => { const live = await held(name); return live && { content: live.content, version: live.version }; } };
+    }
+    if ((found = /^\.cortex\/working\/([a-z0-9]+(?:-[a-z0-9]+)*)\.md$/.exec(node))) {
+      const agent = found[1];
+      return { node, kept: ['working', agent], path: workingPath(agent), agent, live: async () => { const live = await workingOf(agent); return live && { content: live.text, version: live.version }; } };
+    }
+    if ((found = new RegExp(`^skills/(${SLUG})$`).exec(node))) return { node, kept: ['skills', found[1]], path: at('skills', found[1], 'SKILL.md'), personOnly: true, live: () => skill(at('skills', found[1])) };
+    if ((found = new RegExp(`^\\.cortex/proposed/skills/(${SLUG})$`).exec(node))) return { node, kept: ['proposed-skills', found[1]], proposal: true, live: () => skill(at('.cortex', 'proposed', 'skills', found[1])) };
+    if ((found = new RegExp(`^\\.cortex/proposed/tools/(${SLUG})\\.md$`).exec(node))) return { node, kept: ['proposed-tools', found[1]], proposal: true, live: () => file(at('.cortex', 'proposed', 'tools', `${found[1]}.md`)) };
+    throw new Refused('NotFound', `There is no node ${node}. A node is a path cortex_history lists, such as memory/<name>.md, identity.md, vault.md or .cortex/working/<agent>.md`);
+  }
+  // The text of a node at one of its versions: the file now, or the copy kept when it was replaced.
+  async function textAt(spec, version) {
+    const live = await spec.live();
+    if (live?.version === version) return live.content;
+    const file = (await names(at('.cortex', 'history', ...spec.kept))).map(entry => entry.name).find(name => name.endsWith(`_${version}.md`));
+    return file ? readFile(at('.cortex', 'history', ...spec.kept, file), 'utf8') : null;
+  }
+
+  // A point in the journal: a stamp's name, a date or a time, or a seq. A date with no time means
+  // the end of that day, in UTC.
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  function pointOf(when, lines) {
+    if (Number.isSafeInteger(when) || (typeof when === 'string' && /^\d+$/.test(when))) {
+      const seq = Number(when);
+      return { said: { seq }, holds: line => line.seq <= seq };
+    }
+    if (typeof when !== 'string' || !when.trim() || when.length > 100) throw new Refused('InvalidRequest', 'Say when: a stamp\'s name, a date such as 2026-11-19, a time, or a seq');
+    if (/^\d{4}-\d{2}-\d{2}/.test(when)) {
+      const time = DAY.test(when) ? `${when}T23:59:59.999Z` : when;
+      if (!Number.isFinite(Date.parse(time))) throw new Refused('InvalidRequest', `${when} is not a date or a time`);
+      const until = new Date(time).toISOString();
+      return { said: { at: until }, holds: line => line.at <= until };
+    }
+    const stamp = lines.filter(line => line.type === 'stamp' && line.name === when).at(-1);
+    if (!stamp) throw new Refused('NotFound', `There is no stamp named ${when}`);
+    return { said: { stamp: stamp.name, seq: stamp.seq, at: stamp.at }, holds: line => order(line, stamp) <= 0 };
+  }
+  const STAMP = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
   const cortex = {
     dir, reindex,
+
+    // The changes recorded in the journal, oldest first, and the stamps among them. node is a path,
+    // or a folder ending in / for every node in it. since is a seq (changes after it) or a date or
+    // time (changes from then on). actor is a name, or human or agent.
+    async history({ node, since, actor: who, limit = 50 } = {}) {
+      if (node !== undefined && (typeof node !== 'string' || !node || node.length > 300)) throw new Refused('InvalidRequest', 'node is a path, such as memory/<name>.md, or a folder ending in /');
+      if (who !== undefined && (typeof who !== 'string' || !who || who.length > 100)) throw new Refused('InvalidRequest', 'actor is a name, or human or agent');
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new Refused('InvalidRequest', 'limit is a whole number from 1 to 500');
+      let after = () => true;
+      if (since !== undefined) {
+        if (Number.isSafeInteger(since) || (typeof since === 'string' && /^\d+$/.test(since))) after = line => line.seq > Number(since);
+        else {
+          const from = typeof since === 'string' && /^\d{4}-\d{2}-\d{2}/.test(since) ? Date.parse(DAY.test(since) ? `${since}T00:00:00.000Z` : since) : NaN;
+          if (!Number.isFinite(from)) throw new Refused('InvalidRequest', 'since is a seq, or a date such as 2026-11-19, or a time');
+          const start = new Date(from).toISOString();
+          after = line => line.at >= start;
+        }
+      }
+      const by = line => who === undefined || line.actor?.name === who || line.actor?.kind === who;
+      const lines = (await journal.read()).filter(line => after(line) && by(line));
+      const on = line => node === undefined || (node.endsWith('/') ? String(line.node).startsWith(node) : line.node === node);
+      const changes = lines.filter(line => line.type === 'change' && on(line)).map(({ type, ...line }) => line);
+      const stamps = lines.filter(line => line.type === 'stamp').map(({ type, ...line }) => line);
+      return { changes: changes.slice(-limit), stamps, ...(changes.length > limit ? { more: changes.length - limit } : {}) };
+    },
+
+    // A node as it was at a point, read back from the journal and the kept versions. Nothing changes.
+    async asOf({ node, at: when } = {}) {
+      const spec = nodeOf(node);
+      const lines = await journal.read();
+      const point = pointOf(when, lines);
+      const changes = lines.filter(line => line.type === 'change' && line.node === node);
+      const upto = changes.filter(point.holds);
+      const later = changes.filter(line => !point.holds(line));
+      // The version then is what the last change up to that point left. With no change before it, it
+      // is what the first change after it found, or, with no change at all, the version now.
+      const live = await spec.live();
+      const version = upto.length ? upto.at(-1).after : later.length ? later[0].before : live?.version ?? null;
+      const answer = { node, as: point.said, ...(upto.length ? { change: upto.at(-1).seq } : {}) };
+      if (version === null) return { ...answer, exists: false };
+      const content = await textAt(spec, version);
+      if (content === null) return { ...answer, version, kept: false };
+      // An agent never sees the hidden identity fields, now or as they were.
+      if (node === 'identity.md' && actorOf(actor).kind !== 'human') return { ...answer, version, identity: forAgent(await readIdentity(content)) };
+      return { ...answer, version, text: content };
+    },
+
+    // Names this point in the journal, so the cortex can be read as it was here.
+    async stamp({ name, note } = {}) {
+      if (typeof name !== 'string' || name.length > 100 || !STAMP.test(name) || /^\d+$/.test(name) || /^\d{4}-\d{2}-\d{2}/.test(name)) throw new Refused('InvalidRequest', 'A stamp\'s name is lowercase letters and digits joined by hyphens, at most 100 characters, and not a number or a date');
+      if (typeof note !== 'string' || !note.trim() || [...note].length > 500 || /[\r\n]/.test(note)) throw new Refused('InvalidRequest', 'A stamp has a note: one line, at most 500 characters');
+      if ((await journal.read()).some(line => line.type === 'stamp' && line.name === name)) throw new Refused('NameTaken', `There is already a stamp named ${name}`);
+      const line = await journal.append(actor, 'stamp', { name, note: note.trim() });
+      return { name, seq: line.seq, at: line.at };
+    },
+
+    // Brings a node back to an earlier version, as a new change: what it replaces is kept, and no
+    // line of the journal is rewritten. An agent restores memories and its own working memory. Only
+    // the person restores identity.md, vault.md and skills, since only they confirm and approve.
+    // `replaces`, when given, is the version read now, and the restore is refused if it changed.
+    async restore({ node, version, replaces, reason } = {}) {
+      const spec = nodeOf(node);
+      if (spec.proposal) throw new Refused('InvalidRequest', 'A proposal is not restored. Propose it again');
+      if (spec.personOnly && actorOf(actor).kind !== 'human') throw new Refused('PersonOnly', `Only the person restores ${node}. Ask them to run: cortex restore ${node} ${version}`);
+      if (spec.agent !== undefined && spec.agent !== fileName(actor)) throw new Refused('PersonOnly', 'An agent restores only its own working memory');
+      if (typeof version !== 'string' || !version) throw new Refused('InvalidRequest', 'Name the version to bring back');
+      if (reason !== undefined && (typeof reason !== 'string' || !reason.trim() || reason.length > 500 || /[\r\n]/.test(reason))) throw new Refused('InvalidRequest', 'reason is one line, at most 500 characters');
+      const live = await spec.live();
+      if (replaces !== undefined && (live?.version ?? null) !== (replaces ?? null)) throw changed(node, live?.version ?? null);
+      if (live?.version === version) return { node, version, unchanged: true };
+      const content = await textAt(spec, version);
+      if (content === null) throw new Refused('NotFound', `No version ${version} of ${node} is kept`);
+      if (spec.memory) {
+        let memory;
+        try { memory = readMemoryFile(content); } catch { throw new Refused('Unreadable', `The kept version ${version} cannot be read as a memory`); }
+        if (memory.name !== spec.memory) throw new Refused('Unreadable', `The kept version ${version} is of another memory`);
+      }
+      if (live) await keep(...spec.kept, live.content, live.version);
+      await put(spec.path, content);
+      const after = (await spec.live()).version;
+      await logChange(node, 'restore', live?.version, after, reason?.trim() ?? `restored ${version}`);
+      if (spec.memory) await reindex();
+      return { node, restored: version, version: after };
+    },
 
     // This agent's working memory, and every other agent's, newest first.
     async working() {
