@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createLocalTools } from '../mcp/local.mjs';
 import { readEvents } from '../vault/journal.mjs';
 import { words } from '../vault/words.mjs';
+import { newNodeId } from '../vault/node.mjs';
 
 test('local MCP scans and searches, reads journal history, follows evidence, captures and collects', async t => {
   const folder = await mkdtemp(join(tmpdir(), 'ohm-local-mcp-'));
@@ -19,7 +20,9 @@ test('local MCP scans and searches, reads journal history, follows evidence, cap
   await mkdir(root);
   await writeFile(join(vault, '.vault/config.json'), JSON.stringify({ roots: [{ name: 'inbound', path: root, include: ['*.md'] }] }));
   const file = join(root, 'garden.md');
-  await writeFile(file, 'The garden is quiet.');
+  const sourceId = newNodeId();
+  await writeFile(file, `---\nid: ${sourceId}\n---\n\nThe garden is quiet.`);
+  await writeFile(join(root, '_letter.md'), 'A letter.');
   await writeFile(join(root, 'excluded.txt'), 'Excluded');
   await writeFile(join(folder, 'outside.md'), 'Outside');
   await symlink(join(folder, 'outside.md'), join(root, 'outside.md'));
@@ -35,11 +38,16 @@ test('local MCP scans and searches, reads journal history, follows evidence, cap
   const captured = await call('vault_capture', { source: file });
   const read = await call('vault_local_read', { ref: captured.block });
   assert.equal(read.root, 'vault');
+  assert.notEqual(read.node.id, sourceId);
+  assert.equal((await call('vault_local_read', { ref: `block:${sourceId}` })).root, 'inbound');
   assert.ok(read.file.size);
   assert.equal(read.node.body.trim(), 'The garden is quiet.');
   assert.equal(read.node.by, 'agent:example');
   assert.equal(read.node.status, 'proposed');
   assert.equal(read.history.find(event => event.via === 'add').by, 'agent:example');
+  const letter = await call('vault_capture', { source: join(root, '_letter.md') });
+  assert.equal(letter.block, 'inbox/letter.md');
+  assert.equal((await call('vault_local_read', { ref: letter.node })).node.body.trim(), 'A letter.');
   const link = await call('vault_capture', { source: 'https://example.test/reading', channel: 'reading' });
   const neighbors = await call('vault_neighbors', { ref: link.node, direction: 'out', kind: 'from', depth: 2 });
   assert.deepEqual(neighbors.edges.map(edge => [edge.from, edge.to, edge.kind]), [[link.node, `source:${link.source}`, 'from']]);
