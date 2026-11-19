@@ -74,7 +74,8 @@ test("sample file saves add and remove whole-block links", async () => {
   const file = { path: "reading/alder.md", text: "---\nkind: post\nvisibility: private\n---\n\nA seed." }
   const first = await sampleSource.saveBlock(ref, file, null)
   const added = await sampleSource.saveBlock(ref, { ...file, text: setProperty(file.text, "connect", ["garden-of-notes"]) }, first.version)
-  assert.match((await sampleSource.readBlock(ref)).text, /connect:.*garden-of-notes/)
+  const linked = blockOf(await sampleSource.readBlock(ref))
+  assert.deepEqual(linked && "post" in linked ? linked.post.connect : undefined, ["garden-of-notes"])
   const cleared = await sampleSource.saveBlock(ref, file, added.version)
   assert.doesNotMatch((await sampleSource.readBlock(ref)).text, /connect:/)
   await sampleSource.deleteBlock(ref, cleared.version)
