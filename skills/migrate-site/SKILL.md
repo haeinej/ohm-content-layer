@@ -1,9 +1,9 @@
 ---
 name: migrate-site
-description: Move an existing website's content, and posts from the owner's social accounts, into this content layer without losing anything or changing how the site looks. Use when someone wants to set this project up on their site, bring in their website or social posts, or refactor a site to read its content from records.
+description: Move an existing website's content, and posts from the owner's social accounts, into ohm-vault without losing anything or changing how the site looks. Use when someone wants to set this project up on their site, bring in their website or social posts, or refactor a site to read its content from records.
 ---
 
-# Move a site onto the content layer
+# Move a site onto ohm-vault
 
 You are moving what the owner has published into records they own, and changing their website to read from those records. Two things must hold when you finish: nothing is lost, and nothing looks different. You work on a copy until the owner says to go live.
 
@@ -91,8 +91,7 @@ Convert a single item, preview its record, render its page in the copy, and comp
 Go one label at a time. For each item keep its text exactly, its original date, every media file, every alt text, and its public URL.
 
 - **The website's own content** is published with the [publish command](../../README.md#publish-a-post). A post's address is `/posts/<label>/<sublabel>/<slug>`, so it follows where the post is filed. Use the old page's name as the slug, and record each old address beside its new one.
-- **X** has [an importer](../../README.md#import-an-x-archive). It reports the replies, reposts, and quote posts it leaves out. Pass that list on to the owner.
-- **Other platforms** have no importer. Map the export's fields yourself, convert a sample of five, and show them before doing the rest. Keep each post's original ID, URL, and date, and name its platform with `--source-platform`.
+- **Other platforms' exports, X included,** have no importer. Map the export's fields yourself, convert a sample of five, and show them before doing the rest. Keep each post's original ID, URL, and date, and name its platform with `--source-platform`.
 - **Never set a post's form.** The command identifies it. If the result looks wrong for a post, say so and ask; `--form` exists for the owner's decision, not yours.
 - **Use your judgement about what a link is.** The command looks at what a link points to, and takes in an image, video, audio file, or PDF even when its address does not look like a file. If you can see that a link is one of those and it was still saved as a link, attach it with `--media ID=URL`. An image is an image however it arrived.
 - **Ask about anything personal.** If an item looks like it was not meant to be public, ask whether to leave it out or publish it with `--private`.

@@ -111,7 +111,7 @@ and that generated references include the relevant requests and tools. Use the
 project's normal testing approval process for browser or other interactive tests.
 
 Use only evidence appropriate for the documents' audience. Never copy credentials,
-private notes, member memories, identifying fixtures or internal conversation
+private notes, member posts, identifying fixtures or internal conversation
 history into public guides. Use clearly synthetic examples with the same shape.
 Keep transient task status in the handoff, not in an evergreen guide.
 

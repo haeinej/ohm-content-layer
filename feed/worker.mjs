@@ -1,5 +1,5 @@
 import {
-  BSKY_POST, BSKY_PROFILE, COLLECTION, isRecordKey, normalizeArchivePost, normalizeNote, normalizePost,
+  BSKY_POST, BSKY_PROFILE, isRecordKey, normalizeArchivePost, normalizePost,
   normalizeProfile, pdsConfig, POST,
 } from './pds.mjs';
 import { OTHER } from './forms.mjs';
@@ -82,7 +82,6 @@ export async function refreshNotes(env, request = fetch, now = new Date()) {
   const pds = pdsConfig(env);
   const collections = [[pds.collection, normalizeArchivePost]];
   if (env.INCLUDE_BLUESKY_POSTS !== 'false') collections.push([BSKY_POST, normalizePost]);
-  if (env.INCLUDE_LEGACY_NOTES === 'true') collections.push([COLLECTION, normalizeNote]);
   const notes = [];
   let pagesLeft = 48;
   for (const [index, [collection, normalize]] of collections.entries()) {

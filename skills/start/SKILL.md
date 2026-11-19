@@ -36,13 +36,13 @@ Read `AGENTS.md` there before doing anything. It holds the ten rules, which the 
 Run them from the owner's own site folder. Nothing needs to be cloned.
 
 ```sh
-npx github:haeinej/ohm-content-layer identity example.com
-npx github:haeinej/ohm-content-layer configure --site https://example.com --handle example.com > ohm.jsonc
-npx github:haeinej/ohm-content-layer posts
-npx github:haeinej/ohm-content-layer publish --file ./post.md --slug hello --title 'Hello' --label Writing
+npx github:haeinej/ohm-vault identity example.com
+npx github:haeinej/ohm-vault configure --site https://example.com --handle example.com > ohm.jsonc
+npx github:haeinej/ohm-vault posts
+npx github:haeinej/ohm-vault publish --file ./post.md --slug hello --title 'Hello' --label Writing
 ```
 
-`npx github:haeinej/ohm-content-layer` with no command lists them all. Inside a clone of the repository, the same commands are `npm run identity`, `npm run posts`, `npm run publish:post`, and so on.
+`npx github:haeinej/ohm-vault` with no command lists them all. Inside a clone of the repository, the same commands are `npm run identity`, `npm run posts`, `npm run publish:post`, and so on.
 
 The owner's existing site is the specification for how it is built: reproduce it identically and change only where content is read from, without asking how.
 

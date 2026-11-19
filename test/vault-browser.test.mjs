@@ -32,7 +32,6 @@ function page({ fetch = async () => Response.json({ labels: [], changes: 0 }), c
     location: { reload() {} }, localStorage: { getItem() { return null; }, setItem() {} },
     createAccountScope, carryOut, fetch, askPds, sendPds,
     restore: async () => ({ did }), leave: async () => {}, begin() {}, beginWithPassword() {}, finish() {},
-    createCortexPanel: () => ({ directory: new Element(), screen: new Element(), reset() {}, canLeave: () => true, open: async () => {}, hasDetail: () => false }),
   });
   const handlers = vm.runInContext(`${source}\n;({ state, call, openPost, closePost, newPost, go, openPublish, accountScope, postDirty })`, context);
   handlers.state.did = did; handlers.state.tree = { labels: [] };
@@ -70,7 +69,7 @@ test('declining dirty navigation keeps the exact draft/base and sends no replace
   } });
   await shell.openPost('held'); edit(shell, 'Unsaved'); allow = false;
   const before = shell.state.current;
-  await shell.openPost('other'); shell.newPost(); shell.closePost(); shell.go('cortex'); await shell.openPublish();
+  await shell.openPost('other'); shell.newPost(); shell.closePost(); await shell.openPublish();
   assert.equal(shell.state.current, before); assert.equal(before.version, 'v-held');
   assert.equal(shell.$('body').value, 'Unsaved'); assert.equal(reads, 1);
   assert.equal(shell.state.publishing, false); assert.equal(shell.state.page, 'vault');
@@ -114,7 +113,7 @@ test('accepted navigation clears the discarded editor and a failed save preserve
   assert.equal(shell.$('body').value, 'Retry me'); assert.equal(shell.state.current.version, 'v-held');
   assert.equal(shell.$('save').disabled, false); assert.equal(shell.postDirty(), true);
   fail = false; await shell.$('post-form').fire('submit'); assert.equal(shell.state.current.version, 'v2');
-  edit(shell, 'Discarded'); shell.go('cortex'); shell.go('vault');
+  edit(shell, 'Discarded'); shell.closePost();
   assert.equal(shell.state.current, null); assert.equal(shell.$('post-form').hidden, true);
 });
 

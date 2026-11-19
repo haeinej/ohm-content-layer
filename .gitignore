@@ -8,10 +8,6 @@ dist/
 .account-password
 *.secrets.json
 worker-configuration.d.ts
-target/
-twitter-archive*/
-tweets*.js
-tweets_media/
 .DS_Store
 feed/wrangler.site.jsonc
 service/wrangler.deploy.jsonc

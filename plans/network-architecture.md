@@ -73,7 +73,7 @@ Decided:
 
 - **The copy of an attachment is required.** A pointer alone breaks when the source disappears. When a file is too large for the PDS, the copy is a reduced version and the source address points to the full one.
 
-Applied in the draft, [com.ohmmmm.post.draft.json](com.ohmmmm.post.draft.json), and open to change until it is published:
+Applied in [lexicons/com/ohmmmm/post.json](../lexicons/com/ohmmmm/post.json):
 
 - **An attachment's `original` is renamed `file`.** When a site is mirrored the copy in the repository is not the original.
 - **`link.site` is renamed `siteName`**, so it does not read like the `site` layer.

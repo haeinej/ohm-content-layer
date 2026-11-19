@@ -11,10 +11,10 @@ the project, where you can read, edit and review them alongside the change.
 
 ## What you get
 
-Imagine an agent has finished a private memory editor. A useful human guide starts
-with why you would keep working knowledge separately from published posts. It
-explains why you connect an account, where to open the editor, how to change a
-memory, and what stays private. A list of database tables would not answer those
+Imagine an agent has finished folder sync for the vault. A useful human guide starts
+with why you would keep a copy of your posts outside ohm. It explains why you
+connect an account, where to run the sync, how to settle a post changed on both
+sides, and what is never published. A list of database tables would not answer those
 questions.
 
 The agent guide covers those tables and the requests that use them, including
@@ -62,7 +62,7 @@ The guides must distinguish what was built, what was tested and what you can use
 where you are. An unfinished step should be visible where it affects your use.
 
 The docs describe the product using synthetic examples. They do not turn your
-private posts, memories or conversation into public material. Writing them also
+private posts or conversation into public material. Writing them also
 does not deploy the feature or publish a record.
 
 If an agent skips the guides, ask it to run `document-work` on the finished chunk.

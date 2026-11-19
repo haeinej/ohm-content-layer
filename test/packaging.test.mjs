@@ -48,7 +48,7 @@ test('the packed CLI initializes MCP with only its declared runtime dependencies
       { jsonrpc: '2.0', id: 2, method: 'tools/list' },
     ];
     const pending = run(process.execPath, [join(extracted, 'bin/ohm.mjs'), 'mcp'], {
-      cwd: directory, timeout: 10000, env: { ...process.env, NODE_PATH: '', ATPROTO_APP_PASSWORD: '', OHM_CONTENT_LAYER_CONFIG: '' },
+      cwd: directory, timeout: 10000, env: { ...process.env, NODE_PATH: '', ATPROTO_APP_PASSWORD: '', OHM_VAULT_CONFIG: '' },
     });
     pending.child.stdin.end(messages.map(message => JSON.stringify(message)).join('\n') + '\n');
     const result = await pending;
@@ -59,7 +59,6 @@ test('the packed CLI initializes MCP with only its declared runtime dependencies
     assert.match(replies[0].result.instructions, /Saving never publishes/);
     const names = replies[1].result.tools.map(tool => tool.name);
     assert.ok(names.includes('vault_publish'));
-    assert.ok(names.includes('cortex_start'));
     assert.equal(names.length, new Set(names).size);
   } finally {
     await rm(directory, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-# ohm content layer
+# ohm vault
 
 Build your own home on AT Protocol from the website you already have. Your posts and profile live in a repository on a Personal Data Server (PDS) you run. Every post is one shared record type, `com.ohmmmm.post`, so other AT Protocol applications can find and read it, and anything only your site needs is described by schemas under your own domain. Your website stays yours and becomes a view of that repository.
 
@@ -21,7 +21,6 @@ This repository is a Claude Code plugin. Its bundled skills are:
 | --- | --- |
 | [start](skills/start/SKILL.md) | The project's purpose and rules |
 | [vault](skills/vault/SKILL.md) | Working in your notes with the vault's tools |
-| [cortex](skills/cortex/SKILL.md) | Private memory, observations and learning between sessions |
 | [suggest-labels](skills/suggest-labels/SKILL.md) | Deciding your site's sections with you |
 | [migrate-site](skills/migrate-site/SKILL.md) | Moving a website and social posts in without loss |
 | [build-renderer](skills/build-renderer/SKILL.md) | Making your site's pages build from records |
@@ -30,28 +29,28 @@ This repository is a Claude Code plugin. Its bundled skills are:
 [How documentation follows your work](skills/document-work/README.md) explains what to expect from the last skill and how to use it. Its instructions, writing guides and contract live together in [skills/document-work/](skills/document-work/).
 
 ```
-/plugin install ohm --marketplace haeinej/ohm-content-layer
+/plugin install ohm --marketplace haeinej/ohm-vault
 ```
 
-On Claude Code older than 2.1.275, run `/plugin marketplace add haeinej/ohm-content-layer`, then `/plugin install ohm@ohm`. Other agents can read [AGENTS.md](AGENTS.md) and the files under [skills/](skills/) directly. [Set up with your coding agent](docs/set-up-with-an-agent.md)
+On Claude Code older than 2.1.275, run `/plugin marketplace add haeinej/ohm-vault`, then `/plugin install ohm@ohm`. Other agents can read [AGENTS.md](AGENTS.md) and the files under [skills/](skills/) directly. [Set up with your coding agent](docs/set-up-with-an-agent.md)
 
 ### From the command line
 
 The commands run from any folder, so you can work inside your own website's folder. Nothing needs cloning.
 
 ```sh
-npx github:haeinej/ohm-content-layer
+npx github:haeinej/ohm-vault
 ```
 
 That lists the commands. Public publishing commands preview until you pass `--publish`; show the preview to the owner and get approval first. Private imports use `--save`, folder sync uses `--apply`, and renderer commands write local output. Those writes do not publish anything.
 
 ```sh
-npx github:haeinej/ohm-content-layer identity example.com
-npx github:haeinej/ohm-content-layer configure --site https://example.com --handle example.com > ohm.jsonc
-npx github:haeinej/ohm-content-layer publish --file ./hello.md --slug hello --title 'Hello' --label Writing
+npx github:haeinej/ohm-vault identity example.com
+npx github:haeinej/ohm-vault configure --site https://example.com --handle example.com > ohm.jsonc
+npx github:haeinej/ohm-vault publish --file ./hello.md --slug hello --title 'Hello' --label Writing
 ```
 
-Commands read a site configuration named `ohm.jsonc` from the folder you run them in, or take one with `--config`. The examples below shorten `npx github:haeinej/ohm-content-layer` to `ohm`. Inside a clone of this repository the same commands are `npm run identity`, `npm run publish:post`, and so on.
+Commands read a site configuration named `ohm.jsonc` from the folder you run them in, or take one with `--config`. The examples below shorten `npx github:haeinej/ohm-vault` to `ohm`. Inside a clone of this repository the same commands are `npm run identity`, `npm run publish:post`, and so on.
 
 ## How it is put together
 
@@ -228,7 +227,7 @@ A tool adds no ability of its own. Each is made of requests to the vault service
 The server uses the same site configuration as the commands, found in the folder your agent is working in, and needs `ATPROTO_APP_PASSWORD` to sign in to your PDS. The vault is ohm's unless the configuration names another with `OHM_VAULT_URL` and `OHM_VAULT_DID`. An agent that does not load the plugin can start the server itself:
 
 ```sh
-npx github:haeinej/ohm-content-layer mcp
+npx github:haeinej/ohm-vault mcp
 ```
 
 ## Keep your vault in a folder of your own
@@ -300,25 +299,6 @@ Do it in this order, because the site reads only `com.ohmmmm.post` from this ver
 
 Private posts need no migration. One saved before this change is read as the shared schema has it, and publishing it again with `--private` saves it in the new shape. A mirror writes each post again under the shared type on its next runs.
 
-## Import an X archive
-
-Extract your X export and keep `data/tweets.js`, any `tweets-partN.js` files, and `data/tweets_media/` together. The importer is a Java program in this repository, so this part needs a clone, Java 21, and Maven. [X archive instructions](https://help.x.com/en/managing-your-account/how-to-download-your-x-archive)
-
-```sh
-mvn -f importer/pom.xml package
-java -jar importer/target/x-archive-importer.jar --help
-java -jar importer/target/x-archive-importer.jar \
-  --archive /path/to/extracted-archive --site https://example.com
-```
-
-Maven builds the executable JAR and runs the importer's unit tests. The final command previews offline without signing in or publishing. The preview reports the replies, reposts, quote posts, and entries with missing media that it leaves out.
-
-Jackson reads the archive, and ICU4J 78.3 supplies Unicode 17 normalization, character categories and contextual lowercase for label folders. This keeps the Java tool independent of the JDK's older Unicode tables. Its Unicode data adds about 14.45 MiB before shading and is confined to this standalone tool; the Node CLI does not depend on Java. The path fixtures were compared with Node 24.22.2 / ICU 78.3; a different JavaScript runtime can use different Unicode tables.
-
-Imports use `other` when no label is supplied. `--label 'Tweets'` files them under the author's name: labels are trimmed and limited to 100 characters, retaining their authored casing in the record. The URL folder is Unicode NFC-normalized, lowercased and percent-encoded, such as `/posts/tweets/x-123` for X post `123`. The record key stays `x-123` regardless of the label. [Labels and addresses](docs/labels.md)
-
-After the owner approves a reviewed selection, add `--publish --pds https://pds.example.com --handle example.com --did did:web:pds.example.com`, and `--id YOUR_X_POST_ID` once for each post, or leave `--id` out to import everything eligible. `--also-bluesky` also posts compatible text and images to Bluesky.
-
 ## Run your own PDS and site
 
 This part needs a clone of the repository, Node.js 22 or newer, pnpm, a Cloudflare account, and a domain in an active Cloudflare zone.
@@ -378,7 +358,7 @@ npm run --silent snapshot > "$snapshot_file" &&
 rm -f "$snapshot_file"
 ```
 
-Set `INCLUDE_BLUESKY_POSTS=true` in the Worker's configuration to list native Bluesky posts from the same account, and `INCLUDE_LEGACY_NOTES=true` for older `com.haeinjung.note` entries.
+Set `INCLUDE_BLUESKY_POSTS=true` in the Worker's configuration to list native Bluesky posts from the same account.
 
 ## Work on this repository
 
@@ -399,7 +379,7 @@ npm install --no-audit --no-fund
 npm install --prefix service --no-audit --no-fund
 ```
 
-Both commands use their package's committed lockfile. Review any manifest or lockfile changes before committing. The [Devin blueprint](.devin/blueprint.yaml) versions this maintenance setup so contributors can review it with the code. It loads the base image's nvm environment before installing; it requires Node.js 22 or newer and does not install Node itself. Cirrus's frozen pnpm install/build and the Java importer's JDK21/Maven checks stay separate and are needed only when working on those components. For future blueprint edits, merge the reviewed file, sync it in Devin's environment settings, then build a new snapshot; see [Git-backed blueprints](https://docs.devin.ai/onboard-devin/environment/git-backed-blueprints).
+Both commands use their package's committed lockfile. Review any manifest or lockfile changes before committing. The [Devin blueprint](.devin/blueprint.yaml) versions this maintenance setup so contributors can review it with the code. It loads the base image's nvm environment before installing; it requires Node.js 22 or newer and does not install Node itself. Cirrus's frozen pnpm install/build stays separate and is needed only when working on Cirrus. For future blueprint edits, merge the reviewed file, sync it in Devin's environment settings, then build a new snapshot; see [Git-backed blueprints](https://docs.devin.ai/onboard-devin/environment/git-backed-blueprints).
 
 This contributor setup is not required to use the packaged CLI in your own site's folder. [Run your own PDS and site](#run-your-own-pds-and-site) has the separate Cirrus prerequisites. [Public sites](public/README.md) lists local preview commands; the [agent working guide](https://docs.ohmmmm.com/agent-guide#verify) gives verification and recovery contracts.
 
@@ -418,7 +398,7 @@ Use the [human repository guide](docs/repository-map.md) to understand where a c
 | [site/](site/) | The posts page and its stylesheet |
 | [scripts/](scripts/) and [bin/](bin/) | The commands |
 | [lexicons/](lexicons/) | The shared post schema, [com/ohmmmm/post.json](lexicons/com/ohmmmm/post.json), and under [com/haeinjung/](lexicons/com/haeinjung/) the templates for a site's own schemas: the profile and the optional ones |
-| [importer/](importer/) | The X archive importer |
+| [mirror/](mirror/) | Copies posts from your website and other platforms, X included, into your repository. [Mirror](docs/mirror.md) |
 | [skills/](skills/) and [AGENTS.md](AGENTS.md) | What a coding agent reads: the purpose, the rules, and the bundled skills |
 | [docs/](docs/) | The guides linked above |
 | [test/](test/) | Tests. Run them with `npm test` |
@@ -442,7 +422,6 @@ Not yet:
 - **The vault holds no files.** A picture or file is placed in a post by its address, and a copy is sent to your PDS when the post is published.
 - **Syncing a folder has not been run against the deployed service.**
 - **Private posts and the profile command have not been run against Cloudflare.** Private posts are tested with stand-ins for Cloudflare Access and its storage.
-- **The X importer's deployed behavior and authenticated publishing are unverified.** Its Java 21 Maven build, unit tests, packaged `--help` command and synthetic offline preview have been verified locally.
 - **The migrate command has only been previewed.** It has read a live repository and its converted records pass the schema, but it has not written to a PDS.
 - **Legacy CLI public publication is create-only.** Updating, refiling or removing published content uses the vault's reviewed Publish plan; that path has local fixture coverage, with live end-to-end verification still outstanding.
 - **The site renderer stops on quotations, code, and captions.** A page that uses one is reported as not done.

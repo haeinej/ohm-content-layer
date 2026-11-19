@@ -16,9 +16,9 @@ It works on a copy of your site the whole time. Your live site keeps running, an
 ## Before you start
 
 - **Set up the tools.** Follow [Set up your site](../README.md#run-your-own-pds-and-site) to install them and create your PDS. You can ask the agent to walk you through it. Your DID is the root of everything that follows. [Identity](identity.md)
-- **Get your exports.** Download your archive from each platform you want to bring in. X has [an importer](../README.md#import-an-x-archive). For other platforms the agent converts the export itself.
-- **Give your agent the skills.** In Claude Code, run `/plugin install ohm --marketplace haeinej/ohm-content-layer`. With another agent, point it at this repository's `AGENTS.md` and `skills/` folder.
-- **Open your website's source with the agent.** The commands run there with `npx github:haeinej/ohm-content-layer`, so nothing has to be cloned to convert and preview.
+- **Get your exports.** Download your archive from each platform you want to bring in. The agent converts each export itself.
+- **Give your agent the skills.** In Claude Code, run `/plugin install ohm --marketplace haeinej/ohm-vault`. With another agent, point it at this repository's `AGENTS.md` and `skills/` folder.
+- **Open your website's source with the agent.** The commands run there with `npx github:haeinej/ohm-vault`, so nothing has to be cloned to convert and preview.
 
 No website yet? Skip to step 2. The agent helps you decide your sections, and you publish posts into them as you go.
 
@@ -48,7 +48,7 @@ Look at the before and after side by side. This is the cheapest moment to correc
 
 > Convert the rest, one label at a time, then my exports. Keep every text, date, image, and alt text exactly. List anything you could not carry over.
 
-For platforms without an importer, the agent shows you five converted posts before doing the rest.
+For each platform's export, the agent shows you five converted posts before doing the rest.
 
 ### 5. Switch the copy to read from records
 
@@ -88,7 +88,7 @@ When the agent meets something with no obvious place, such as a subtitle or a no
 | A reply, follow-up, or thread | List the earlier post's AT URI, or the web page's URL, in `connect`. |
 | Writings, photographs, projects, or other groups | Use the section's own name as the `label`, and a `sublabel` for a group inside it. [Forms, labels, and sublabels](labels.md) |
 
-The [Java importer](../README.md#import-an-x-archive) handles X exports. The [publish command](../README.md#publish-a-post) works with local text and media from other sources and accepts source metadata. For another platform's export, have your agent map the fields and convert a sample first. Each export has its own format and may omit media or other context.
+The [publish command](../README.md#publish-a-post) works with local text and media from any source and accepts source metadata. [The mirror](mirror.md) keeps new posts from X and feeds coming in. For another platform's export, have your agent map the fields and convert a sample first. Each export has its own format and may omit media or other context.
 
 ## Own the schema and its addresses
 

@@ -6,7 +6,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/haeinej/ohm-content-layer.git"
+    "url": "git+https://github.com/haeinej/ohm-vault.git"
   },
   "bin": {
     "ohm": "bin/ohm.mjs"
@@ -49,7 +49,6 @@
     "home:deploy": "wrangler deploy --config public/home/wrangler.jsonc",
     "home:seo": "node public/home/scripts/check-seo.mjs",
     "home:joiners": "node public/home/scripts/joiners.mjs",
-    "home-draft:dev": "wrangler dev --assets public/home-draft --ip 127.0.0.1 --port 8792 --compatibility-date 2026-10-30",
     "docs:dev": "wrangler dev --config public/docs/wrangler.jsonc --ip 127.0.0.1 --port 8791",
     "docs:build": "python3 public/docs/build.py",
     "docs:deploy": "wrangler deploy --config public/docs/wrangler.jsonc"

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
@@ -331,8 +332,6 @@ test('each tool names real API requests, and vault tools ask only for what they 
     const request = name => REQUESTS[name.includes('.') ? name : `com.ohmmmm.vault.${name}`];
     for (const name of tool.requests) assert.ok(request(name), `${tool.name} names ${name}`);
     if (tool.annotations?.readOnlyHint) assert.deepEqual(tool.requests.filter(name => request(name).changes), [], tool.name);
-    // Cortex behavior is exercised against the service in cortex-mcp.test.mjs.
-    if (!tool.name.startsWith('vault_')) continue;
     for (const args of calls[tool.name]) {
       asked.length = 0;
       const first = await tools.call(tool.name, args);
@@ -356,9 +355,7 @@ test('the server speaks the protocol: it lists the tools, answers calls, and rep
   const listed = (await ask('tools/list')).result.tools;
   assert.deepEqual(listed.filter(tool => tool.name.startsWith('vault_')).map(tool => tool.name),
     ['vault_tree', 'vault_list', 'vault_read', 'vault_search', 'vault_save', 'vault_set_visibility', 'vault_status', 'vault_publish', 'vault_mirror', 'vault_delete']);
-  assert.deepEqual(listed.filter(tool => tool.name.startsWith('cortex_')).map(tool => tool.name).sort(),
-    ['cortex_start', 'cortex_note', 'cortex_settle', 'cortex_recall', 'cortex_remember', 'cortex_forget', 'cortex_skill', 'cortex_propose_skill', 'cortex_propose_tool'].sort());
-  assert.equal(listed.length, 19);
+  assert.equal(listed.length, 10);
   // An agent is told a tool's name, what it does and what it takes, and nothing else.
   for (const tool of listed) assert.deepEqual([tool.inputSchema.type, Object.keys(tool).filter(key => !['name', 'description', 'inputSchema', 'annotations'].includes(key))], ['object', []]);
   // Only the tools that read are marked as changing nothing.
@@ -373,8 +370,8 @@ test('the server speaks the protocol: it lists the tools, answers calls, and rep
 });
 
 test('the server starts on its own and answers over standard input and output', async () => {
-  const child = spawn(process.execPath, [new URL('../mcp/server.mjs', import.meta.url).pathname], {
-    cwd: new URL('../test/', import.meta.url).pathname, stdio: ['pipe', 'pipe', 'inherit'],
+  const child = spawn(process.execPath, [fileURLToPath(new URL('../mcp/server.mjs', import.meta.url))], {
+    cwd: fileURLToPath(new URL('../test/', import.meta.url)), stdio: ['pipe', 'pipe', 'inherit'],
   });
   let out = '';
   child.stdout.on('data', chunk => { out += chunk; });
@@ -390,8 +387,7 @@ test('the server starts on its own and answers over standard input and output', 
   const lines = out.trim().split('\n').map(line => JSON.parse(line));
   assert.equal(code, 0);
   assert.deepEqual(lines.map(line => line.id), [1, 2, 3]);
-  assert.equal(lines[1].result.tools.length, 19);
-  assert.match(lines[0].result.instructions, /cortex_start/);
+  assert.equal(lines[1].result.tools.length, 10);
   assert.match(lines[0].result.instructions, /Saving never publishes/);
   assert.equal(lines[2].result.isError, true);
   assert.match(lines[2].result.content[0].text, /No site configuration here/);
