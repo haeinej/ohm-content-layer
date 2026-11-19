@@ -18,12 +18,13 @@ export default {
     'com.ohmmmm.vault.searchPosts': {
       verb: 'GET', asks: 'member', changes: false,
       about: 'The posts that mention every word of `q`, best first, each with a passage that shows where.',
-      takes: { q: 'the words to look for', visibility: 'optional: only posts at this visibility', limit: 'optional: how many, 10 unless said, 50 at most' },
-      gives: '`found`, and `posts` (id, slug, title, label, sublabel, visibility, date, passage)',
+      takes: { q: 'the words to look for', visibility: 'optional: only posts at this visibility', excludePrivate: 'optional: pass 1 to search public and friends posts only', limit: 'optional: how many, 10 unless said, 50 at most' },
+      gives: '`found`, `posts` (id, slug, title, label, sublabel, visibility, date, passage), and `visibilityScope: shared` when private posts were excluded',
       run: async ({ url, posts, did }) => {
         const words = [...new Set(String(url.searchParams.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean))].slice(0, 12);
         if (!words.length) throw new Refused(400, 'InvalidRequest', 'Give at least one word to search for, as q');
         const visibility = url.searchParams.get('visibility');
+        const excludePrivate = url.searchParams.get('excludePrivate') === '1';
         if (visibility !== null && !VISIBILITIES.includes(visibility)) throw new Refused(400, 'InvalidRequest', `visibility is one of: ${VISIBILITIES.join(', ')}`);
         const asked = url.searchParams.get('limit');
         const limit = asked === null ? 10 : Number(asked);
@@ -31,6 +32,7 @@ export default {
         const count = (field, word) => (field ? String(field).toLowerCase().split(word).length - 1 : 0);
         const scored = [];
         for (const post of await posts.all(did)) {
+          if (excludePrivate && post.visibility === 'private') continue;
           if (visibility && post.visibility !== visibility) continue;
           const scores = words.map(word => 5 * count(post.title, word) + 3 * count(`${post.label} ${post.sublabel}`, word) + count(post.body, word));
           // Every word has to appear somewhere in the post.
@@ -38,6 +40,7 @@ export default {
         }
         scored.sort((a, b) => b.score - a.score || String(b.post.date ?? '').localeCompare(String(a.post.date ?? '')) || a.post.slug.localeCompare(b.post.slug));
         return {
+          ...(excludePrivate ? { visibilityScope: 'shared' } : {}),
           found: scored.length,
           posts: scored.slice(0, limit).map(({ post }) => ({
             id: post.id, slug: post.slug, ...(post.title ? { title: post.title } : {}), label: post.label, sublabel: post.sublabel, visibility: post.visibility,

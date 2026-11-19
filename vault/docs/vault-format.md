@@ -166,14 +166,22 @@ The hook notes each file the agent writes inside the vault, and the next `vault 
 
 ## Sharing with friends
 
-A block marked `visibility: friends` is meant for the friends you choose. The vault service keeps those blocks readable, so it can show them to those friends on any device without anyone needing your keys. It keeps nothing private in readable form: a private block is refused, and stays in your folder until the encrypted store is built.
+A block marked `visibility: friends` is meant for the friends you choose. The vault service keeps those blocks readable, so it can show them to those friends on any device without anyone needing your keys. Private blocks use the encrypted store. Service-backed agent tools also exclude legacy posts marked private.
 
 - **Your friends-only blocks** are kept on the service as the files they are in your folder: the path and the text. Your friends-only posts were already kept there, and count as part of the same layer.
 - **Your friend list** says who may read them, by DID. Only you, signed in to ohm, can add a friend; an agent cannot. You or your tools can remove one.
 - **A friend** reads what you share, both blocks and posts, with a token from their own PDS. Someone not on your list gets the same answer as if there were nothing there, so asking reveals nothing. A friend has to be let in to the ohm service, as every member is.
 - **Removing a friend** stops them reading from then on. What they already read cannot be taken back.
 
-This is the service side only. Nothing in the editor or the folder sync uses it yet, and an existing service database needs the migration `service/migrations/0002_friends_layer.sql` first. The requests are listed in the [service reference](../service/CAPABILITIES.md) under Friends.
+Ask an agent connected to the service to list your friends-only blocks or open a block someone shared with your DID. When saving, deleting or removing access, review the preview before confirming. An existing service database needs the Friends schema for these tools to work. See the [service reference](../service/CAPABILITIES.md).
+
+## Using the vault with a local agent
+
+Configure a trusted MCP client to launch `ohm vault mcp --vault /path/to/vault --agent example` over stdio. Select your home vault folder so the client can read the files you intend to share with it. The process can read the local vault, including readable private files and the roots you configured. The encrypted service store uses a separate device unlock flow.
+
+Ask the agent to run `vault_index`, then search for a block, open it with its history, or follow connections from it. Refresh the index after editing files outside the tools.
+
+To try a capture, ask it to save `https://example.test/reading` to the Inbox. You get a proposed block and a source reference in your folder. Ask it to collect the block in `reading` to make it appear there too. The journal records both actions under the agent name you chose.
 
 ## Using the vault from the cortex
 

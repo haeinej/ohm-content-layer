@@ -6,7 +6,7 @@ Human guide: [docs/vault-format.md](../vault-format.md). Design and what comes n
 
 [vault/node.mjs](../../vault/node.mjs) reads and writes a vault folder as four kinds of nodes (block, channel, entity, source) and derives evidence edges from their content. It is pure: callers pass `{ path, text }` pairs and write what they get back. It does no I/O, indexing, sync or publishing, and it holds no inference: agent conclusions live in ohm-cortex, which refers to blocks by ID.
 
-**Implemented and tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)); read-only roots and the index ([test/indexer.test.mjs](../../test/indexer.test.mjs), real temporary folders and node:sqlite). Provenance and the cortex contract are tested in [test/provenance.test.mjs](../../test/provenance.test.mjs); the friends layer in [test/friends.test.mjs](../../test/friends.test.mjs), with real signed tokens through the service router. **Not built:** two-way roots, the MCP tools, and service storage for non-post blocks. The service, `syncFolder` and publishing still handle posts only.
+Format and evidence are tested in [node.test.mjs](../../test/node.test.mjs). Indexing and provenance use temporary folders and SQLite in [indexer.test.mjs](../../test/indexer.test.mjs) and [provenance.test.mjs](../../test/provenance.test.mjs). The friends layer has signed-token service tests in [friends.test.mjs](../../test/friends.test.mjs).
 
 ## Schemas
 
@@ -105,6 +105,16 @@ How `scan` writes the journal: after walking, and **before** the index transacti
 - `hookEvent(input, { vault, agent })` maps Claude Code PostToolUse JSON (`tool_name` in `WRITING_TOOLS`, `tool_input.file_path`/`notebook_path`, `cwd`, `session_id`) to a `written` event. It returns `null` outside the vault, for `.`-paths, for other tools, and for an invalid agent name.
   - `ohm vault hook` reads stdin, writes no output, never loads SQLite, and always exits 0.
 
+## MCP entry points
+
+- `ohm vault mcp --vault /path/to/vault --agent example` launches the local stdio server, [mcp/local.mjs](../../mcp/local.mjs). The server name is `ohm-vault`. Select the vault explicitly, via `OHM_VAULT_FOLDER` or by launching within a home. The process reads the selected folder and its configured roots. It has local plaintext access and no connection to the encrypted service store.
+- Run `vault_index` for the scan report. `vault_local_search({query, limit?})` searches the current index. `vault_local_read({ref})` accepts a key, slug or indexed path and returns `inspect` output, including file stats and history. `vault_neighbors({ref, direction?, kind?, depth?})` follows evidence up to five levels with at most 200 edges. Those three reads have `readOnlyHint`.
+- `vault_capture({source, channel?, title?})` uses `addToVault`. It accepts HTTP(S) references or files included by a configured root with text or full retention. The Inbox is the default. It records `by: agent:<name>`, `status: proposed` and journal events with `via: add`.
+- `vault_collect({block, channel, position?})` adds canonical block membership and creates or updates `_channel.md` order. Position is zero-based. It appends `via: collect` events for changed files. Capture and collect rescan before returning.
+- The service tool registry is [mcp/tools.mjs](../../mcp/tools.mjs). The [generated request map](../../service/CAPABILITIES.md) includes Friends listing, reading, saving, deleting and removing access. Saves, deletions and friend removals return a preview and require the same request and its `confirm` value after person approval. Pass the last-read `version` as `replaces` for save or delete. Shared reads use the reader's own DID. The `addFriend` and keys requests require an ohm session.
+- The service tool results exclude private post bodies, search passages and tree entries. Publish removals carry a record key and a generic reason. Private drafts are device-local captures. [mcp.test.mjs](../../test/mcp.test.mjs) exercises the service tools against SQLite and a simulated PDS. [local-mcp.test.mjs](../../test/local-mcp.test.mjs) exercises the local tools and stdio.
+- [words.mjs](../../vault/words.mjs) normalizes and tokenizes text without platform imports. The local index and the cortex vault reader both use it.
+
 ## Cortex contract
 
 [vault/cortex.mjs](../../vault/cortex.mjs): `openVault({ path })` (what the cortex calls for `{ kind: 'module', module, path }`) and `cortexVault(vault, { home })`. They implement ohm-cortex's `src/vault.mjs` contract (`OPERATIONS`: `shape`, `read`, `exists`, `changes`, `profile` and `search`).
@@ -137,7 +147,7 @@ How `scan` writes the journal: after walking, and **before** the index transacti
   - `listBlocks`, `getBlock`, `putBlock`, `deleteBlock`, `listFriends` and `removeFriend` are `member`.
   - `addFriend` is `ohm` (session only), so no token-holding agent can widen access.
   - `listShared` and `getShared` are `token`. The token path runs `admitMember`, so a friend must be admitted by `MEMBERS`.
-- Not built: the editor and `ohm vault sync` using these requests, MCP tools, channel-level groups, and moving private posts out of D1 (step 8 of the plan).
+- The Friends MCP tools use these requests. Editor and folder sync integration, channel-level groups and moving legacy private posts out of D1 remain future work.
 
 ## Use
 

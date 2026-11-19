@@ -7,6 +7,8 @@ import { createServer, serve } from '../mcp/protocol.mjs';
 import { createTools, OFFERED, TOOLS } from '../mcp/tools.mjs';
 import { REQUESTS } from '../service/src/capabilities/index.mjs';
 import { createService } from '../service/src/worker.mjs';
+import { blockStore } from '../service/src/blocks.mjs';
+import { newPostId } from '../vault/file.mjs';
 import { testDatabase } from './d1.mjs';
 
 // The tools, against the vault service itself: the real service, on a database in memory, asked
@@ -33,23 +35,30 @@ async function toolsOf({ beforeApply = () => {} } = {}) {
   };
   const repository = new Map();
   const uploads = [];
-  const service = createService({ whoIs: Object.assign(async () => did, { pdsFor: async () => 'https://pds.example.test' }), get });
+  const service = createService({ whoIs: Object.assign(async request => request.headers.get('Authorization').slice(7), { pdsFor: async () => 'https://pds.example.test' }), get });
   const asked = [];
-  const ask = async (name, { query, body } = {}) => {
+  const ask = async (name, { query, body, reader = did } = {}) => {
     asked.push(name);
     const url = new URL(`https://vault.example.test/xrpc/com.ohmmmm.vault.${name}`);
     if (query) url.search = new URLSearchParams(query);
     const response = await service(new Request(url, {
-      method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer stand-in', ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}),
+      method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${reader}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}),
     }), env);
     const data = await response.json();
     if (!response.ok) throw Object.assign(new Error(data.message), { status: response.status, code: data.error, extra: data });
     return data;
   };
-  // The same six calls the tools make through scripts/vault-client.mjs.
   const vault = {
     tree: () => ask('getTree'), search: query => ask('searchPosts', { query }), get: id => ask('getPost', { query: { id } }),
     put: (post, replaces) => ask('putPost', { body: { post, ...(replaces ? { replaces } : {}) } }), remove: (id, replaces) => ask('deletePost', { body: { id, replaces } }),
+    listBlocks: since => ask('listBlocks', since === undefined ? {} : { query: { since } }),
+    getBlock: id => ask('getBlock', { query: { id } }),
+    putBlock: (block, replaces) => ask('putBlock', { body: { block, replaces } }),
+    deleteBlock: (id, replaces) => ask('deleteBlock', { body: { id, replaces } }),
+    listFriends: () => ask('listFriends'),
+    removeFriend: did => ask('removeFriend', { body: { did } }),
+    listShared: owner => ask('listShared', { query: { owner } }),
+    getShared: (owner, id) => ask('getShared', { query: { owner, id } }),
     mirror: ({ apply = false, expectedSummary } = {}) => {
       if (apply) beforeApply(published);
       return ask('importPublished', { body: { apply, ...(expectedSummary ? { expectedSummary } : {}) } });
@@ -59,7 +68,7 @@ async function toolsOf({ beforeApply = () => {} } = {}) {
       asked.push('getAttachment');
       const url = new URL('https://vault.example.test/xrpc/com.ohmmmm.vault.getAttachment');
       url.search = new URLSearchParams({ id, attachment });
-      const response = await service(new Request(url, { headers: { Authorization: 'Bearer stand-in' } }), env);
+      const response = await service(new Request(url, { headers: { Authorization: `Bearer ${did}` } }), env);
       if (!response.ok) throw Object.assign(new Error((await response.json()).message), { code: 'FileUnreachable' });
       return { bytes: new Uint8Array(await response.arrayBuffer()), mime: response.headers.get('Content-Type') };
     },
@@ -76,54 +85,51 @@ async function toolsOf({ beforeApply = () => {} } = {}) {
       }
     },
   };
-  return { tools: createTools({ vault }), vault, asked, published, repository, uploads };
+  const seed = async (slug, fields = {}) => {
+    const id = newPostId();
+    await vault.put({ id, slug, label: '', sublabel: '', body: 'Seeded post.', visibility: 'friends', ...fields });
+    return vault.get(id);
+  };
+  return { tools: createTools({ vault }), vault, asked, published, repository, uploads, seed, ask, blocks: blockStore(env.DB) };
 }
 
-test('an agent saves privately, finds the post again, and changes it from the version it read', async () => {
-  const { tools } = await toolsOf();
-  const made = await tools.call('vault_save', { key: 'after-the-rain', title: 'After the rain', label: 'Field notes', date: '2026-01-01', body: 'The street went quiet after the rain.\n' });
-  assert.deepEqual([made.done, made.created, made.visibility, made.form, made.label, made.slug], [true, true, 'private', 'writing', 'Field notes', 'after-the-rain']);
-  await tools.call('vault_save', { key: 'loose-thought', body: 'Rain makes a city honest.' });
-
-  const found = await tools.call('vault_search', { query: 'RAIN street' });
-  assert.deepEqual(found.posts.map(post => [post.slug, post.visibility]), [['after-the-rain', 'private']]);
-  assert.match(found.posts[0].passage, /went quiet after the rain/);
-  assert.equal((await tools.call('vault_search', { query: 'rain' })).found, 2);
-  assert.equal((await tools.call('vault_search', { query: 'rain', visibility: 'public' })).found, 0);
-
-  // A post is read by its slug or by its ID, and changing it needs the version that was read.
-  const read = await tools.call('vault_read', { key: 'after-the-rain' });
-  assert.deepEqual([read.id, read.body], [made.id, 'The street went quiet after the rain.']);
-  assert.equal((await tools.call('vault_read', { key: made.id })).version, read.version);
-  await assert.rejects(tools.call('vault_save', { key: 'after-the-rain', title: 'Again' }), /Read it with vault_read and pass its version/);
-  const changed = await tools.call('vault_save', { key: 'after-the-rain', version: read.version, title: 'After the rain, again' });
-  assert.deepEqual([changed.done, changed.title, changed.visibility, changed.id], [true, 'After the rain, again', 'private', made.id]);
-  await assert.rejects(tools.call('vault_save', { key: 'after-the-rain', version: read.version, title: 'Stale' }), /has changed since it was read/);
-  // What was left out stayed: the body, the label, the date.
-  const again = await tools.call('vault_read', { key: 'after-the-rain' });
-  assert.deepEqual([again.body, again.label, again.date], [read.body, 'Field notes', read.date]);
-  assert.equal((await tools.call('vault_save', { key: 'after-the-rain', version: again.version, title: 'After the rain, again' })).unchanged, true);
-
-  // The slug is an ordinary field: changed, it is the same post at a new address. An empty title removes it.
-  const moved = await tools.call('vault_save', { key: 'after-the-rain', version: again.version, slug: 'after-rain', title: '' });
-  assert.deepEqual([moved.id, moved.slug, moved.title, moved.form], [made.id, 'after-rain', undefined, 'note']);
-  await assert.rejects(tools.call('vault_read', { key: 'after-the-rain' }), /No post uses "after-the-rain"/);
+test('service tools hide legacy private posts and keep search counts and publish previews free of private content', async () => {
+  const { tools, seed, repository } = await toolsOf();
+  const { post } = await seed('private-slug', { title: 'Private title', label: 'Private label', visibility: 'private', body: 'Rain. Private body.' });
+  await seed('shared-slug', { title: 'Shared title', body: 'Shared rain.' });
+  repository.set(post.id, { title: 'Former public title' });
+  const tree = await tools.call('vault_tree');
+  assert.deepEqual([tree.posts, tree.friends, tree.labels.length], [1, 1, 1]);
+  assert.doesNotMatch(JSON.stringify(tree), /private/i);
+  assert.deepEqual((await tools.call('vault_list')).posts.map(each => each.slug), ['shared-slug']);
+  const search = await tools.call('vault_search', { query: 'rain' });
+  assert.deepEqual([search.found, search.posts[0].passage], [1, 'Shared rain.']);
+  assert.deepEqual((await tools.call('vault_status')).remove, [{ key: post.id, why: 'The published record will be taken down.' }]);
+  assert.doesNotMatch(JSON.stringify(await tools.call('vault_publish')), /Private title|private-slug|Private body/);
+  await assert.rejects(tools.call('vault_search', { query: 'rain', visibility: 'private' }), /public or friends/);
+  for (const key of [post.id, post.slug]) {
+    await assert.rejects(tools.call('vault_read', { key }), /No post uses/);
+    await assert.rejects(tools.call('vault_set_visibility', { key, to: 'friends' }), /No post uses/);
+    await assert.rejects(tools.call('vault_delete', { key }), /No post uses/);
+    await assert.rejects(tools.call('vault_save', { key, body: 'Replacement' }), /vault_capture/);
+  }
+  await assert.rejects(tools.call('vault_save', { key: 'new', body: 'Proposed private text' }), /vault_capture/);
 });
 
 test('nothing other people are meant to see changes without the second call', async () => {
-  const { tools, vault } = await toolsOf();
-  const made = await tools.call('vault_save', { key: 'hello', title: 'Hello', label: 'Writings', body: 'A first post.' });
+  const { tools, vault, seed } = await toolsOf();
+  const { post: made } = await seed('hello', { title: 'Hello', label: 'Writings', body: 'A first post.' });
   const held = async () => (await vault.get(made.id)).post;
 
   const asked = await tools.call('vault_set_visibility', { key: 'hello', to: 'public' });
   assert.equal(asked.done, false);
-  assert.deepEqual([asked.willHappen.from, asked.willHappen.to], ['private', 'public']);
+  assert.deepEqual([asked.willHappen.from, asked.willHappen.to], ['friends', 'public']);
   // Saying a post is for everyone does not publish it, and the answer says so.
   assert.match(asked.willHappen.audience, /Saving does not publish it/);
-  assert.equal((await held()).visibility, 'private');
+  assert.equal((await held()).visibility, 'friends');
   await assert.rejects(tools.call('vault_set_visibility', { key: 'hello', to: 'public', confirm: 'c0000000000000000' }), /has changed since it was shown/);
   // The value given for one request does not unlock another.
-  await assert.rejects(tools.call('vault_set_visibility', { key: 'hello', to: 'friends', confirm: asked.confirm }), /has changed since it was shown/);
+  await assert.rejects(tools.call('vault_delete', { key: 'hello', confirm: asked.confirm }), /has changed since it was shown/);
   const moved = await tools.call('vault_set_visibility', { key: 'hello', to: 'public', confirm: asked.confirm });
   assert.deepEqual([moved.done, moved.visibility], [true, 'public']);
   assert.equal((await tools.call('vault_set_visibility', { key: 'hello', to: 'public' })).unchanged, true);
@@ -139,6 +145,7 @@ test('nothing other people are meant to see changes without the second call', as
   await assert.rejects(tools.call('vault_save', { ...edit, body: 'Something else entirely.', confirm: shown.confirm }), /has changed since it was shown/);
   const saved = await tools.call('vault_save', { ...edit, confirm: shown.confirm });
   assert.deepEqual([saved.done, saved.sublabel], [true, 'Beginnings']);
+  await assert.rejects(tools.call('vault_save', edit), /has changed since it was read/);
   assert.equal((await held()).body, 'A first post, corrected.');
 
   // Removing a post is two calls as well.
@@ -151,15 +158,13 @@ test('nothing other people are meant to see changes without the second call', as
 });
 
 test('the tree and the list show the vault\'s structure, and bad requests say what is wrong', async () => {
-  const { tools, vault } = await toolsOf();
-  await tools.call('vault_save', { key: 'trap', title: 'Trap', label: 'Writings', sublabel: 'Collisions', body: 'Words.', date: '2026-03-01' });
-  const draft = await tools.call('vault_save', { key: 'draft', title: 'Draft', label: 'Writings', body: 'Words.', date: '2026-04-01' });
-  // A post that first appeared somewhere else, as a mirror brings one in.
-  const { post, version } = await vault.get(draft.id);
-  await vault.put({ ...post, source: { platform: 'bluesky', uri: 'https://bsky.app/profile/example.test/post/3k' } }, version);
+  const { tools, seed } = await toolsOf();
+  await seed('trap', { title: 'Trap', label: 'Writings', sublabel: 'Collisions', body: 'Words.', date: '2026-03-01' });
+  await seed('draft', { title: 'Draft', label: 'Writings', body: 'Words.', date: '2026-04-01',
+    source: { platform: 'bluesky', uri: 'https://bsky.app/profile/example.test/post/3k' } });
 
   const tree = await tools.call('vault_tree');
-  assert.deepEqual([tree.posts, tree.private, tree.public, tree.friends], [2, 2, 0, 0]);
+  assert.deepEqual([tree.posts, tree.private, tree.public, tree.friends], [2, undefined, 0, 2]);
   assert.deepEqual(tree.labels.map(folder => [folder.label, folder.posts.map(each => each.slug), folder.sublabels.map(group => [group.sublabel, group.posts.map(each => each.slug)])]),
     [['Writings', ['draft'], [['Collisions', ['trap']]]]]);
   assert.deepEqual((await tools.call('vault_list', { label: 'writings' })).posts.map(each => each.slug), ['draft', 'trap']);
@@ -168,17 +173,15 @@ test('the tree and the list show the vault\'s structure, and bad requests say wh
   assert.deepEqual((await tools.call('vault_list', { platform: 'own' })).posts.map(each => each.slug), ['trap']);
 
   // What the vault service will not take, it says in its own words, and the tool passes them on.
-  await assert.rejects(tools.call('vault_save', { key: 'Not A Slug', body: 'x' }), /lowercase Latin letters and digits/);
-  await assert.rejects(tools.call('vault_save', { key: 'no-body' }), /A new post needs a body/);
-  await assert.rejects(tools.call('vault_save', { key: 'sub', body: 'x', sublabel: 'Alone' }), /A sublabel sits inside a label/);
-  await assert.rejects(tools.call('vault_save', { key: 'draft2', body: 'x', label: 'Writings', slug: 'ignored' }).then(() => tools.call('vault_save', { key: 'draft2', version: 'x', slug: 'trap' })), /has changed since it was read/);
   await assert.rejects(tools.call('vault_read', { key: 'missing' }), /No post uses "missing"/);
   await assert.rejects(tools.call('vault_search', { query: '  ' }), /at least one word/);
   await assert.rejects(tools.call('vault_set_visibility', { key: 'trap', to: 'everyone' }), /Visibility is one of/);
   await assert.rejects(tools.call('vault_publish_everything'), /There is no tool named/);
   // Two posts cannot share a slug.
-  const second = await tools.call('vault_read', { key: 'draft2' });
-  await assert.rejects(tools.call('vault_save', { key: 'draft2', version: second.version, slug: 'trap' }), /already has the slug "trap"/);
+  const second = await tools.call('vault_read', { key: 'draft' });
+  const args = { key: 'draft', version: second.version, slug: 'trap' };
+  const { confirm } = await tools.call('vault_save', args);
+  await assert.rejects(tools.call('vault_save', { ...args, confirm }), /already has the slug "trap"/);
 });
 
 test('an agent brings in what the person has published: it looks first, and brings in only on the second call', async () => {
@@ -260,10 +263,10 @@ test('invalid protocol params and unexpected handlers do not poison the ordered 
 });
 
 test('an agent publishes: it shows what would change first, and the repository changes only on the second call', async () => {
-  const { tools, repository, uploads } = await toolsOf();
+  const { tools, repository, uploads, seed } = await toolsOf();
   const confirmed = async (name, args) => tools.call(name, { ...args, confirm: (await tools.call(name, args)).confirm });
-  const made = await tools.call('vault_save', { key: 'the-hill', title: 'The hill', label: 'Photographs', date: '2026-02-01', body: 'Up early.\n\n![The hill at dawn](https://photos.example.test/hill.png)' });
-  await tools.call('vault_save', { key: 'mine', body: 'Only for me.' });
+  const { post: made } = await seed('the-hill', { title: 'The hill', label: 'Photographs', date: '2026-02-01', body: 'Up early.\n\n![The hill at dawn](https://photos.example.test/hill.png)' });
+  await seed('mine', { body: 'Only for me.', visibility: 'private' });
   // A record something else published, which the vault knows nothing about.
   repository.set('from-elsewhere', { $type: 'com.ohmmmm.post', title: 'From elsewhere', body: 'x', publishedAt: '2025-01-01T00:00:00.000Z' });
 
@@ -306,21 +309,71 @@ test('an agent publishes: it shows what would change first, and the repository c
   assert.deepEqual((await confirmed('vault_publish', {})).published, { created: 0, replaced: 1, removed: 0, files: 1 });
   assert.deepEqual([repository.get(made.id).title, repository.get(made.id).subtitle], ['The hill, again', 'At dawn']);
 
-  // Making it private again takes it down, on publish and not before.
-  await confirmed('vault_set_visibility', { key: 'the-hill', to: 'private' });
+  // Changing it back to friends takes it down, on publish and not before.
+  await assert.rejects(tools.call('vault_set_visibility', { key: 'the-hill', to: 'private' }), /requires the person/);
+  await confirmed('vault_set_visibility', { key: 'the-hill', to: 'friends' });
   assert.ok(repository.has(made.id));
   const down = await tools.call('vault_publish');
-  assert.deepEqual(down.willHappen.remove.map(each => [each.slug, each.why]), [['the-hill', 'It is now only for you.']]);
+  assert.deepEqual(down.willHappen.remove, [{ key: made.id, why: 'The published record will be taken down.' }]);
   assert.deepEqual((await tools.call('vault_publish', { confirm: down.confirm })).published, { created: 0, replaced: 0, removed: 1, files: 0 });
   assert.deepEqual([...repository.keys()], ['from-elsewhere']);
 });
 
+test('friends tools preview changes, enforce versions and use the reader’s own DID', async () => {
+  const { tools, asked, blocks, ask } = await toolsOf();
+  const reader = 'did:web:reader.example.test';
+  const block = { id: newPostId(), path: 'reading/first.md', text: '---\nkind: text\nvisibility: friends\n---\n\nCollected words.' };
+  await assert.rejects(tools.call('vault_friends_save', { block: { ...block, text: 'A private block.' } }), /visibility: friends/);
+  await assert.rejects(tools.call('vault_friends_save', { block: { ...block, text: block.text.replace('friends', 'public') } }), /visibility: friends/);
+  assert.deepEqual(asked, []);
+  const preview = await tools.call('vault_friends_save', { block });
+  assert.equal(preview.done, false);
+  assert.match(preview.willHappen.warning, /can read/);
+  assert.deepEqual((await tools.call('vault_friends_list')).blocks, []);
+  await assert.rejects(tools.call('vault_friends_save', { block: { ...block, text: block.text + ' Changed.' }, confirm: preview.confirm }), /has changed since it was shown/);
+  const { version } = await tools.call('vault_friends_save', { block, confirm: preview.confirm });
+  const list = await tools.call('vault_friends_list');
+  assert.equal(list.blocks[0].id, block.id);
+  assert.deepEqual(await tools.call('vault_friends_read', { id: block.id }), { block, version });
+  await assert.rejects(ask('addFriend', { body: { did: reader } }), { code: 'SignInRequired' });
+  assert.equal(REQUESTS['com.ohmmmm.vault.addFriend'].asks, 'ohm');
+  await assert.rejects(tools.call('vault_friends_add', { did: reader }), /There is no tool/);
+  const shared = createTools({ vault: {
+    listShared: owner => ask('listShared', { query: { owner }, reader }),
+    getShared: (owner, id) => ask('getShared', { query: { owner, id }, reader }),
+  } });
+  await assert.rejects(shared.call('vault_shared_list', { owner: did }), /Nothing here is shared/);
+  await blocks.addFriend(did, reader);
+  assert.equal((await tools.call('vault_friends_who')).friends[0].did, reader);
+  assert.equal((await shared.call('vault_shared_list', { owner: did })).blocks[0].id, block.id);
+  assert.deepEqual(await shared.call('vault_shared_read', { owner: did, id: block.id }), { block, version });
+  const edit = { block: { ...block, text: block.text + ' More.' }, replaces: version };
+  const deletion = { id: block.id, replaces: version };
+  const removeBlock = await tools.call('vault_friends_delete', deletion);
+  const saveEdit = await tools.call('vault_friends_save', edit);
+  const edited = await tools.call('vault_friends_save', { ...edit, confirm: saveEdit.confirm });
+  await assert.rejects(tools.call('vault_friends_delete', { ...deletion, confirm: removeBlock.confirm }), /has changed/);
+  await assert.rejects(tools.call('vault_friends_save', { ...edit, block: { ...block, text: block.text + ' Stale.' },
+    confirm: (await tools.call('vault_friends_save', { ...edit, block: { ...block, text: block.text + ' Stale.' } })).confirm }), /has changed/);
+  const unfriend = await tools.call('vault_friends_remove', { did: reader });
+  assert.equal((await shared.call('vault_shared_list', { owner: did })).blocks.length, 1);
+  await assert.rejects(tools.call('vault_friends_remove', { did: reader, confirm: saveEdit.confirm }), /has changed since it was shown/);
+  await tools.call('vault_friends_remove', { did: reader, confirm: unfriend.confirm });
+  await assert.rejects(shared.call('vault_shared_read', { owner: did, id: block.id }), /Nothing here is shared/);
+  const latestDeletion = { ...deletion, replaces: edited.version };
+  const confirmed = await tools.call('vault_friends_delete', latestDeletion);
+  assert.equal((await tools.call('vault_friends_delete', { ...latestDeletion, confirm: confirmed.confirm })).removed, true);
+  assert.deepEqual((await tools.call('vault_friends_list', { since: list.cursor })).blocks, [{ id: block.id, removed: true }]);
+  await assert.rejects(tools.call('vault_friends_read', { id: block.id }), /There is no such block/);
+});
+
 test('each tool names real API requests, and vault tools ask only for what they declare', async () => {
-  const { tools, asked } = await toolsOf();
-  const made = await tools.call('vault_save', { key: 'hello', body: 'A first post.' });
+  const { tools, asked, seed } = await toolsOf();
+  const made = await seed('hello', { body: 'A first post.', visibility: 'public' });
+  await seed('another');
   const calls = {
     vault_tree: [{}], vault_list: [{}], vault_read: [{ key: 'hello' }], vault_search: [{ query: 'first' }],
-    vault_save: [{ key: 'hello', version: made.version, body: 'A first post, again.' }, { key: 'another', body: 'x' }],
+    vault_save: [{ key: 'hello', version: made.version, body: 'A first post, again.' }],
     vault_set_visibility: [{ key: 'hello', to: 'friends' }],
     vault_status: [{}],
     vault_publish: [{}],
@@ -332,7 +385,7 @@ test('each tool names real API requests, and vault tools ask only for what they 
     const request = name => REQUESTS[name.includes('.') ? name : `com.ohmmmm.vault.${name}`];
     for (const name of tool.requests) assert.ok(request(name), `${tool.name} names ${name}`);
     if (tool.annotations?.readOnlyHint) assert.deepEqual(tool.requests.filter(name => request(name).changes), [], tool.name);
-    for (const args of calls[tool.name]) {
+    for (const args of calls[tool.name] ?? []) {
       asked.length = 0;
       const first = await tools.call(tool.name, args);
       if (first.confirm) await tools.call(tool.name, { ...args, confirm: first.confirm });
@@ -353,16 +406,17 @@ test('the server speaks the protocol: it lists the tools, answers calls, and rep
   assert.deepEqual((await ask('ping')).result, {});
 
   const listed = (await ask('tools/list')).result.tools;
-  assert.deepEqual(listed.filter(tool => tool.name.startsWith('vault_')).map(tool => tool.name),
-    ['vault_tree', 'vault_list', 'vault_read', 'vault_search', 'vault_save', 'vault_set_visibility', 'vault_status', 'vault_publish', 'vault_mirror', 'vault_delete']);
-  assert.equal(listed.length, 10);
+  assert.deepEqual(listed.map(tool => tool.name),
+    ['vault_tree', 'vault_list', 'vault_read', 'vault_search', 'vault_save', 'vault_set_visibility', 'vault_status', 'vault_publish', 'vault_mirror', 'vault_delete',
+      'vault_friends_list', 'vault_friends_read', 'vault_friends_save', 'vault_friends_delete', 'vault_friends_who', 'vault_friends_remove', 'vault_shared_list', 'vault_shared_read']);
   // An agent is told a tool's name, what it does and what it takes, and nothing else.
   for (const tool of listed) assert.deepEqual([tool.inputSchema.type, Object.keys(tool).filter(key => !['name', 'description', 'inputSchema', 'annotations'].includes(key))], ['object', []]);
   // Only the tools that read are marked as changing nothing.
-  assert.deepEqual(listed.filter(tool => tool.name.startsWith('vault_') && tool.annotations?.readOnlyHint).map(tool => tool.name), ['vault_tree', 'vault_list', 'vault_read', 'vault_search', 'vault_status']);
+  assert.deepEqual(listed.filter(tool => tool.annotations?.readOnlyHint).map(tool => tool.name),
+    ['vault_tree', 'vault_list', 'vault_read', 'vault_search', 'vault_status', 'vault_friends_list', 'vault_friends_read', 'vault_friends_who', 'vault_shared_list', 'vault_shared_read']);
 
   const saved = await ask('tools/call', { name: 'vault_save', arguments: { key: 'hello', body: 'A first post.' } });
-  assert.equal(JSON.parse(saved.result.content[0].text).visibility, 'private');
+  assert.equal(saved.result.isError, true);
   const refused = await ask('tools/call', { name: 'vault_read', arguments: { key: 'missing' } });
   assert.deepEqual([refused.result.isError, refused.result.content[0].text], [true, 'No post uses "missing".']);
   assert.equal((await ask('resources/list')).error.code, -32601);
@@ -387,7 +441,7 @@ test('the server starts on its own and answers over standard input and output', 
   const lines = out.trim().split('\n').map(line => JSON.parse(line));
   assert.equal(code, 0);
   assert.deepEqual(lines.map(line => line.id), [1, 2, 3]);
-  assert.equal(lines[1].result.tools.length, 10);
+  assert.equal(lines[1].result.tools.length, 18);
   assert.match(lines[0].result.instructions, /Saving never publishes/);
   assert.equal(lines[2].result.isError, true);
   assert.match(lines[2].result.content[0].text, /No site configuration here/);
