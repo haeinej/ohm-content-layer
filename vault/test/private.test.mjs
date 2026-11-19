@@ -54,6 +54,10 @@ test('the private store keeps sealed files only, with compare-and-swap on a vers
   // The same ciphertext again changes nothing; the version names exactly one ciphertext.
   assert.equal((await store.write(me, { id, ciphertext }, { replaces: saved.version })).unchanged, true);
   assert.equal(saved.version, await privateVersion(sealedBlock({ id, ciphertext }).text));
+  // A write sent again after its answer was lost, still naming the version it replaced, is the same
+  // write: nothing changes and nothing is refused.
+  const again = await store.write(me, { id, ciphertext }, { replaces: null });
+  assert.deepEqual([again.version, again.unchanged], [saved.version, true]);
 
   // Two devices edit from the same version: the second is refused and told the current version.
   const first = await store.write(me, { id, ciphertext: await keys.seal(me, id, 'edit one') }, { replaces: saved.version });
