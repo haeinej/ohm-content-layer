@@ -1,30 +1,43 @@
-// The graph's data: who and what sits around one person, as a hierarchy that then intertwines.
-// Positions come from the force layout in GraphView; this file says what the nodes are, which
-// layer each belongs to, and every edge.
+// The graph's data: one person's knowledge graph, centred on them. Positions come from the force
+// layout in GraphView; this file says what the nodes are, which layer each belongs to, and every edge.
 //
-//   0 person ─ 1 cortex (memories, skills, notes) ─ 2 vault labels ─ 3 sublabels ─ 4 posts ─ 5 people
+//   0 you ─ 1 cortex (memories, notes, skills, tools) ─ 2 channels ─ 3 channels inside them
+//         ─ 4 blocks ─ 5 sources and entities
 //
-// The cortex is the layer closest to the person, a ring of what their agents know about them. It
-// is also what connects the person to their vault: each label hangs from the memories that know
-// about it (or from the person, when none does), and memories reach the sublabels and posts they
-// are about more loosely. Posts then cross the hierarchy: [[links]]
-// between posts, and people mentioned in several posts, tie distant branches together.
-import { bySlug, cortex, links, mentions, owner, personByHandle, posts, sees, type Audience, type Doc, type Person } from "@/data/sample"
+// Edges come in two families, and the difference is the point:
+//
+// - Evidence is what the content itself shows, so anyone can check it and it can be rebuilt from
+//   the files: a channel contains a block, a block links to another, mentions an entity, or was
+//   captured from a source. No model writes evidence.
+// - Inference is what the cortex concluded from evidence. A model never draws an edge between two
+//   blocks; it writes a memory, note, skill or tool, and that node points at the things it was
+//   drawn from. Remove the inference and the evidence is untouched.
+import { bySlug, channelRecords, channelsOf, cortex, mentions, outgoing, owner, personByHandle, posts, sees, type Audience, type Doc, type Person } from "@/data/sample"
 
 export type Layer = 0 | 1 | 2 | 3 | 4 | 5
-export type NodeType = "person" | "memory" | "label" | "sublabel" | "post"
+export type NodeType = "person" | "memory" | "note" | "skill" | "tool" | "channel" | "block" | "source" | "entity"
 export type GraphNode = {
   id: string
   layer: Layer
   type: NodeType
   name: string
-  /** The top-level branch it belongs to: "cortex" or a label. Empty for people. */
+  /** The top-level branch it belongs to: "cortex" or a top-level channel. Empty for you, sources and entities. */
   branch: string
   doc?: Doc
   person?: Person
   degree: number
 }
-export type EdgeKind = "hierarchy" | "knows" | "about" | "link" | "mention"
+
+/** Evidence: shown by the content, checkable, rebuilt from files. */
+export type EvidenceKind = "contains" | "links" | "mentions" | "from"
+/** Inference: a cortex node pointing at what it was drawn from. */
+export type InferenceKind = "grounds" | "observes" | "learned" | "acts"
+/** Structure: you hold your top-level channels and your cortex. */
+export type EdgeKind = EvidenceKind | InferenceKind | "holds"
+export type EdgeFamily = "evidence" | "inference" | "structure"
+export const familyOf = (kind: EdgeKind): EdgeFamily =>
+  kind === "holds" ? "structure" : kind === "grounds" || kind === "observes" || kind === "learned" || kind === "acts" ? "inference" : "evidence"
+
 export type GraphEdge = { source: string; target: string; kind: EdgeKind }
 export type Graph = { center: Person; nodes: GraphNode[]; edges: GraphEdge[] }
 
@@ -34,14 +47,24 @@ export type GraphFilters = {
   /** The repo's prime folders, checked in or out. */
   cortex?: boolean
   vault?: boolean
+  /** Entities: people a block mentions. */
   people?: boolean
+  /** Blocks linking to blocks. */
   links?: boolean
+  /** The originals imported blocks were captured from. */
+  sources?: boolean
   /** Who is looking: only what they can see is drawn. The cortex is yours alone. */
   audience?: Audience
   /** The repository's filters, as a test each page must pass. */
   keep?: (d: Doc) => boolean
 }
-export const DEFAULT_FILTERS = { cortex: true, vault: true, people: true, links: true, audience: "personal" as Audience }
+export const DEFAULT_FILTERS = { cortex: true, vault: true, people: true, links: true, sources: true, audience: "personal" as Audience }
+
+/** What each kind of cortex item says about the things it points at. */
+const INFERENCE: Record<string, InferenceKind> = { memory: "grounds", note: "observes", skill: "learned", tool: "acts" }
+const PLATFORM_NAME: Record<string, string> = { x: "X", bluesky: "Bluesky", instagram: "Instagram" }
+
+const channelId = (path: string) => `channel:${path}`
 
 export function buildGraph(filters: GraphFilters = {}): Graph {
   const f = { ...DEFAULT_FILTERS, ...filters }
@@ -57,70 +80,77 @@ export function buildGraph(filters: GraphFilters = {}): Graph {
 
   add({ id: center.did, layer: 0, type: "person", name: `@${center.handle}`, branch: "", person: center })
 
-  // Someone else at the centre: the owner's posts that mention them, and the owner as a person.
+  // Someone else at the centre: the owner's blocks that mention them, and the owner as an entity.
   const docs = !f.vault ? [] : (isOwner ? posts : posts.filter(p => mentions(p).includes(center.handle)))
     .filter(d => sees(f.audience, d) && (!filters.keep || filters.keep(d)))
 
-  // 1 · The cortex: the owner's alone.
-  const withCortex = isOwner && f.cortex && f.audience === "personal"
-  if (withCortex) {
-    for (const c of cortex.filter(c => !filters.keep || filters.keep(c))) {
-      add({ id: c.id, layer: 1, type: "memory", name: c.title, branch: "cortex", doc: c })
-      edge(center.did, c.id, "hierarchy")
-    }
-  }
-
-  // 2–4 · The vault: labels, sublabels, posts.
+  // 2–4 · Channels and blocks. A block can be in any number of channels; a path `a/b` is channel b
+  // inside channel a. Containment is evidence: you put it there.
   for (const d of docs) {
-    const label = `label:${d.label}`
-    add({ id: label, layer: 2, type: "label", name: d.label, branch: d.label })
-    let parent = label
-    if (d.sublabel) {
-      parent = `sublabel:${d.label}/${d.sublabel}`
-      add({ id: parent, layer: 3, type: "sublabel", name: d.sublabel, branch: d.label })
-      edge(label, parent, "hierarchy")
+    add({ id: d.id, layer: 4, type: "block", name: d.title, branch: channelsOf(d)[0].split("/")[0], doc: d })
+    for (const path of channelsOf(d)) {
+      const [top, inner] = path.split("/")
+      add({ id: channelId(top), layer: 2, type: "channel", name: top, branch: top })
+      if (inner) {
+        add({ id: channelId(path), layer: 3, type: "channel", name: inner, branch: top })
+        edge(channelId(top), channelId(path), "contains")
+      }
+      edge(channelId(path), d.id, "contains")
     }
-    add({ id: d.id, layer: 4, type: "post", name: d.title, branch: d.label, doc: d })
-    edge(parent, d.id, "hierarchy")
   }
-  // Each label once from its parent: drop repeated hierarchy edges.
-  dedupe(edges)
-
-  // Labels hang from the memories that know about them; memories reach sublabels and posts loosely.
-  const known = new Set<string>()
-  if (withCortex) {
-    for (const c of cortex) {
-      for (const a of c.about ?? []) {
-        if (!a.includes("/") && nodes.has(`label:${a}`)) {
-          edge(c.id, `label:${a}`, "knows")
-          known.add(`label:${a}`)
-          continue
-        }
-        const target = a.includes("/") ? `sublabel:${a}` : bySlug(a)?.id
-        if (target) edge(c.id, target, "about")
+  // Channels are records: yours show even when empty.
+  if (isOwner && f.vault && f.audience === "personal") {
+    for (const { path } of channelRecords) {
+      const [top, inner] = path.split("/")
+      add({ id: channelId(top), layer: 2, type: "channel", name: top, branch: top })
+      if (inner) {
+        add({ id: channelId(path), layer: 3, type: "channel", name: inner, branch: top })
+        edge(channelId(top), channelId(path), "contains")
       }
     }
   }
-  for (const n of nodes.values()) if (n.type === "label" && !known.has(n.id)) edge(center.did, n.id, "hierarchy")
+  for (const n of nodes.values()) if (n.type === "channel" && n.layer === 2) edge(center.did, n.id, "holds")
 
-  // Posts intertwine: links between them, and the people they mention.
-  const postNodes = [...nodes.values()].filter(n => n.type === "post")
+  // 1 · The cortex: the owner's alone. Each item points at the channels and blocks it was drawn from.
+  if (isOwner && f.cortex && f.audience === "personal") {
+    for (const c of cortex.filter(c => !filters.keep || filters.keep(c))) {
+      add({ id: c.id, layer: 1, type: c.kind as NodeType, name: c.title, branch: "cortex", doc: c })
+      edge(center.did, c.id, "holds")
+      for (const a of c.about ?? []) {
+        const target = nodes.has(channelId(a)) ? channelId(a) : bySlug(a)?.id
+        if (target) edge(c.id, target, INFERENCE[c.kind] ?? "grounds")
+      }
+    }
+  }
+
+  // Evidence across the hierarchy: links between blocks, the people they mention, where they came from.
+  const blockNodes = [...nodes.values()].filter(n => n.type === "block")
   if (f.links) {
-    for (const n of postNodes) for (const slug of links(n.doc!)) {
+    // Links in the text and connections you made on the whole block: both are yours, both evidence.
+    for (const n of blockNodes) for (const { slug } of outgoing(n.doc!)) {
       const target = bySlug(slug)
-      if (target) edge(n.id, target.id, "link")
+      if (target) edge(n.id, target.id, "links")
     }
   }
   if (f.people) {
-    for (const n of postNodes) {
+    for (const n of blockNodes) {
       const who = new Set(mentions(n.doc!))
       if (!isOwner) who.add(owner.handle)
       who.delete(center.handle)
       for (const h of who) {
         const person = personByHandle(h) ?? { did: `handle:${h}`, handle: h, name: h }
-        add({ id: person.did, layer: 5, type: "person", name: `@${person.handle}`, branch: "", person })
-        edge(n.id, person.did, "mention")
+        add({ id: person.did, layer: 5, type: "entity", name: `@${person.handle}`, branch: "", person })
+        edge(n.id, person.did, "mentions")
       }
+    }
+  }
+  if (f.sources) {
+    for (const n of blockNodes) {
+      const platform = n.doc!.platform
+      if (!platform || platform === "own") continue
+      const id = `source:${n.doc!.id}`
+      add({ id, layer: 5, type: "source", name: `${PLATFORM_NAME[platform] ?? platform} original`, branch: "" })
+      edge(n.id, id, "from")
     }
   }
 
@@ -132,12 +162,15 @@ export function buildGraph(filters: GraphFilters = {}): Graph {
   return { center, nodes: [...nodes.values()], edges }
 }
 
+/** One edge per pair. Evidence wins over inference, so a fact is never shown as a guess. */
 function dedupe(edges: GraphEdge[]) {
-  const seen = new Set<string>()
-  for (let i = edges.length - 1; i >= 0; i--) {
-    const e = edges[i]
+  const rank: Record<EdgeFamily, number> = { evidence: 0, structure: 1, inference: 2 }
+  const best = new Map<string, number>()
+  edges.forEach((e, i) => {
     const key = [e.source, e.target].sort().join("|")
-    if (seen.has(key)) edges.splice(i, 1)
-    else seen.add(key)
-  }
+    const held = best.get(key)
+    if (held === undefined || rank[familyOf(e.kind)] < rank[familyOf(edges[held].kind)]) best.set(key, i)
+  })
+  const keep = new Set(best.values())
+  for (let i = edges.length - 1; i >= 0; i--) if (!keep.has(i)) edges.splice(i, 1)
 }

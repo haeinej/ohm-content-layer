@@ -15,7 +15,7 @@ import Highlight from "@tiptap/extension-highlight"
 import { Markdown } from "@tiptap/markdown"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import {
-  ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon, ClockIcon, CopyIcon, DownloadIcon, FileTextIcon, FolderInputIcon, FolderOpenIcon, GripVerticalIcon, ImageIcon,
+  ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon, CopyIcon, FileTextIcon, GripVerticalIcon, ImageIcon,
   LockIcon, PlusIcon, SmilePlusIcon, TableIcon, Trash2Icon, TypeIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -28,11 +28,11 @@ import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { byId, bySlug, posts, titleOf, type Doc } from "@/data/sample"
+import { byId, bySlug, channelRecords, channelsOf, posts, titleOf, type Doc } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
-import { autosave, canGo, go, marks, me, moveDoc, open, openFile, revealFolder, saveDraft, setIcon, showGraph, toggleArchive, useWorkspace } from "@/workspace/store"
+import { autosave, canGo, go, marks, me, moveBlock, open, openFile, revealFolder, saveDraft, setIcon, showGraph, toggleArchive, useWorkspace } from "@/workspace/store"
 import { InlineRename, requestDelete } from "@/workspace/PageActions"
 import { withAgent } from "@/workspace/tools"
 import { insertImage, insertImageFiles, insertTable, insertText } from "./commands"
@@ -42,13 +42,18 @@ import { PlusMenu, SlashMenu } from "./InsertMenu"
 import { SelectionToolbar } from "./SelectionToolbar"
 import { LastEdited, TableControls } from "./TableControls"
 import { LinkPreview } from "./LinkPreview"
+import { currentVersion } from "@/data/journal"
+import { ConnectionsButton } from "./ConnectionsCard"
+import { HistoryButton } from "@/history/History"
 import "./editor.css"
 
 /** Bodies written before the editor start with "# Title"; the title has its own field now. */
 const withoutTitle = (body: string, title: string) => body.replace(new RegExp(`^#\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n*`), "")
 
-/** The page as Markdown, with [[links]] kept as written: the serializer escapes their brackets. */
-const unescapeLinks = (md: string) => md.replace(/\\\[\\\[([a-z0-9-]+)\\\]\\\]/gi, "[[$1]]")
+/** The page as Markdown, with [[links]] kept as written: the serializer escapes their brackets (and a `|`). */
+const unescapeLinks = (md: string) =>
+  md.replace(/\\?\[\\?\[([a-z0-9-]+)(?:\\?\|((?:[^\]\n\\]|\\.)+?))?\\?\]\\?\]/gi,
+    (_, slug: string, words?: string) => (words ? `[[${slug}|${words.replace(/\\(.)/g, "$1")}]]` : `[[${slug}]]`))
 const toMarkdown = (e: Editor) => unescapeLinks(e.getMarkdown())
 
 const pill = "flex items-center gap-0.5 rounded-full bg-muted p-0.5"
@@ -90,9 +95,10 @@ function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown
   const [menu, setMenu] = useState(false)
   const folders = useMemo(() => {
     const set = new Set<string>()
-    for (const p of posts) { set.add(p.label); if (p.sublabel) set.add(`${p.label}/${p.sublabel}`) }
+    for (const p of posts) for (const c of channelsOf(p)) { set.add(c.split("/")[0]); set.add(c) }
+    for (const c of channelRecords) set.add(c.path)
     return [...set].sort()
-  }, [doc.updated, doc.label, doc.sublabel]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doc.updated, doc.label, doc.sublabel, doc.channels]) // eslint-disable-line react-hooks/exhaustive-deps
   const here = doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label
   const md = () => `# ${titleOf(doc)}\n\n${markdown()}`
   const rename = () => { if (post) { setMenu(false); setRenaming(true) } }
@@ -154,13 +160,13 @@ function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown
           <DropdownMenuItem onClick={() => saveAsMarkdown(doc.title, md())}>Save as Markdown</DropdownMenuItem>
           {post && (
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>Move to section</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger>Move to</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-72 w-52 overflow-y-auto">
+                {/* Moves the page from its first channel, the one its address comes from. */}
                 {folders.map(f => (
                   <DropdownMenuCheckboxItem key={f} checked={f === here} onCheckedChange={() => {
-                    const [label, sublabel] = f.split("/")
-                    moveDoc(doc.id, label, sublabel)
-                    notify({ message: `Moved to ${f.replace("/", " › ")}`, tone: "info" })
+                    const { published } = moveBlock(doc.id, here, f)
+                    notify({ message: `Moved to ${f.replace("/", " › ")}${published ? ". Its address changes when you next publish" : ""}`, tone: "info" })
                     setMenu(false)
                   }}>{f.replace("/", " › ")}</DropdownMenuCheckboxItem>
                 ))}
@@ -230,6 +236,9 @@ export function PageEditor({ doc }: { doc: Doc }) {
   const fileInput = useRef<HTMLInputElement>(null)
   useAutoHeight(titleRef, title)
   const save = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const unsaved = useRef<string | null>(null)
+  /** The version this editor last saw: what it opened with, or its own last save. */
+  const base = useRef(currentVersion(doc.id))
 
   const editor = useEditor({
     editable,
@@ -279,13 +288,23 @@ export function PageEditor({ doc }: { doc: Doc }) {
     },
     onUpdate: ({ editor: e }) => {
       if (save.current) clearTimeout(save.current)
-      save.current = setTimeout(() => autosave(doc.id, { body: toMarkdown(e) }), 400)
+      // Kept as text at once, so leaving the page can still save it after the editor is gone.
+      unsaved.current = toMarkdown(e)
+      save.current = setTimeout(() => {
+        if (unsaved.current !== null) autosave(doc.id, { body: unsaved.current })
+        unsaved.current = null; save.current = null; base.current = currentVersion(doc.id)
+      }, 400)
     },
   }, [doc.id])
   const editorRef = useRef<Editor | null>(null)
   editorRef.current = editor
 
-  useEffect(() => () => { if (save.current) clearTimeout(save.current) }, [])
+  // Leaving the page (or re-reading it after a restore) saves what was typed in the last moment.
+  useEffect(() => () => {
+    if (save.current) clearTimeout(save.current)
+    // Not over a restore or revert made meanwhile: then the page has a newer version than this editor's.
+    if (unsaved.current !== null && currentVersion(doc.id) === base.current) autosave(doc.id, { body: unsaved.current })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (editable && !doc.title) titleRef.current?.focus() }, [doc.id]) // eslint-disable-line react-hooks/exhaustive-deps
   // The toolbar's Image and the "/" menu's Image both ask for a file.
   useEffect(() => {
@@ -311,7 +330,8 @@ export function PageEditor({ doc }: { doc: Doc }) {
       outputSchema: { type: "object", properties: { id: { type: "string" }, slug: { type: "string" }, visibility: { const: "private" } } },
       run: withAgent("Saving draft", async input => {
         if (input.title !== undefined) setTitle(input.title)
-        if (input.body !== undefined) editor.commands.setContent(input.body, { contentType: "markdown" })
+        // Not as you typing: the agent's text is saved once, as its change, not again as your autosave.
+        if (input.body !== undefined) editor.commands.setContent(input.body, { contentType: "markdown", emitUpdate: false })
         const out = saveDraft({ title: input.title ?? titleRef.current?.value ?? doc.title, body: toMarkdown(editor) })
         notify({ message: "Saved as private", tone: "info" })
         return out
@@ -327,7 +347,7 @@ export function PageEditor({ doc }: { doc: Doc }) {
       : dt.types.includes(DOC_DRAG) || dt.types.includes("Files") ? "open" : null
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col"
+    <div data-doc-id={doc.id} className="relative flex min-h-0 flex-1 flex-col"
       onDragEnter={e => { const k = dragKind(e.dataTransfer); if (k) setDropping(k) }}
       onDragOver={e => { if (dragKind(e.dataTransfer)) e.preventDefault() }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(null) }}
@@ -362,15 +382,23 @@ export function PageEditor({ doc }: { doc: Doc }) {
             </div>
           )}
           {!editable && (
-            <span className="flex items-center gap-1.5 ps-1 text-small whitespace-nowrap text-muted-foreground">
-              <Icon icon={LockIcon} size="xs" />
-              {doc.kind === "post" ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}
+            <span className="flex min-w-0 items-center gap-1.5 ps-1 text-small whitespace-nowrap text-muted-foreground"
+              title={doc.kind === "post" ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}>
+              <Icon icon={LockIcon} size="xs" className="flex-none" />
+              {/* The note gives way first when the toolbar is narrow; the lock and its tooltip stay. */}
+              <span className="truncate">{doc.kind === "post" ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}</span>
             </span>
           )}
         </div>
         <div className="flex flex-none items-center gap-1.5">
+          {doc.kind === "post" && (
+            <div className={pill}>
+              <ConnectionsButton doc={doc} editable={editable} variant="toolbar" side="bottom" />
+            </div>
+          )}
           <div className={pill}>
-            <ToolButton label="History" icon={ClockIcon} onClick={() => notify({ message: `Last edited ${updated}. Earlier versions are not part of this wireframe`, tone: "info" })} />
+            {/* Cortex pages are blocks too: the same history. */}
+            <HistoryButton doc={doc} className={pillButton} />
           </div>
           <Avatar className="size-8"><AvatarFallback className="bg-primary text-small text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
         </div>

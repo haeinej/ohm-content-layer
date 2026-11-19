@@ -26,7 +26,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | A4 | Search finds a person | Type a name or handle → choose them | The graph is centred on that person | See everything that touches someone | `workspace.search`, then `workspace.graph` |
 | A5 | Ask an agent from search | Type a question → Send with no match chosen | A notice: asking arrives once an agent is connected | Reserved: ask instead of look up | *Not yet* |
 | A6 | Open from the tree | Personal repository → expand → click a page | The page is open in the editor; its row is selected; its unread dot clears | Browse by where things live | `workspace.open` |
-| A7 | Open from the graph | Graph → click a post or memory node (or focus it and press Enter) | That page is open in the editor | Browse by how things connect | `workspace.open` |
+| A7 | Open from the graph | Graph → click a block or cortex node (or focus it and press Enter) | That page is open in the editor | Browse by how things connect | `workspace.open` |
 | A8 | Follow a link | In a page, click a green `[[link]]` | The linked page is open | Move along the links you wrote | `workspace.open` |
 | A9 | Preview a link | Hover a green `[[link]]` | A card shows the page's path, title and opening lines; the page is shaded green in the tree | Check where a link goes without leaving | *UI only* |
 | A10 | Open by dragging | Drag a page from the tree onto the main panel | That page is open | Open by direct manipulation | *UI only* |
@@ -50,13 +50,18 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | B7 | Resize the panel | Drag its right edge (or arrows on the handle; double-click resets) | Width 220–640 px, remembered on this device | More room for names or the graph | *UI only* |
 | B8 | **New page** | Rack New post, ⌘N, vault ⋯ → New page (N), or folder ⋯ → New page here (N) | A new **private** page open in the editor, title focused, in that folder if chosen | Start writing | `workspace.create` |
 | B9 | Pin | Row ⋯ → Pin (P) | The page shows under Pinned at the top; press again to unpin | Keep what you return to close | *UI only* |
-| B10 | Mark as unread | Row ⋯ → Mark as unread (U) | A forest dot and bold title until opened | Remind yourself to come back | *UI only* |
+| B10 | Mark as unread | Row ⋯ → Mark as unread (U) | A bold title until opened | Remind yourself to come back | *UI only* |
 | B11 | **Rename a page** | Row ⋯ → Rename (R), or click the page's name in the path pill | The name, in place, ringed in forest; Enter or leaving keeps it, Escape puts it back | Fix or improve a title | *UI only* (or `workspace.save-draft` with `title`, private pages) |
-| B12 | **Rename a folder** | Folder ⋯ → Rename (R) | The label or sublabel is renamed; every page in it is refiled; it stays open. The notice counts published pages whose address follows on the next publish | Keep your sections in your own words | *UI only* |
-| B13 | Move a page | Row ⋯ or Path ⌄ → Move to section ›, or drag the row (or the path pill) onto a vault folder | The page is filed there | Reorganise | *UI only* |
+| B12 | **Rename a channel** | Channel ⋯ → Rename (R) | The channel is renamed everywhere a block was collected into it, and every page whose section it is is refiled; it stays open. The notice counts published pages whose address follows on the next publish | Keep your sections in your own words | *UI only* |
+| B13 | **Move a block** | Drag its row onto a channel, or above or below another block; or Row ⋯ → Move to › (Path ⌄ → Move to › moves it from its first channel) | It leaves the channel that row was in and sits in the other, at that place. Moved out of its first channel, its address changes on the next publish, and the notice says so | Reorganise, as in a file manager | *UI only* |
+| B13a | **Add to another channel** | Hold ⌥ while dragging the row onto a channel, or Row ⋯ → Channels › and check it | The block is listed there as well as everywhere it already was | Gather a block into many channels, as on Are.na | *UI only* |
+| B13b | Take out of a channel | Row ⋯ → Remove from <channel> (on its row in that channel), or Channels › and uncheck it | It leaves that channel only; its section never changes this way | Undo a collection | *UI only* |
+| B13c | **Move a channel** | Drag a channel's row onto another channel, or onto the vault row for the top | It goes inside the other channel, or to the top, with every block in it and its order; a channel that holds channels cannot go inside another yet, and is refused with a notice | Reorganise channels | *UI only* |
+| B13d | **New channel** | Vault ⋯ → New channel (C), or a channel's ⋯ → New channel inside (C) | An empty channel, shown in the tree and named in place; it stays when empty | Make a place before there is anything in it | *UI only* |
+| B13e | Delete a channel | A channel's ⋯ → Delete channel (D), offered only when it is empty | The channel is gone; a channel with blocks or channels in it is refused, with the reason | Tidy up | *UI only* |
 | B14 | Archive | Row ⋯ or Path ⌄ → Archive (A) | The page leaves the tree for Archived · n at the bottom; Restore brings it back. If it is open, it stays open with an "archived" bar and Restore | Clear clutter without deleting | *UI only* |
 | B15 | Delete | Row ⋯ or Path ⌄ → Delete (D) → **confirm** | The page is removed from the vault. If it was open, the page you had before it opens (never a blank editor). For a published page, the dialog says taking it down is its own step | Remove what you don't want | *UI only* · **asks first** |
-| B16 | Shortcuts on a row | Focus a row → P, U, R, A, D (pages) or N, R (folders) | As B9–B15, without opening the menu | Work fast from the keyboard | *UI only* |
+| B16 | Shortcuts on a row | Focus a row → P, U, R, A, D (pages) or N, C, R, D (channels) | As B9–B15, without opening the menu | Work fast from the keyboard | *UI only* |
 
 ## C. Visibility (inside the personal repository)
 
@@ -72,13 +77,13 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 
 | # | Path | Entry → steps | End state | For | Agent |
 | --- | --- | --- | --- | --- | --- |
-| D1 | **See your graph** | Repository → graph icon, or ⌘G | You at the centre, the cortex close around you, then labels, sublabels and posts, with links between posts and the people they mention | See how what you know and what you wrote connect | `workspace.graph` |
+| D1 | **See your graph** | Repository → graph icon, or ⌘G | You at the centre, the cortex close around you, then channels and blocks, with evidence (links, mentions, sources) in grey and the cortex's inferences in green | See how what you know and what you wrote connect | `workspace.graph` |
 | D2 | Explore | Hover a node | It and its edges light up; the rest fades | Read one node's neighbourhood | *UI only* |
 | D3 | Rearrange | Drag a node | Its neighbours follow on soft springs and settle back | Untangle a part to look at | *UI only* |
-| D4 | Zoom and pan | Wheel or pinch, drag the background, or + / − / fit | The view moves; post and memory labels fade in as you zoom; fit returns to all | Read detail or the whole | *UI only* |
-| D5 | **Centre on a person** | Click a person node (or a search result, or an inbox mention) | The graph is centred on them: posts that mention them, and you | See everything around someone | `workspace.graph` with `center` |
+| D4 | Zoom and pan | Wheel or pinch, drag the background, or + / − / fit | The view moves; block and cortex names fade in as you zoom; fit returns to all | Read detail or the whole | *UI only* |
+| D5 | **Centre on a person** | Click an entity node (or a search result, or an inbox mention) | The graph is centred on them: blocks that mention them, and you | See everything around someone | `workspace.graph` with `center` |
 | D6 | Back to you | Back to me | Centred on you again | Return | `workspace.graph` |
-| D7 | Filter the graph | Graph settings → Links between posts, People mentioned; Lay out again | Those edges or nodes show or hide; the layout restarts | Simplify or refresh | *UI only* |
+| D7 | Filter the graph | Graph settings → Links between blocks, Entities mentioned, Sources; Lay out again | Those edges or nodes show or hide; the layout restarts | Simplify or refresh | *UI only* |
 
 ## E. The page editor (main panel)
 
@@ -96,10 +101,15 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | E10 | Block menu | Click the handle → Insert below, Duplicate, Copy as Markdown, Delete | As chosen | Quick block actions | *UI only* |
 | E11 | **Tables** | Hover a table: row handle (insert above or below, move up or down, delete), column handle (insert left or right, move, fit, distribute, delete), + bars (add row, column), drag column edges; table handle → Header row/column, Copy as Markdown, Delete table | The table changes | Shape data in a page | *UI only* |
 | E12 | **Images** | Drop or paste an image on the page, or Image → pick a file | The image is in the page where it landed | Illustrate | *UI only* |
-| E13 | **Links** | Type `[[slug]]` | It reads as a green chunk with the linked page's title (raw while the caret is in it); it joins the graph's links | Connect pages | `workspace.save-draft` (Markdown body) |
+| E13 | **Links** | Type `[[slug]]`, or `[[slug\|your words]]` | It reads as a green chunk with the linked page's title, or your words (raw while the caret is in it); it joins the graph's links | Connect pages | `workspace.save-draft` (Markdown body) |
+| E13a | **Connect words** | Select words in one paragraph → Connect → find a block → Enter | The words become a link to it, `[[slug\|the words]]`; it is listed in the connections card, *in the text* | Tie a connection to the passage that justifies it | *UI only*: connections are yours |
+| E13b | **Connect the page** | Connections card → + Connect → find a block → Enter; then Why? (optional) | A connection on the whole block, with its line on why, listed in this card and as ↙ in the other page's card | Connect whole blocks, and say why | *UI only*: connections are yours |
+| E13d | **See a block's connections** | Page toolbar → connections button (its count), or hover a block's row in the side panel → click the dot at its right end | A card beside it: the graph around the block, the part of the tree it sits in, and its connections | Read how one block sits among the rest without leaving it | *UI only* |
+| E13e | **Connect by pulling a line** | Hover a block's row → press its dot and pull: a line follows the pointer → let go over another block's row, a graph node, or the open page | The two blocks are connected as whole blocks; a notice names both. Escape, or letting go anywhere else, connects nothing. From a block others see, it is refused with a notice | The quickest way to connect two blocks | *UI only*: connections are yours |
+| E13c | Disconnect | Connections card → hover a whole-block connection → ✕ | It is gone from both pages and the graph; a link in the text is removed by editing the text | Undo a connection | *UI only* |
 | E14 | Mention | Type `@handle` | A link; ⌘-click centres the graph on them; they join the graph | Connect people | `workspace.save-draft` |
 | E15 | **Save as Markdown** | Drag the path pill out of the window, or Path ⌄ → Save as Markdown | A `.md` file of the page | Take your writing anywhere | *UI only* |
-| E16 | History | History | A notice with the last edit; versions are not in the wireframe | Reserved: go back in time | *Not yet* |
+| E16 | **History** | Page toolbar → clock | The page's versions, as in H9 | Go back in time | `history.versions` |
 | E17 | Read a shared page | Open a page for friends or everyone | Read-only, with "changing it asks first" | Protect what others already see | *UI only* |
 
 ## F. Inbox and notifications
@@ -125,7 +135,23 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | G7 | Appearance | Settings → Appearance → System / Light / Dark; Density Compact / Comfortable / Rounded | Theme and how round and tight things are, on this device | Comfort | *UI only* |
 | G8 | Sign out | Settings → Sign out | A notice (not in the wireframe) | Leave | *Not yet* |
 
-## H. An agent, through WebMCP
+## H. History ([flows/history.md](history.md))
+
+You and agents both edit directly; every change is marked with who made it, and you revert what you don't want.
+
+| # | Path | Entry → steps | End state | For | Agent |
+| --- | --- | --- | --- | --- | --- |
+| H1 | **See history** | Repository header → history button → Dates, You or Agents | One line per entry, a verb and the page ("Edited Monday, rain"), with an icon for you, an agent, a save or a day | Know what happened, and who did it | `history.list` |
+| H2 | **A day** | Dates → a day | That day's changes, as the same lines | See a day at a glance | `history.list` with `since` |
+| H3 | **An agent's session** | Agents → a session | What it did, the changes it made, and its dead ends | See what an agent did as one task, and what not to retry | `history.list` |
+| H4 | Finish a task (agents) | An agent, when it is done | A session: what it did, its changes grouped, its dead ends | Leave the next agent what was learned | `history.session` |
+| H5 | **Open a change** | Any line that is a change | Who, when, why, what it touched as a tree, the words it changed | Read a change without opening the page | `history.list` |
+| H6 | **Revert this change** | An opened change → Revert this change | Only what it touched goes back; refused if a later change touched the same part | Undo one change, yours or an agent's | `history.revert` |
+| H7 | **Restore this version** | An opened change (here or in a page's card) → Restore this version | The page as it was right after that change | Go back to a version | `history.restore` |
+| H8 | **Save** | History → Save → a name | A named point on the line; nothing changes | Mark a moment to come back to | `history.save` |
+| H9 | **A page's versions** | Page toolbar → clock | The page's own changes and saves | See how a page came to be | `history.versions` |
+
+## I. An agent, through WebMCP
 
 An agent in the browser sees only the tools the page offers right now (Settings › Agents decides which). Each tool calls the same code as the click it stands for. While a tool runs, the page shows the agent at work, and the bell records it.
 
@@ -136,6 +162,12 @@ An agent in the browser sees only the tools the page offers right now (Settings 
 | `workspace.graph` | Shows the graph, centred on someone | D1, D5 | read-only | The graph is in the side panel |
 | `workspace.create` | Starts a private page | B8 | — | A new private page is open |
 | `workspace.save-draft` | Saves the open private page (title, Markdown body) | E1, E2, E13 | — (private only) | Saved, still private. It refuses a page others can see |
+| `history.list` | Reads the repository's history and open dead ends | H1–H6 | read-only, untrusted content | — |
+| `history.versions` | Reads the open page's versions | H9, E16 | read-only, untrusted content | — |
+| `history.revert` | Undoes one change to a private page; marked as the agent's | H6 | — (private only) | A new change, by the agent |
+| `history.restore` | Brings a private page back to a version; marked as the agent's | H7 | — (private only) | A new change, by the agent |
+| `history.save` | Names this point in history | H8 | — | A save; nothing changes |
+| `history.session` | Records a finished task, its changes and dead ends | H4 | — | A session |
 
 Nothing an agent can do here is public. Making a page visible to others, deleting, and publishing are not tools yet. When they become tools, they will be marked consequential and ask the person first, as the UI does now.
 

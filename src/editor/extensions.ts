@@ -48,7 +48,8 @@ export const SlashCommand = Extension.create({
 // ─── [[links]] and @mentions ───────────────────────────────────────────────────
 // Drawn as links in the text and followed on click; the text itself stays plain Markdown.
 
-const REF = /\[\[([a-z0-9-]+)\]\]|@([a-z0-9.-]+\.[a-z]+)/gi
+// `[[slug]]` reads as the page's title; `[[slug|the words]]` keeps your words, linked to the page.
+export const REF = /\[\[([a-z0-9-]+)(?:\|([^\]\n]+))?\]\]|@([a-z0-9.-]+\.[a-z]+)/gi
 
 export const References = (onFollow: (ref: { slug?: string; handle?: string }) => void) =>
   Extension.create({
@@ -65,7 +66,7 @@ export const References = (onFollow: (ref: { slug?: string; handle?: string }) =
                 if (!node.isText || !node.text) return
                 for (const m of node.text.matchAll(REF)) {
                   const from = pos + m.index!, to = from + m[0].length
-                  const slug = m[1], handle = m[2]
+                  const slug = m[1], words = m[2], handle = m[3]
                   const target = slug ? bySlug(slug) : undefined
                   // While the caret is in it, the link shows as written, so it can be edited.
                   const editing = selTo >= from && selFrom <= to
@@ -76,9 +77,10 @@ export const References = (onFollow: (ref: { slug?: string; handle?: string }) =
                       const chip = document.createElement("span")
                       chip.className = target ? "ohm-link" : "ohm-link is-missing"
                       chip.dataset.slug = slug
-                      chip.textContent = target ? titleOf(target) : slug
+                      chip.textContent = words ?? (target ? titleOf(target) : slug)
+                      if (words && target) chip.title = titleOf(target)
                       return chip
-                    }, { side: -1, key: `link:${slug}:${from}` }))
+                    }, { side: -1, key: `link:${slug}:${words ?? ""}:${from}` }))
                     decos.push(Decoration.inline(from, to, { class: "ohm-link-source" }))
                     continue
                   }

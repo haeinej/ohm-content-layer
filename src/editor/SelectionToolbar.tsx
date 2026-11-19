@@ -1,11 +1,11 @@
-// The toolbar that floats over selected text: ask for a change, marks, turn into.
+// The toolbar that floats over selected text: ask for a change, connect, marks, turn into.
 import { useEffect, useRef, useState } from "react"
 import { useEditorState, type Editor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
 import { CellSelection } from "@tiptap/pm/tables"
 import type { LucideIcon } from "lucide-react"
 import {
-  ArrowUpIcon, BoldIcon, CheckIcon, ChevronDownIcon, CodeIcon, ItalicIcon, MessageSquareIcon, MicIcon,
+  ArrowUpIcon, BoldIcon, CheckIcon, ChevronDownIcon, CodeIcon, ItalicIcon, LinkIcon, MicIcon,
   ScanTextIcon, StrikethroughIcon, UnderlineIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,40 @@ import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/cn"
+import { titleOf, type Doc } from "@/data/sample"
 import { BLOCK_TYPES, currentBlock } from "./commands"
+import { ConnectPicker } from "./ConnectPicker"
+import { REF } from "./extensions"
+
+/** Whether the selection touches a link or mention already in the text: those are not connected again. */
+function overlapsLink(editor: Editor) {
+  const { $from, from, to } = editor.state.selection
+  const start = $from.start()
+  for (const m of $from.parent.textContent.matchAll(REF)) {
+    const a = start + m.index!, b = a + m[0].length
+    if (from < b && to > a) return true
+  }
+  return false
+}
+
+/**
+ * Turns the selected words into a link to another block: `[[slug|the words]]`, or `[[slug]]` when the
+ * words are its title. The connection is tied to the passage that justifies it, which makes it
+ * evidence anyone can check.
+ */
+function connectSelection(editor: Editor, target: Doc) {
+  const { from, to } = editor.state.selection
+  const words = editor.state.doc.textBetween(from, to, " ").replace(/[[\]|\n]/g, "").replace(/\s+/g, " ").trim()
+  const link = !words || words === titleOf(target) ? `[[${target.slug}]]` : `[[${target.slug}|${words}]]`
+  editor.chain().focus().insertContentAt({ from, to }, link).run()
+  // Put the caret one character past the link, so it reads as connected words at once rather than as
+  // the raw text you edit; at the end of a line, that character is a space.
+  const end = from + link.length
+  const next = editor.state.doc.textBetween(end, Math.min(end + 1, editor.state.selection.$from.end()))
+  if (!next) editor.chain().insertContentAt(end, " ").run()
+  editor.commands.setTextSelection(end + 1)
+  notify({ message: `Connected to “${titleOf(target)}”`, tone: "info" })
+}
 
 const bar = "flex items-center gap-0.5 rounded-full bg-popover p-1 text-popover-foreground shade-4 backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-(--ohm-duration-open) ease-(--ohm-ease-out)"
 const sep = <span aria-hidden className="mx-1 h-4 w-px bg-border" />
@@ -51,7 +84,7 @@ function InlineField({ placeholder, onSend, onCancel, mic }: { placeholder: stri
 }
 
 export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: string }) {
-  const [mode, setMode] = useState<"tools" | "ask">("tools")
+  const [mode, setMode] = useState<"tools" | "ask" | "connect">("tools")
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -59,6 +92,8 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
       strike: e.isActive("strike"), code: e.isActive("code"), block: currentBlock(e).id,
       empty: e.state.selection.empty,
       cells: e.state.selection instanceof CellSelection,
+      // A connection is one passage: the selection has to sit inside one paragraph, heading or item.
+      onePassage: e.state.selection.$from.sameParent(e.state.selection.$to) && !overlapsLink(e),
     }),
   })
   useEffect(() => { if (s.empty) setMode("tools") }, [s.empty])
@@ -67,8 +102,12 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
   return (
     <BubbleMenu editor={editor} options={{ placement: "top", offset: 10 }}
       shouldShow={({ editor: e, state }) => e.isEditable && !state.selection.empty && !e.isActive("image")}>
-      <div className={bar} onMouseDown={e => { if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault() }}>
-        {mode === "ask" ? (
+      <div className={cn(bar, mode === "connect" && "flex-col items-stretch rounded-2xl p-1.5")}
+        onMouseDown={e => { if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault() }}>
+        {mode === "connect" ? (
+          <ConnectPicker fromId={docId} placeholder="Connect these words to…" onCancel={() => { setMode("tools"); editor.commands.focus() }}
+            onPick={target => { setMode("tools"); connectSelection(editor, target) }} />
+        ) : mode === "ask" ? (
           <InlineField placeholder="Ask for a change…" onCancel={() => setMode("tools")}
             onSend={() => { notify({ message: "Asking an agent arrives once one is connected through WebMCP", tone: "info" }); setMode("tools") }} />
 
@@ -76,6 +115,16 @@ export function SelectionToolbar({ editor, docId }: { editor: Editor; docId: str
           <Button size="sm" variant="ghost" className="h-7 gap-1.5 rounded-full px-2.5 font-normal" onClick={() => setMode("ask")}>
             <Icon icon={ScanTextIcon} size="sm" /> Ask for change
           </Button>
+          {s.onePassage && !s.cells && (
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button size="sm" variant="ghost" className="h-7 gap-1.5 rounded-full px-2.5 font-normal" onClick={() => setMode("connect")} />
+              }>
+                <Icon icon={LinkIcon} size="sm" /> Connect
+              </TooltipTrigger>
+              <TooltipContent side="top">Link these words to another block <span className="text-muted-foreground">[[</span></TooltipContent>
+            </Tooltip>
+          )}
           {sep}
           <Mark label="Bold" shortcut="⌘B" icon={BoldIcon} active={s.bold} onClick={() => editor.chain().focus().toggleBold().run()} />
           <Mark label="Italic" shortcut="⌘I" icon={ItalicIcon} active={s.italic} onClick={() => editor.chain().focus().toggleItalic().run()} />

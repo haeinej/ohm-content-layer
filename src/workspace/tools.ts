@@ -2,8 +2,12 @@
 import { useEffect } from "react"
 import { search, type SearchInput } from "@/data/search"
 import { registerStepTool } from "@/webmcp"
+import { actingAs, type Actor } from "@/data/journal"
 import { record } from "./notifications"
 import { createDraft, open, setAgent, showGraph, useWorkspace, type ToolName } from "./store"
+
+/** An agent working through this page's WebMCP tools. The draft does not say which agent, so it is named by where it works. */
+const AGENT: Actor = { kind: "agent", name: "Agent in this page" }
 
 /** Show the agent at work while a tool runs (AGENTS.md rule 13). UI calls never go through this. */
 export function withAgent<I, O>(label: string, fn: (input: I, signal: AbortSignal) => Promise<O>) {
@@ -12,7 +16,8 @@ export function withAgent<I, O>(label: string, fn: (input: I, signal: AbortSigna
     const clear = () => setAgent(null)
     signal.addEventListener("abort", clear)
     try {
-      const out = await fn(input, signal)
+      // What the tool changes is the agent's: history marks it as its version, and you can revert it.
+      const out = await actingAs(AGENT, () => fn(input, signal))
       setAgent({ state: "done", label })
       record({ kind: "agent", title: label, detail: "Done, through WebMCP" })
       setTimeout(clear, 1500)
