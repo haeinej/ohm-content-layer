@@ -3,7 +3,7 @@
 // Open in ›, Pin, Mark as unread, Rename (in place), Move to ›, Channels ›, Archive, Delete.
 // Beside it on a block, a dot: click it for the block's connections card, or pull a line from it to
 // another block to connect them (ConnectionsCard).
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EllipsisIcon } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut,
@@ -32,13 +32,24 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
   const { rev } = useWorkspace()
   const linked = useLinkedHover()
   const [row, setRow] = useState<Row | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuOpen, setMenuVisible] = useState(false)
   const [cardOpen, setCardOpen] = useState(false)
   const [linking, setLinking] = useState(false)
   // Something open over a row holds it still: the menu, the connections card, a line being pulled from
   // its dot, or renaming.
   const held = menuOpen || cardOpen || linking
   const [renaming, setRenaming] = useState<string | null>(null)
+  const renameFromMenu = useRef(false)
+  const setMenuOpen = (open: boolean) => {
+    if (open) renameFromMenu.current = false
+    setMenuVisible(open)
+  }
+  const startRename = (rowId: string) => {
+    // The inline field takes focus. The menu must not return focus to the row on close.
+    renameFromMenu.current = menuOpen
+    setRenaming(rowId)
+    setMenuOpen(false)
+  }
 
   const place = useCallback((el: HTMLElement) => {
     if (!container) return
@@ -125,7 +136,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
   function run(k: string, rowId: string): boolean {
     const folder = folderPath(rowId)
     if (folder) {
-      if (k === "r") { setRenaming(rowId); setMenuOpen(false); return true }
+      if (k === "r") { startRename(rowId); return true }
       if (k === "c" && !folder.includes("/")) { setMenuOpen(false); startChannel(folder); return true }
       if (k === "d") {
         setMenuOpen(false)
@@ -148,7 +159,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     switch (k) {
       case "p": togglePin(id); done(marks.pinned.has(id) ? `Pinned “${titleOf(doc)}”` : `Unpinned “${titleOf(doc)}”`); break
       case "u": toggleUnread(id); break
-      case "r": if (!post) return false; setRenaming(rowId); break
+      case "r": if (!post) return false; startRename(rowId); return true
       case "a": if (!post) return false; toggleArchive(id); done(marks.archived.has(id) ? `Archived “${titleOf(doc)}”` : `Restored “${titleOf(doc)}”`); break
       case "d": if (!post) return false; requestDelete(id); break
       default: return false
@@ -174,7 +185,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
           }>
             <Icon icon={EllipsisIcon} size="sm" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-56"
+          <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-56" finalFocus={() => !renameFromMenu.current}
             onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase(), row.id)) e.preventDefault() }}>
             <DropdownMenuItem onClick={() => run("n", row.id)}>New block here<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>
             {!folder.includes("/") && <DropdownMenuItem onClick={() => run("c", row.id)}>New channel inside<DropdownMenuShortcut>C</DropdownMenuShortcut></DropdownMenuItem>}
@@ -200,7 +211,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
           }>
             <Icon icon={EllipsisIcon} size="sm" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-60"
+          <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-60" finalFocus={() => !renameFromMenu.current}
             onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase(), row.id)) e.preventDefault() }}>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>Open in</DropdownMenuSubTrigger>
