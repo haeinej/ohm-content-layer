@@ -1,10 +1,10 @@
-import { all, people, type Doc } from "./sample"
+import { all, entities, isBlock, locationOf, type Doc } from "./sample"
 import { SETTINGS_TABS } from "@/workspace/settings-tabs"
 import { searchInput } from "./source"
 import type { SearchHit, SearchProvider, SearchScope } from "./search"
 
 const inScope = (doc: Doc, scope: SearchScope) =>
-  scope === "all" || (scope === "vault" ? doc.kind === "post" : scope === "cortex" ? doc.kind !== "post" : false)
+  scope === "all" || (scope === "vault" ? isBlock(doc) : scope === "cortex" ? !isBlock(doc) : false)
 
 const excerpt = (body: string, q: string) => {
   const text = body.replace(/^#.*$/m, "").replace(/\s+/g, " ").trim()
@@ -25,15 +25,15 @@ export const sampleSearch: SearchProvider = async (input, signal) => {
     .map(d => ({ d, score: (d.title.toLowerCase().includes(q) ? 2 : 0) + (d.body.toLowerCase().includes(q) ? 1 : 0) }))
     .filter(r => r.score > 0)
     .sort((a, b) => b.score - a.score || b.d.updated.localeCompare(a.d.updated))
-    .map(({ d }): SearchHit => ({ id: d.id, title: d.title, kind: d.kind, label: d.sublabel ? `${d.label} › ${d.sublabel}` : d.label, excerpt: excerpt(d.body, q) }))
+    .map(({ d }): SearchHit => ({ id: d.id, title: d.title, kind: d.kind, location: locationOf(d).replaceAll("/", " › "), excerpt: excerpt(d.body, q) }))
   const words = q.split(/\s+/).filter(Boolean)
-  const who: SearchHit[] = scope === "all" || scope === "people"
-    ? people.filter(p => words.every(w => `${p.name} ${p.handle}`.toLowerCase().includes(w)))
-      .map(p => ({ id: p.did, title: p.name, kind: "person", label: "people", excerpt: `@${p.handle}` }))
+  const who: SearchHit[] = scope === "all" || scope === "entities"
+    ? entities.filter(p => words.every(w => `${p.name} ${p.handle}`.toLowerCase().includes(w)))
+      .map(p => ({ id: p.did, title: p.name, kind: "entity", location: "entities", excerpt: `@${p.handle}` }))
     : []
   const settings: SearchHit[] = scope === "all" || scope === "settings"
     ? SETTINGS_TABS.filter(t => words.every(w => `${t.label} ${t.keywords}`.toLowerCase().includes(w)))
-      .map(t => ({ id: `setting:${t.id}`, title: t.label, kind: "setting", label: "settings", excerpt: t.description }))
+      .map(t => ({ id: `setting:${t.id}`, title: t.label, kind: "setting", location: "settings", excerpt: t.description }))
     : []
   return [...docs, ...who, ...settings].slice(0, limit)
 }

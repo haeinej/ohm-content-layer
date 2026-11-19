@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { notify } from "@/components/ui/notice"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { cortex, posts } from "@/data/sample"
+import { blocks, cortex, channelRecords } from "@/data/sample"
 import { SETTINGS_TABS, type SettingsTab } from "./settings-tabs"
 import { panelTitle } from "./Surface"
 import {
@@ -60,9 +60,9 @@ const copy = (text: string) => {
 
 const TOOLS: { name: ToolName; title: string; does: string; reads: boolean }[] = [
   { name: "workspace.search", title: "Search", does: "Searches your vault and cortex", reads: true },
-  { name: "workspace.open", title: "Open", does: "Opens a post, memory or skill", reads: true },
+  { name: "workspace.open", title: "Open", does: "Opens a block or cortex file", reads: true },
   { name: "workspace.graph", title: "Show graph", does: "Shows the graph of your blocks, or of those mentioning a person", reads: true },
-  { name: "workspace.create", title: "New post", does: "Starts a private draft", reads: false },
+  { name: "workspace.create", title: "New block", does: "Starts a private draft", reads: false },
   { name: "workspace.save-draft", title: "Save draft", does: "Saves the open draft as private", reads: false },
   { name: "history.list", title: "History", does: "Reads who changed what, and when", reads: true },
   { name: "history.save", title: "Save", does: "Names this point in history; changes nothing", reads: false },
@@ -110,14 +110,14 @@ function Page({ tab }: { tab: SettingsTab }) {
         <p className="text-small text-muted-foreground">Nothing an agent does here is public. Publishing will be its own step, and it always asks you.</p>
       </>
     case "vault": {
-      const labels = [...new Set(posts.map(p => p.label))]
+      const paths = channelRecords.map(channel => channel.path)
       return <>
-        <Section title="New posts">
-          <Row title="Start private" note="Every new post is yours alone until you choose who it is for." action={<Badge variant="secondary">Always</Badge>} />
+        <Section title="New blocks">
+          <Row title="Start private" note="Every new block is yours alone until you choose who it is for." action={<Badge variant="secondary">Always</Badge>} />
         </Section>
         <Section title="Labels">
-          {labels.map(l => (
-            <Row key={l} title={l} note={`${posts.filter(p => p.label === l).length} posts`} action={<Button variant="secondary">Rename</Button>} />
+          {paths.map(path => (
+            <Row key={path} title={path} note={`${blocks.filter(block => block.homeChannel === path).length} blocks`} action={<Button variant="secondary">Rename</Button>} />
           ))}
         </Section>
       </>

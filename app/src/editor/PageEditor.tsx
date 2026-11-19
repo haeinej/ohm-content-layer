@@ -1,7 +1,7 @@
 // The page editor: a block editor in the manner of the reference recordings. The page's path on top
 // (drag it out to save it as Markdown, or onto a vault folder to file it), then the title, "/" for
 // commands, a floating toolbar on selected text, a handle on each block with its menu, tables with
-// row and column handles, and images by dropping or pasting files. Private posts save as you type;
+// row and column handles, and images by dropping or pasting files. Private blocks save as you type;
 // others are read-only here, because changing what other people see asks first (AGENTS.md rule 11).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { EditorContent, useEditor, type Editor } from "@tiptap/react"
@@ -28,7 +28,7 @@ import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { byId, bySlug, channelRecords, channelsOf, posts, titleOf, type Doc } from "@/data/sample"
+import { isBlock, locationOf, byId, bySlug, channelRecords, channelsOf, blocks, titleOf, type Doc } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { registerStepTool } from "@/webmcp"
 import { DOC_DRAG, dragOutAsMarkdown, openDropped, saveAsMarkdown } from "@/workspace/drop"
@@ -79,8 +79,8 @@ function useAutoHeight(ref: React.RefObject<HTMLTextAreaElement | null>, value: 
   }, [ref, value])
 }
 
-/** Where a page lives: vault › label › sublabel › title, or cortex › folder › title. */
-const pathOf = (d: Doc) => [d.kind === "post" ? "vault" : "cortex", d.label, d.sublabel, titleOf(d)].filter(Boolean) as string[]
+/** Where a page lives: vault › home channel › title, or cortex › folder › title. */
+const pathOf = (d: Doc) => [isBlock(d) ? "vault" : "cortex", ...locationOf(d).split("/"), titleOf(d)].filter(Boolean) as string[]
 
 /**
  * The page's path, in a pill. Click the page's name to rename it in place. Drag the pill out to save
@@ -89,16 +89,16 @@ const pathOf = (d: Doc) => [d.kind === "post" ? "vault" : "cortex", d.label, d.s
  */
 function PathPill({ doc, markdown, onPickFile, onRenamed }: { doc: Doc; markdown: () => string; onPickFile: () => void; onRenamed: (title: string) => void }) {
   const path = pathOf(doc)
-  const post = doc.kind === "post"
+  const post = isBlock(doc)
   const [renaming, setRenaming] = useState(false)
   const [menu, setMenu] = useState(false)
   const folders = useMemo(() => {
     const set = new Set<string>()
-    for (const p of posts) for (const c of channelsOf(p)) { set.add(c.split("/")[0]); set.add(c) }
+    for (const p of blocks) for (const c of channelsOf(p)) { set.add(c.split("/")[0]); set.add(c) }
     for (const c of channelRecords) set.add(c.path)
     return [...set].sort()
-  }, [doc.updated, doc.label, doc.sublabel, doc.channels]) // eslint-disable-line react-hooks/exhaustive-deps
-  const here = doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label
+  }, [doc.updated, doc.homeChannel, doc.channels]) // eslint-disable-line react-hooks/exhaustive-deps
+  const here = locationOf(doc)
   const md = () => `# ${titleOf(doc)}\n\n${markdown()}`
   const rename = () => { if (post) { setMenu(false); setRenaming(true) } }
   const key = (e: React.KeyboardEvent) => {
@@ -222,7 +222,7 @@ function BlockMenu({ editor, block, updated, onClose }: { editor: Editor; block:
 
 export function PageEditor({ doc }: { doc: Doc }) {
   const { agentsAllowed, offered } = useWorkspace()
-  const editable = doc.kind === "post" && doc.visibility === "private"
+  const editable = isBlock(doc) && doc.visibility === "private"
   const [title, setTitle] = useState(doc.title)
   const [plusOpen, setPlusOpen] = useState(false)
   const [iconOpen, setIconOpen] = useState(false)
@@ -381,15 +381,15 @@ export function PageEditor({ doc }: { doc: Doc }) {
           )}
           {!editable && (
             <span className="flex min-w-0 items-center gap-1.5 ps-1 text-small whitespace-nowrap text-muted-foreground"
-              title={doc.kind === "post" ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}>
+              title={isBlock(doc) ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}>
               <Icon icon={LockIcon} size="xs" className="flex-none" />
               {/* The note gives way first when the toolbar is narrow; the lock and its tooltip stay. */}
-              <span className="truncate">{doc.kind === "post" ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}</span>
+              <span className="truncate">{isBlock(doc) ? `For ${doc.visibility === "public" ? "everyone" : "friends"}: changing it asks first` : "From your cortex"}</span>
             </span>
           )}
         </div>
         <div className="flex flex-none items-center gap-1.5">
-          {doc.kind === "post" && (
+          {isBlock(doc) && (
             <div className={pill}>
               <ConnectionsButton doc={doc} editable={editable} variant="toolbar" side="bottom" />
             </div>

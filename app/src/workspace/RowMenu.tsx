@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { byId, channelRecords, channelsOf, docIdOf, isSection, placedIn, posts, sectionOf, titleOf } from "@/data/sample"
+import { isBlock, locationOf, byId, channelRecords, channelsOf, docIdOf, placedIn, blocks, titleOf } from "@/data/sample"
 import {
   collect, createDraft, deleteChannel, marks, moveBlock, open, uncollect, setRepoMode, showGraph, toggleArchive, togglePin, toggleUnread, useWorkspace,
 } from "./store"
@@ -26,7 +26,7 @@ const folderPath = (id?: string) => (id?.startsWith("vault:") ? id.slice(6) : nu
 const isTarget = (id?: string) => isPage(id) || !!folderPath(id)
 /** Whether a channel holds no blocks and no channels. */
 const isEmpty = (path: string) =>
-  !posts.some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) && !channelRecords.some(c => c.path.startsWith(`${path}/`))
+  !blocks.some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) && !channelRecords.some(c => c.path.startsWith(`${path}/`))
 
 export function RowMenu({ container }: { container: HTMLElement | null }) {
   const { rev } = useWorkspace()
@@ -112,10 +112,10 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     })
   })
 
-  /** Every channel: the site sections and the channels of your own. */
+  /** Paths of the channels in this home. */
   const channels = useMemo(() => {
     const set = new Set<string>()
-    for (const p of posts) for (const c of channelsOf(p)) { set.add(c.split("/")[0]); set.add(c) }
+    for (const p of blocks) for (const c of channelsOf(p)) { set.add(c.split("/")[0]); set.add(c) }
     // Channels are records: an empty one is offered too.
     for (const c of channelRecords) set.add(c.path)
     return [...set].sort()
@@ -134,12 +134,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
         return true
       }
       if (k === "n") {
-        // In a site section the new block is filed there; in a channel of your own it is collected
-        // into it, and filed under `other` until you give it a section.
-        if (isSection(folder)) {
-          const [label, sublabel] = folder.split("/")
-          createDraft({ label, sublabel })
-        } else createDraft({ channels: [folder] })
+        createDraft({ homeChannel: folder })
         setMenuOpen(false)
         return true
       }
@@ -148,7 +143,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
     id = docIdOf(id)
     const doc = byId(id)
     if (!doc) return false
-    const post = doc.kind === "post"
+    const post = isBlock(doc)
     const done = (message: string) => notify({ message, tone: "info" })
     switch (k) {
       case "p": togglePin(id); done(marks.pinned.has(id) ? `Pinned “${titleOf(doc)}”` : `Unpinned “${titleOf(doc)}”`); break
@@ -166,8 +161,8 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
   const doc = row && !folder ? byId(docIdOf(row.id)) : undefined
   /** The channel this row shows the block in, when it is not its section. */
   const placed = row ? placedIn(row.id) : null
-  const post = doc?.kind === "post"
-  const here = doc ? (doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label) : ""
+  const post = isBlock(doc)
+  const here = doc ? locationOf(doc) : ""
 
   return <>
     {row && folder && !renaming && (
@@ -181,7 +176,7 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="right" sideOffset={6} className="w-56"
             onKeyDown={e => { if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && run(e.key.toLowerCase(), row.id)) e.preventDefault() }}>
-            <DropdownMenuItem onClick={() => run("n", row.id)}>New page here<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>
+            <DropdownMenuItem onClick={() => run("n", row.id)}>New block here<DropdownMenuShortcut>N</DropdownMenuShortcut></DropdownMenuItem>
             {!folder.includes("/") && <DropdownMenuItem onClick={() => run("c", row.id)}>New channel inside<DropdownMenuShortcut>C</DropdownMenuShortcut></DropdownMenuItem>}
             <DropdownMenuItem onClick={() => run("r", row.id)}>Rename<DropdownMenuShortcut>R</DropdownMenuShortcut></DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -224,9 +219,9 @@ export function RowMenu({ container }: { container: HTMLElement | null }) {
               <DropdownMenuSubTrigger disabled={!post}>Channels</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-72 w-52 overflow-y-auto">
                 {channels.map(c => {
-                  const section = sectionOf(doc) === c
+                  const home = doc.homeChannel === c
                   return (
-                    <DropdownMenuCheckboxItem key={c} disabled={section} checked={section || !!doc.channels?.includes(c)} onCheckedChange={on => {
+                    <DropdownMenuCheckboxItem key={c} disabled={home} checked={home || !!doc.channels?.includes(c)} onCheckedChange={on => {
                       if (on) collect(doc.id, c); else uncollect(doc.id, c)
                       notify({ message: `${on ? "Added to" : "Removed from"} ${c.replace("/", " › ")}`, tone: "info" })
                     }}>{c.replace("/", " › ")}</DropdownMenuCheckboxItem>

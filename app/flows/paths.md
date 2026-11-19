@@ -25,7 +25,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | A3 | Search finds a setting | Type a setting's word (e.g. "dark") → choose it | That settings page is open | Reach a setting without browsing | `workspace.search` (`scope: settings`) |
 | A4 | Search finds a person | Type a name or handle → choose them | The graph is centred on that person | See everything that touches someone | `workspace.search`, then `workspace.graph` |
 | A5 | Ask an agent from search | Type a question → Send with no match chosen | A notice: asking arrives once an agent is connected | Reserved: ask instead of look up | *Not yet* |
-| A6 | Open from the tree | Personal repository → expand → click a page | The page is open in the editor; its row is selected; its unread dot clears | Browse by where things live | `workspace.open` |
+| A6 | Open from the tree | Home → expand → click a page | The page is open in the editor; its row is selected; its unread dot clears | Browse by where things live | `workspace.open` |
 | A7 | Open from the graph | Graph → click a block or cortex node (or focus it and press Enter) | That page is open in the editor | Browse by how things connect | `workspace.open` |
 | A8 | Follow a link | In a page, click a green `[[link]]` | The linked page is open | Move along the links you wrote | `workspace.open` |
 | A9 | Preview a link | Hover a green `[[link]]` | A card shows the page's path, title and opening lines; the page is shaded green in the tree | Check where a link goes without leaving | *UI only* |
@@ -34,21 +34,21 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | A13 | **Back and forward** | Toolbar ← →, or ⌘[ and ⌘] | The previous or next page you opened is open again, revealed in the tree | Retrace your steps | *UI only* |
 | A12 | Open in a new tab | Row ⋯ or Path ⌄ → Open in › New tab | The page opens in a new tab (`?open=<id>`) | Keep two pages side by side | *UI only* |
 
-## B. The personal repository (side panel)
+## B. The home (side panel)
 
 | # | Path | Entry → steps | End state | For | Agent |
 | --- | --- | --- | --- | --- | --- |
-| B1 | Show or hide the panel | Rack Personal repo, or ⌘\ (brings back the panel you last had) | The panel shows or hides; the open page never changes | Make room, or come back to your files | *UI only* |
+| B1 | Show or hide the panel | Rack Home, or ⌘\ (brings back the panel you last had) | The panel shows or hides; the open page never changes | Make room, or come back to your files | *UI only* |
 | B1a | **Reveal the open page** | Automatic: open a page from anywhere | Its folders open in the tree; it scrolls into view, is selected and flashes once | Always know where you are | Any tool that opens a page |
 | B1b | Reveal a folder from the path | Click a folder in the path pill | The panel shows the repository with that folder open, scrolled to, flashing | Jump from where a page lives to its neighbours | *UI only* |
 | B2 | Choose what shows | Your pill (picture and name) → All, or Cortex and/or Vault | The tree and graph show only those | Focus on memory, or on writing | *UI only* |
-| B3 | Open and close folders | Click a folder or the cortex/vault row (each side's ⋯ also has Expand all) | Folders open or closed (cortex, vault, labels, sublabels) | Walk the hierarchy | *UI only* |
+| B3 | Open and close folders | Click a folder or the cortex/vault row (each side's ⋯ also has Expand all) | Folders open or closed (cortex, vault, channel paths) | Walk the hierarchy | *UI only* |
 | B4 | Expand one side | Cortex or vault ⋯ → Expand all / Collapse all (E) | Everything inside that one opens or closes | Survey one side at once | *UI only* |
 | B5 | Show only one side | Cortex or vault ⋯ → Show only… (O) | The scope becomes that one | Same as B2, from the row | *UI only* |
 | B6 | List or graph | Header: one switch, showing the view it goes to (graph icon in the list, list icon in the graph) | The panel shows the list or the graph of the same scope and filters | Switch between where and how things connect | `workspace.graph` opens the graph |
 | B6a | **Filter** | Header funnel → Platform (your site, Bluesky, Instagram, X), Type (text, photo, table, checklist; memory, observation, skill, tool), Who it is for, Edited (any time, past week, month, year), Status (unread, pinned); Clear | The list and the graph show only matching pages; folders open so matches are in view; a dot on the funnel while any filter is on; "Nothing matches" with Clear when empty | Find a kind of page across folders | *UI only* |
 | B7 | Resize the panel | Drag its right edge (or arrows on the handle; double-click resets) | Width 220–640 px, remembered on this device | More room for names or the graph | *UI only* |
-| B8 | **New page** | Rack New post, ⌘N, vault ⋯ → New page (N), or folder ⋯ → New page here (N) | A new **private** page open in the editor, title focused, in that folder if chosen | Start writing | `workspace.create` |
+| B8 | **New block** | Rack New block, ⌘N, vault ⋯ → New block (N), or folder ⋯ → New block here (N) | A new **private** page open in the editor, title focused, in that folder if chosen | Start writing | `workspace.create` |
 | B9 | Pin | Row ⋯ → Pin (P) | The page shows under Pinned at the top; press again to unpin | Keep what you return to close | *UI only* |
 | B10 | Mark as unread | Row ⋯ → Mark as unread (U) | A bold title until opened | Remind yourself to come back | *UI only* |
 | B11 | **Rename a page** | Row ⋯ → Rename (R), or click the page's name in the path pill | The name, in place, ringed in forest; Enter or leaving keeps it, Escape puts it back | Fix or improve a title | *UI only* (or `workspace.save-draft` with `title`, private pages) |
@@ -63,7 +63,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | B15 | Delete | Row ⋯ or Path ⌄ → Delete (D) → **confirm** | The page is removed from the vault. If it was open, the page you had before it opens (never a blank editor). For a published page, the dialog says taking it down is its own step | Remove what you don't want | *UI only* · **asks first** |
 | B16 | Shortcuts on a row | Focus a row → P, U, R, A, D (pages) or N, C, R, D (channels) | As B9–B15, without opening the menu | Work fast from the keyboard | *UI only* |
 
-## C. Visibility (inside the personal repository)
+## C. Visibility (inside the home)
 
 | # | Path | Entry → steps | End state | For | Agent |
 | --- | --- | --- | --- | --- | --- |
@@ -116,7 +116,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 
 | # | Path | Entry → steps | End state | For | Agent |
 | --- | --- | --- | --- | --- | --- |
-| F1 | **Inbox** | Rack Inbox (a dot when there are new items) | The side panel lists replies, mentions, friend requests and cortex notes, newest first | See what came in from others | *UI only* |
+| F1 | **Inbox** | Rack Inbox (a dot when there are new items) | The side panel lists replies, mentions, friend requests and cortex observations, newest first | See what came in from others | *UI only* |
 | F2 | Open an inbox item | Click it | About a post: that post opens. Otherwise its own view opens (a friend request: Accept / Not now; a mention: see them in the graph). It counts as read | Respond | *UI only* |
 | F3 | **Notifications** | Rack bell (a dot when unread; it pulses while an agent works) | A panel: **Agent** (what an agent is doing now, and what agents did through WebMCP) and **System** (the workspace's notices) | Know what happened, especially what an agent did | *UI only* (every tool run is recorded here) |
 | F4 | Act on a notification | Click one about a page; × removes one; Clear all | Opens the page / removes / empties | Follow up or tidy | *UI only* |
@@ -130,7 +130,7 @@ Nothing in the wireframe is saved between reloads. Every end state below is true
 | G2 | Your profile | Settings → Your profile | Name, description and picture fields; Review changes notes that publishing your profile asks first | Shape how other apps show you | *UI only* · publishing **asks first** |
 | G3 | Identity | Settings → Identity | Your DID (copy), handle, server | Know and share your root identity | *UI only* |
 | G4 | **Agents** | Settings → Agents → Let agents use this page; one switch per tool | Tools are offered to an agent, or withdrawn, at once | Control what an agent can do here | Governs every tool |
-| G5 | Vault | Settings → Vault | New posts start private (always); your labels | Review how your vault is organised | *UI only* |
+| G5 | Vault | Settings → Vault | New blocks start private (always); your labels | Review how your vault is organised | *UI only* |
 | G6 | Cortex | Settings → Cortex | Memories, observations waiting, skills | Review what your agents remember | *UI only* |
 | G7 | Appearance | Settings → Appearance → System / Light / Dark; Density Compact / Comfortable / Rounded | Theme and how round and tight things are, on this device | Comfort | *UI only* |
 | G8 | Sign out | Settings → Sign out | A notice (not in the wireframe) | Leave | *Not yet* |

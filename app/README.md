@@ -12,8 +12,8 @@ An agent that clicks through pixels is slow and fragile. It can also do things t
 
 A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/workspace.md)):
 
-- A **rack** on the page: search, new post, **personal repository** (a pill with your picture and name; All, Cortex, Vault; visibility inside it), **inbox**, notifications, and you.
-- A **side panel** card that becomes what the rack chose. The personal repo has cortex and vault as checkable top-level folders, and a **graph** inside it. The graph shows your blocks and how they connect: each block a node, each channel a soft area around its blocks, links in the text grey and connections you made forest, thicker the more two blocks share. It behaves like Obsidian's: springy, with hover highlighting and drag.
+- A **rack** on the page: search, new block, **home** (a pill with your picture and name; All, Cortex, Vault; visibility inside it), **inbox**, notifications, and you.
+- A **side panel** card that becomes what the rack chose. The home has cortex and vault as checkable top-level folders, and a **graph** inside it. The graph shows your blocks and how they connect: each block a node, each channel a soft area around its blocks, links in the text grey and whole-block links forest, thicker the more two blocks share. It behaves like Obsidian's: springy, with hover highlighting and drag.
 - A **main panel** card where every page opens in a block editor:
   - **Path:** the page's path sits in a pill. Drag it out to save the page as `.md`, or onto a channel to move it there.
   - **Editing:** a `/` menu, a floating selection toolbar, and block handles with menus.
@@ -33,6 +33,12 @@ The editor saves pending typing when you switch blocks. Restoring a version or r
 npm ci --prefix app
 npm --prefix app run dev   # http://localhost:5190
 ```
+
+## Blocks, channels and history
+
+Choose **New block** to start a private draft. From a channel's menu, **New block here** uses that channel as the block's home. A block can appear in several channels, each with its own order. A post is a published block.
+
+Choose **Home**, then **History**, to see sample changes by date or author. A block's clock opens its own vault versions. Cortex files have their own history. The connections card can show a sample cortex inference whose evidence cites a block version.
 
 ## Where things are
 

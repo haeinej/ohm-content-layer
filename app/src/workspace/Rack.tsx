@@ -44,9 +44,9 @@ export function Rack() {
         <span className="size-icon rounded-full bg-primary dark:bg-foreground" />
       </span>
       <RackButton label="Search" shortcut="⌘K" active={searchOpen} onClick={() => setSearchOpen(true)}><RackIcon icon={icons.search} /></RackButton>
-      <RackButton label="New post" shortcut="⌘N" onClick={() => createDraft()}><RackIcon icon={icons.write} /></RackButton>
+      <RackButton label="New block" shortcut="⌘N" onClick={() => createDraft()}><RackIcon icon={icons.write} /></RackButton>
       <div className="h-4" />
-      <RackButton label="Personal repo" active={side === "repo"} onClick={() => toggleSide("repo")}><RackIcon icon={FolderGitIcon} /></RackButton>
+      <RackButton label="Home" active={side === "repo"} onClick={() => toggleSide("repo")}><RackIcon icon={FolderGitIcon} /></RackButton>
       <RackButton label={unread ? `Inbox, ${unread} new` : "Inbox"} active={side === "inbox"} onClick={() => toggleSide("inbox")}>
         <span className="relative flex">
           <RackIcon icon={InboxIcon} />

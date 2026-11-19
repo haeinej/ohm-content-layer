@@ -8,7 +8,9 @@
 // Every edge is the person's own: a link they wrote in a block's text (`[[slug]]`), or a connection
 // they made between whole blocks. Both are evidence, rebuilt from the content. What agents work out
 // about the person stays in the cortex and is not drawn here.
-import { bySlug, channelRecords, channelsOf, mentions, outgoing, owner, personByHandle, posts, sees, type Audience, type Doc, type Person } from "@/data/sample"
+import { blockKey, blocks, byId, channelRecords, channelsOf, entityByHandle, mentions, owner, sees, type Audience, type Doc, type Entity } from "@/data/sample"
+import { sampleSource } from "@/data/sample-source"
+import type { VaultEvidence } from "@/data/source"
 
 export type GraphNode = {
   id: string
@@ -20,18 +22,18 @@ export type GraphNode = {
 }
 
 /** A link written in the text, or a connection made between whole blocks. */
-export type EdgeKind = "links" | "connects"
+export type EdgeKind = VaultEvidence[number]["kind"]
 /**
  * One edge per pair of blocks. `kinds` says which ways they are joined; `weight` is how strongly:
- * one for each way they are joined, and one for each channel they share. GraphView draws it as
+ * one for each evidence kind, and one for each channel they share. GraphView draws it as
  * the line's thickness.
  */
-export type GraphEdge = { source: string; target: string; kinds: EdgeKind[]; weight: number; why?: string }
+export type GraphEdge = { source: string; target: string; kinds: EdgeKind[]; weight: number; wholeBlock?: boolean; why?: string }
 
 /** A channel, as the area its blocks are drawn in. */
 export type GraphChannel = { path: string; name: string; parent?: string; depth: number; members: string[] }
 
-export type Graph = { center: Person; nodes: GraphNode[]; edges: GraphEdge[]; channels: GraphChannel[] }
+export type Graph = { center: Entity; nodes: GraphNode[]; edges: GraphEdge[]; channels: GraphChannel[] }
 
 export type GraphFilters = {
   /** Handle or DID. Defaults to the owner; anyone else shows the owner's blocks that mention them. */
@@ -47,16 +49,16 @@ export type GraphFilters = {
   /** The repository's filters, as a test each page must pass. */
   keep?: (d: Doc) => boolean
 }
-export const DEFAULT_FILTERS = { vault: true, links: true, connections: true, audience: "personal" as Audience }
+export const DEFAULT_FILTERS = { vault: true, links: true, connections: true, audience: "private" as Audience }
 
 export function buildGraph(filters: GraphFilters = {}): Graph {
   const f = { ...DEFAULT_FILTERS, ...filters }
-  const center = (f.center && personByHandle(f.center)) || owner
+  const center = (f.center && entityByHandle(f.center)) || owner
   const isOwner = center.did === owner.did
 
-  const docs = !f.vault ? [] : (isOwner ? posts : posts.filter(p => mentions(p).includes(center.handle)))
+  const docs = !f.vault ? [] : (isOwner ? blocks : blocks.filter(p => mentions(p).includes(center.handle)))
     .filter(d => sees(f.audience, d) && (!filters.keep || filters.keep(d)))
-  const nodes = new Map<string, GraphNode>(docs.map(d => [d.id, { id: d.id, name: d.title, doc: d, channels: channelsOf(d), degree: 0 }]))
+  const nodes = new Map<string, GraphNode>(docs.map(d => [blockKey(d.id), { id: blockKey(d.id), name: d.title, doc: d, channels: channelsOf(d), degree: 0 }]))
 
   // Channels, with every channel above them: `a/b` is b inside a.
   const channels = new Map<string, GraphChannel>()
@@ -80,26 +82,27 @@ export function buildGraph(filters: GraphFilters = {}): Graph {
     }
   }
   // Channels are records: yours show even when empty, as a label with no area yet.
-  if (isOwner && f.vault && f.audience === "personal") for (const { path } of channelRecords) channel(path)
+  if (isOwner && f.vault && f.audience === "private") for (const { path } of channelRecords) channel(path)
 
   // Edges: what each block points at, merged into one per pair.
   const edges = new Map<string, GraphEdge>()
-  const join = (a: string, b: string, kind: EdgeKind, why?: string) => {
+  const join = (a: string, b: string, kind: EdgeKind, wholeBlock: boolean, why?: string) => {
     if (a === b || !nodes.has(a) || !nodes.has(b)) return
     const key = [a, b].sort().join("|")
     const held = edges.get(key) ?? { source: a, target: b, kinds: [], weight: 0 }
     if (!held.kinds.includes(kind)) held.kinds.push(kind)
+    if (wholeBlock) held.wholeBlock = true
     if (why && !held.why) held.why = why
     edges.set(key, held)
   }
-  for (const n of nodes.values()) {
-    for (const out of outgoing(n.doc)) {
-      const target = bySlug(out.slug)
-      if (!target) continue
-      if (out.inText && f.links) join(n.id, target.id, "links")
-      const whole = (n.doc.connect ?? []).some(c => c.to === out.slug)
-      if (whole && f.connections) join(n.id, target.id, "connects", out.why)
-    }
+  for (const edge of sampleSource.workspace.evidence()) {
+    const wholeBlock = edge.kind === "links" && edge.at === "connect"
+    if (wholeBlock ? !f.connections : !f.links) continue
+    const target = byId(edge.to.slice("block:".length))
+    const why = wholeBlock && target
+      ? nodes.get(edge.from)?.doc.connect?.find(each => each.to === target.slug)?.why
+      : undefined
+    join(edge.from, edge.to, edge.kind, wholeBlock, why)
   }
   // How strongly: each way they are joined, and each channel they share.
   for (const e of edges.values()) {

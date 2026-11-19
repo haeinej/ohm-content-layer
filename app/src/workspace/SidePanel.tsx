@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { byId, channelRecords, channelsOf, cortex, docIdOf, inbox, inOrder, PLACED, placedIn, posts, sectionOf, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
+import { isBlock, locationOf, channelRowId, byId, channelRecords, channelsOf, cortex, docIdOf, inbox, inOrder, placedIn, blocks, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
 import { cn } from "@/lib/cn"
 import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
@@ -29,13 +29,13 @@ import {
 
 /**
  * Folders › folders inside them › items. In the vault the folders are channels, and a block is in
- * every channel it was collected into: its row in its site section has its own id, and each other
- * row `id@channel`. In the cortex the folders are fixed categories. Folder ids are prefixed so they
+ * every channel it was collected into: its row in its home channel has its own id, and each other
+ * row `<id>/<channel path>`. In the cortex the folders are fixed categories. Folder ids are prefixed so they
  * never collide with docs.
  */
 type Placement = { path: string; id: string }
-const inSection = (d: Doc): Placement[] => [{ path: sectionOf(d), id: d.id }]
-const inChannels = (d: Doc): Placement[] => channelsOf(d).map((path, i) => ({ path, id: i === 0 ? d.id : `${d.id}${PLACED}${path}` }))
+const inSection = (d: Doc): Placement[] => [{ path: locationOf(d), id: d.id }]
+const inChannels = (d: Doc): Placement[] => channelsOf(d).map((path, i) => ({ path, id: i === 0 ? d.id : channelRowId(d.id, path) }))
 function toTree(prime: string, docs: Doc[], order?: string[], placements = inSection, empty: string[] = []): FileTreeNode[] {
   const labels = new Map<string, Map<string | undefined, { doc: Doc; id: string }[]>>()
   // Channels are records: an empty one is still a folder.
@@ -79,12 +79,12 @@ const folderIds = (nodes: FileTreeNode[]): string[] =>
 const toggle = "text-muted-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
 
 const AUDIENCES: { id: Audience; label: string; note: string; icon: LucideIcon }[] = [
-  { id: "personal", label: "You", note: "As you: everything, your vault and your cortex.", icon: LockIcon },
-  { id: "friends", label: "Friends", note: "As a friend: posts for friends, and for everyone.", icon: UsersIcon },
-  { id: "public", label: "Public", note: "As anyone: posts for everyone.", icon: GlobeIcon },
+  { id: "private", label: "You", note: "As you: everything, your vault and your cortex.", icon: LockIcon },
+  { id: "friends", label: "Friends", note: "As a friend: blocks for friends, and for everyone.", icon: UsersIcon },
+  { id: "public", label: "Public", note: "As anyone: blocks for everyone.", icon: GlobeIcon },
 ]
 
-// ─── Personal repository ──────────────────────────────────────────────────────
+// ─── Home ──────────────────────────────────────────────────────
 
 
 /** A channel's row being dragged: the channel's path. Blocks travel as DOC_DRAG, with their row in ROW_DRAG. */
@@ -117,7 +117,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
     const clear = () => { over?.removeAttribute("data-drop"); over = null }
     const rowOf = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>("[data-slot=file-tree-item], [data-drop-prime]")
     // The channel a block's row sits in: the one in its id, or its section for its own row.
-    const channelOfRow = (id: string) => placedIn(id) ?? (byId(docIdOf(id)) ? sectionOf(byId(docIdOf(id))!) : null)
+    const channelOfRow = (id: string) => placedIn(id) ?? (byId(docIdOf(id)) ? locationOf(byId(docIdOf(id))!) : null)
 
     // What is being dragged: a row of this tree, or a page from elsewhere (its path pill), read fresh
     // from each event so a drag that ended outside the tree leaves nothing behind.
@@ -129,7 +129,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
       const id = row.dataset.id ?? ""
       if (row.dataset.dropPrime === "vault") return dragging.kind === "channel" ? { row, channel: null, where: "into" } : null
       if (id.startsWith("vault:")) return { row, channel: id.slice(6), where: "into" }
-      if (dragging.kind === "block" && !id.includes(":") && byId(docIdOf(id))?.kind === "post") {
+      if (dragging.kind === "block" && !id.includes(":") && isBlock(byId(docIdOf(id)))) {
         const r = row.getBoundingClientRect()
         return { row, channel: channelOfRow(id), where: e.clientY < r.top + r.height / 2 ? "before" : "after", block: docIdOf(id) }
       }
@@ -175,7 +175,7 @@ function useTreeDragDrop(ref: React.RefObject<HTMLDivElement | null>, deps: unkn
         const id = was.id || e.dataTransfer?.getData(DOC_DRAG) || ""
         const doc = byId(id)
         if (!doc || !t.channel || t.block === id) return
-        const from = was.from ?? sectionOf(doc)
+        const from = was.from ?? locationOf(doc)
         const { published } = moveBlock(id, from, t.channel, { keep: e.altKey, ...(t.where === "before" ? { before: t.block } : t.where === "after" ? { after: t.block } : {}) })
         notify({ message: from === t.channel ? `Moved within ${shown(t.channel)}`
           : `${e.altKey ? "Added" : "Moved"} “${titleOf(doc)}” to ${shown(t.channel)}${published ? ". Its address changes when you next publish" : ""}`, tone: "info" })
@@ -249,19 +249,19 @@ function RepoPanel() {
   const { view, rev, repoMode, scope, audience, showVisibility } = useWorkspace()
   const { filters } = useWorkspace()
   const filtering = activeCount(filters) > 0
-  const cortexTree = useMemo(() => toTree("cortex", cortex.filter(kept), ["memories", "observations", "skills", "tools"]), [rev, filters]) // eslint-disable-line react-hooks/exhaustive-deps
-  const vaultDocs = useMemo(() => posts.filter(p => sees(audience, p) && !marks.archived.has(p.id) && kept(p)), [rev, audience, filters]) // eslint-disable-line react-hooks/exhaustive-deps
-  const pinned = posts.concat(cortex).filter(d => marks.pinned.has(d.id) && (d.kind !== "post" || sees(audience, d)) && kept(d))
-  const archived = posts.filter(d => marks.archived.has(d.id) && kept(d))
+  const cortexTree = useMemo(() => toTree("cortex", cortex.filter(kept), ["identity", "memory", "observation", "skill", "tool", "playbook", "working", "inference"]), [rev, filters]) // eslint-disable-line react-hooks/exhaustive-deps
+  const vaultDocs = useMemo(() => blocks.filter(p => sees(audience, p) && !marks.archived.has(p.id) && kept(p)), [rev, audience, filters]) // eslint-disable-line react-hooks/exhaustive-deps
+  const pinned = blocks.concat(cortex).filter(d => marks.pinned.has(d.id) && (!isBlock(d) || sees(audience, d)) && kept(d))
+  const archived = blocks.filter(d => marks.archived.has(d.id) && kept(d))
   const [showArchived, setShowArchived] = useState(false)
   const [rows, setRows] = useState<HTMLDivElement | null>(null)
   // Empty channels show to you, unfiltered; seen as someone else, a channel shows only what they can see in it.
   const vaultTree = useMemo(() => toTree("vault", vaultDocs, undefined, inChannels,
-    audience === "personal" && !filtering ? channelRecords.map(c => c.path) : []), [vaultDocs, audience, filtering, rev]) // eslint-disable-line react-hooks/exhaustive-deps
+    audience === "private" && !filtering ? channelRecords.map(c => c.path) : []), [vaultDocs, audience, filtering, rev]) // eslint-disable-line react-hooks/exhaustive-deps
   const showCortex = scope.cortex, showVault = scope.vault
   const treeRef = useRef<HTMLDivElement | null>(null)
   useTreeDragDrop(treeRef, [repoMode])
-  const cortexLocked = audience !== "personal"
+  const cortexLocked = audience !== "private"
   const allFolders = useMemo(() => [
     ...(showCortex ? ["prime:cortex", ...folderIds(cortexTree)] : []),
     ...(showVault ? ["prime:vault", ...folderIds(vaultTree)] : []),
@@ -273,7 +273,7 @@ function RepoPanel() {
   useEffect(() => {
     if (!reveal || repoMode !== "tree") return
     const doc = byId(reveal.target)
-    const [prime, path] = doc ? [doc.kind === "post" ? "vault" : "cortex", doc.sublabel ? `${doc.label}/${doc.sublabel}` : doc.label]
+    const [prime, path] = doc ? [isBlock(doc) ? "vault" : "cortex", locationOf(doc)]
       : (reveal.target.split(":") as [string, string])
     if (path === undefined) return
     const parts = path.split("/")
@@ -313,13 +313,13 @@ function RepoPanel() {
 
   return (
     <SidePanelFrame
-      label={`${me.name}'s repository`}
+      label={`${me.name}'s home`}
       scroll={repoMode !== "graph"}
       heading={
-        /* Whose repository: you, in a pill. Its menu chooses what shows: All, or Cortex and Vault. */
+        /* The home menu chooses which parts are visible. */
         <DropdownMenu>
           <DropdownMenuTrigger render={
-            <button type="button" aria-label={`${me.name}'s repository: what it shows`}
+            <button type="button" aria-label={`Choose what to show in ${me.name}'s home`}
               className="flex max-w-full items-center gap-2 rounded-full bg-muted py-1 ps-1 pe-2.5 text-left transition-colors duration-(--ohm-duration-state) hover:bg-foreground/8 aria-expanded:bg-foreground/8" />
           }>
             <Avatar className="size-6"><AvatarFallback className="bg-primary text-small text-primary-foreground">{me.name.slice(0, 1)}</AvatarFallback></Avatar>
@@ -338,7 +338,7 @@ function RepoPanel() {
         {/* The eye: click shows who each page is for; hover chooses who you are looking as. */}
         <Popover>
           <PopoverTrigger openOnHover delay={150} closeDelay={200} render={
-            <Button size="icon-sm" variant="ghost" className={cn(toggle, audience !== "personal" && "text-primary dark:text-(--ohm-green-light)")}
+            <Button size="icon-sm" variant="ghost" className={cn(toggle, audience !== "private" && "text-primary dark:text-(--ohm-green-light)")}
               aria-label="Show who each page is for" aria-pressed={showVisibility} onClick={() => setShowVisibility(!showVisibility)} />
           }>
             <Icon icon={showVisibility ? EyeIcon : EyeOffIcon} size="sm" />

@@ -1,23 +1,23 @@
-// Version history, as the cortex's journal has it (cortex/docs/journal-and-history.md in ohmmmm): one
-// append-only journal of lines, and every version of every block kept by its hash. Cortex pages
-// (memories, observations, skills, tools) are blocks here too. History is never rewritten: restoring or
-// reverting is a new change. Synthetic, in memory, like the rest of data/.
+// In-memory sample histories. The vault owns block changes. Cortex owns its file changes and
+// agent sessions. The home timeline can read both. An undo is another change in the same history.
+//
 //
 // You and agents both edit directly. Every change says who made it, so an agent's edits are marked
 // as its versions, and you revert what you don't want. When an agent finishes a task it writes a
 // session: what it did, the changes it made, and its dead ends, as ANVC (github.com/yodering/anvc)
 // keeps abandoned attempts so a later agent does not retry them.
-import { all, byId, type Connection, type Doc } from "./sample"
+import { blockKey, fixtureIds, all, byId, isBlock, type Connection, type Doc, type Kind } from "./sample"
 
 export type Actor = { kind: "human" | "agent"; name: string }
 export const YOU: Actor = { kind: "human", name: "you" }
 
 /** What a block's version holds: everything a change can touch. */
-export type Snapshot = { title: string; body: string; label: string; sublabel?: string; channels?: string[]; connect?: Connection[] }
+export type Snapshot = { title: string; body: string; kind: Kind; homeChannel?: string; channels?: string[]; connect?: Connection[] }
 export type ChangeOp = "create" | "edit" | "move" | "channels" | "connect" | "restore" | "revert" | "remove"
 export type DeadEnd = { tried: string; why: string; recheck?: string }
 
-type Common = { seq: number; id: string; at: string; actor: Actor }
+export type HistoryOwner = "vault" | "cortex"
+type Common = { owner: HistoryOwner; seq: number; id: string; at: string; actor: Actor }
 /** A change: what was done, to which block, by whom, with the versions before and after. */
 export type ChangeLine = Common & { type: "change"; node: string; op: ChangeOp; fields: string[]; before?: string; after: string; reason?: string; summary: string }
 /** What an agent did in one task, written when it finished: the changes it made, and its dead ends. */
@@ -26,12 +26,14 @@ export type SessionLine = Common & { type: "session"; done: string; changes: str
 export type SaveLine = Common & { type: "save"; name: string; note?: string }
 export type Line = ChangeLine | SessionLine | SaveLine
 
-export const journal: Line[] = []
+const journals: Record<HistoryOwner, Line[]> = { vault: [], cortex: [] }
+export const historyLines = (owner?: HistoryOwner): readonly Line[] =>
+  owner ? journals[owner] : [...journals.vault, ...journals.cortex].sort((a, b) => a.seq - b.seq)
 /** Every version of every block, by version hash. */
 export const versions = new Map<string, Snapshot>()
 
 export const snap = (d: Doc): Snapshot => ({
-  title: d.title, body: d.body, label: d.label, sublabel: d.sublabel,
+  title: d.title, body: d.body, kind: d.kind, homeChannel: d.homeChannel,
   channels: d.channels ? [...d.channels] : undefined, connect: d.connect?.map(c => ({ ...c })),
 })
 /** A short content hash: the same content is the same version everywhere. */
@@ -43,8 +45,8 @@ export function versionOf(s: Snapshot) {
 export function applySnapshot(doc: Doc, s: Snapshot) {
   doc.title = s.title
   doc.body = s.body
-  doc.label = s.label
-  doc.sublabel = s.sublabel
+  doc.kind = s.kind
+  doc.homeChannel = s.homeChannel
   doc.channels = s.channels ? [...s.channels] : undefined
   doc.connect = s.connect?.map(c => ({ ...c }))
 }
@@ -52,8 +54,8 @@ export function applySnapshot(doc: Doc, s: Snapshot) {
 let seq = 0
 const lineId = () => `${Date.now().toString(36)}-${(++seq).toString(36)}`
 function push<L extends Line>(line: Omit<L, "seq" | "id">): L {
-  const full = { ...line, seq: journal.length + 1, id: lineId() } as L
-  journal.push(full)
+  const full = { ...line, seq: seq + 1, id: lineId() } as L
+  journals[line.owner].push(full)
   return full
 }
 
@@ -66,8 +68,8 @@ export async function actingAs<T>(who: Actor, fn: () => Promise<T>): Promise<T> 
   try { return await fn() } finally { acting = was }
 }
 
-export const changeById = (id: string) => journal.find((l): l is ChangeLine => l.type === "change" && l.id === id)
-export const linesFor = (node: string) => journal.filter((l): l is ChangeLine => l.type === "change" && l.node === node)
+export const changeById = (id: string) => historyLines().find((l): l is ChangeLine => l.type === "change" && l.id === id)
+export const linesFor = (node: string) => historyLines().filter((l): l is ChangeLine => l.type === "change" && l.node === node)
 export const currentVersion = (node: string) => linesFor(node).at(-1)?.after
 export const snapshotAt = (version: string) => versions.get(version)
 
@@ -84,7 +86,7 @@ function describe(before: Snapshot | undefined, after: Snapshot, op: ChangeOp): 
     const d = words(after.body) - words(before.body)
     parts.push(`Edited the text${d ? ` (${d > 0 ? "+" : "−"}${Math.abs(d)} ${Math.abs(d) === 1 ? "word" : "words"})` : ""}`)
   }
-  if (fields.includes("label") || fields.includes("sublabel")) parts.push(`Moved to ${after.sublabel ? `${after.label} › ${after.sublabel}` : after.label}`)
+  if (fields.includes("homeChannel")) parts.push(`Moved to ${after.homeChannel?.replaceAll("/", " › ")}`)
   if (fields.includes("channels")) parts.push("Changed its channels")
   if (fields.includes("connect")) parts.push("Changed its connections")
   return { fields, summary: parts.join(" · ") || "No change" }
@@ -93,7 +95,7 @@ function opOf(before: Snapshot | undefined, after: Snapshot): ChangeOp {
   if (!before) return "create"
   const touched = (k: keyof Snapshot) => JSON.stringify(before[k]) !== JSON.stringify(after[k])
   if (touched("title") || touched("body")) return "edit"
-  if (touched("label") || touched("sublabel")) return "move"
+  if (touched("homeChannel")) return "move"
   if (touched("channels")) return "channels"
   return "connect"
 }
@@ -109,15 +111,16 @@ export function recordChange(doc: Doc, op: ChangeOp, opts: { reason?: string; at
   const before = currentVersion(doc.id)
   if (before === version) return null
   versions.set(version, after)
+  const owner = isBlock(doc) ? "vault" : "cortex"
   const last = linesFor(doc.id).at(-1)
   const joins = last && op === "edit" && last.op === "edit" && last.actor.kind === who.kind && last.actor.name === who.name
-    && journal.at(-1) === last && at.getTime() - Date.parse(last.at) < 5 * 60_000 && !opts.reason
+    && journals[owner].at(-1) === last && at.getTime() - Date.parse(last.at) < 5 * 60_000 && !opts.reason
   if (joins) {
     Object.assign(last, { after: version, at: at.toISOString(), ...describe(last.before ? versions.get(last.before) : undefined, after, "edit") })
     return last
   }
   return push<ChangeLine>({
-    at: at.toISOString(), actor: who, type: "change", node: doc.id, op, before, after: version,
+    owner, at: at.toISOString(), actor: who, type: "change", node: doc.id, op, before, after: version,
     ...(opts.reason ? { reason: opts.reason } : {}), ...describe(before ? versions.get(before) : undefined, after, op),
   })
 }
@@ -135,7 +138,7 @@ export function syncJournal(next?: { op: ChangeOp; reason?: string }) {
     recordChange(p, next?.op ?? opOf(held ? versions.get(held) : undefined, s), { reason: next?.reason })
   }
   const here = new Set(all.map(p => p.id))
-  for (const node of new Set(journal.flatMap(l => (l.type === "change" ? [l.node] : [])))) {
+  for (const node of new Set(historyLines().flatMap(l => (l.type === "change" ? [l.node] : [])))) {
     const last = linesFor(node).at(-1)!
     if (here.has(node) || last.op === "remove") continue
     const { seq: _s, id: _i, reason: _r, ...rest } = last
@@ -145,14 +148,14 @@ export function syncJournal(next?: { op: ChangeOp; reason?: string }) {
 
 /** An agent finishing a task: what it did, its changes since its last session, and its dead ends. */
 export function recordSession(who: Actor, done: string, dead: DeadEnd[] = [], at = new Date()) {
-  const lastAt = journal.filter((l): l is SessionLine => l.type === "session" && l.actor.name === who.name).at(-1)?.at ?? ""
-  const changes = journal.filter(l => l.type === "change" && l.actor.name === who.name && l.at > lastAt && l.at <= at.toISOString()).map(l => l.id)
-  return push<SessionLine>({ at: at.toISOString(), actor: who, type: "session", done: done.trim(), changes, deadEnds: dead })
+  const lastAt = historyLines("cortex").filter((l): l is SessionLine => l.type === "session" && l.actor.name === who.name).at(-1)?.at ?? ""
+  const changes = historyLines().filter(l => l.type === "change" && l.actor.name === who.name && l.at > lastAt && l.at <= at.toISOString()).map(l => l.id)
+  return push<SessionLine>({ owner: "cortex", at: at.toISOString(), actor: who, type: "session", done: done.trim(), changes, deadEnds: dead })
 }
 
 /** Names this point in history. It changes nothing. */
 export function save(name: string, note?: string, at = new Date()) {
-  return push<SaveLine>({ at: at.toISOString(), actor: acting, type: "save", name: name.trim(), ...(note?.trim() ? { note: note.trim() } : {}) })
+  return push<SaveLine>({ owner: "vault", at: at.toISOString(), actor: acting, type: "save", name: name.trim(), ...(note?.trim() ? { note: note.trim() } : {}) })
 }
 
 /** A word-level difference, for showing what a change did to the text. */
@@ -186,33 +189,42 @@ function seed() {
   const edit = (id: string, s: Snapshot, op: ChangeOp, by: Actor, at: Date, reason?: string) => { applySnapshot(doc(id), s); recordChange(doc(id), op, { by, at, reason }) }
 
   // Every block and cortex page starts as it is now, made by you on its date, except two with earlier versions.
-  for (const p of all) if (p.id !== "p4" && p.id !== "p2") recordChange(p, "create", { at: day(p.updated, "09:00"), by: YOU })
+  for (const p of all) if (p.id !== fixtureIds.monday && p.id !== fixtureIds.slow) recordChange(p, "create", { at: day(p.updated, "09:00"), by: YOU })
 
-  const p2Now = current.get("p2")!, p4Now = current.get("p4")!
-  edit("p2", { ...p2Now, body: "# Slow software\n\nTools that wait for you." }, "create", YOU, day("2026-10-18", "21:10"))
-  edit("p2", { ...p2Now, body: "# Slow software\n\nTools that wait for you. A draft that is private until you say otherwise." }, "edit", YOU, day("2026-10-20", "08:40"))
-  edit("p2", p2Now, "edit", muse, day("2026-10-21", "11:02"), "Linked the two pages you said say the same thing")
+  const slowNow = current.get(fixtureIds.slow)!, mondayNow = current.get(fixtureIds.monday)!
+  edit(fixtureIds.slow, { ...slowNow, body: "# Slow software\n\nTools that wait for you." }, "create", YOU, day("2026-10-18", "21:10"))
+  edit(fixtureIds.slow, { ...slowNow, body: "# Slow software\n\nTools that wait for you. A draft that is private until you say otherwise." }, "edit", YOU, day("2026-10-20", "08:40"))
+  edit(fixtureIds.slow, slowNow, "edit", muse, day("2026-10-21", "11:02"), "Linked the two pages you said say the same thing")
   recordSession(muse, "Linked Slow software to the pages it echoes", [
     { tried: "Filing Slow software under projects", why: "You keep essays in writing, and moved it back the last time" },
   ], day("2026-10-21", "11:05"))
 
-  edit("p4", { ...p4Now, body: "# Monday, rain\n\nNothing shipped.", channels: undefined }, "create", YOU, day("2026-11-10", "22:15"))
+  edit(fixtureIds.monday, { ...mondayNow, body: "# Monday, rain\n\nNothing shipped.", channels: undefined }, "create", YOU, day("2026-11-10", "22:15"))
   save("Before the slowness channel", "Everything as it was before I started collecting slowness", day("2026-11-10", "23:00"))
-  edit("p4", { ...p4Now, body: "# Monday, rain\n\nNothing shipped. Read for an hour.", channels: undefined }, "edit", claude, day("2026-11-11", "07:30"), "Added the line you dictated")
+  edit(fixtureIds.monday, { ...mondayNow, body: "# Monday, rain\n\nNothing shipped. Read for an hour.", channels: undefined }, "edit", claude, day("2026-11-11", "07:30"), "Added the line you dictated")
   recordSession(claude, "Added the line you dictated to Monday, rain", [
     { tried: "Turning the entry into a checklist", why: "You said journal entries stay as prose", recheck: "Read the working-style memory" },
   ], day("2026-11-11", "07:32"))
-  edit("p4", p4Now, "edit", YOU, day("2026-11-11", "08:05"))
+  edit(fixtureIds.monday, mondayNow, "edit", YOU, day("2026-11-11", "08:05"))
 
   // Recent agent edits, marked as theirs: a cortex page and a connection. Revert either if you don't want it.
-  const c3 = current.get("c3")!
-  edit("c3", { ...c3, body: "# Photo captions are one line\n\nSeen in two sessions, project photos. Three recent photo posts used two lines: one for the place, one for the light." },
+  const captions = current.get(fixtureIds.captions)!
+  edit(fixtureIds.captions, { ...captions, body: "# Photo captions are one line\n\nSeen in two sessions, project photos. Three recent photo posts used two lines: one for the place, one for the light." },
     "edit", claude, day("2026-11-18", "18:20"), "Your last three photo captions used two lines")
   recordSession(claude, "Checked your caption memory against recent photos", [], day("2026-11-18", "18:21"))
-  const p9 = current.get("p9")!
-  edit("p9", { ...p9, connect: [{ to: "garden-of-notes", why: "A pattern language is where the garden idea started" }] }, "connect", muse, day("2026-11-19", "09:10"), "Your garden essay quotes the first book on this list")
+  const reading = current.get(fixtureIds.reading)!
+  edit(fixtureIds.reading, { ...reading, connect: [{ to: "garden-of-notes", why: "A pattern language is where the garden idea started" }] }, "connect", muse, day("2026-11-19", "09:10"), "Your garden essay quotes the first book on this list")
   recordSession(muse, "Looked for pages that belong together", [
     { tried: "Connecting Reading list to Tokyo walks, day one", why: "Nothing on the list is about the walks" },
   ], day("2026-11-19", "09:12"))
 }
 seed()
+
+// Sample inferences cite the block versions kept when the sample home was seeded.
+for (const [inference, blocks] of [
+  [fixtureIds.privateFirst, [fixtureIds.monday]],
+  [fixtureIds.slowness, [fixtureIds.slow, fixtureIds.tokyo, fixtureIds.dusk]],
+] as const) {
+  const doc = all.find(each => each.id === inference)!
+  doc.evidence = blocks.map(id => ({ node: blockKey(id), version: currentVersion(id)! }))
+}

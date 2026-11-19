@@ -1,4 +1,4 @@
-// Version history, for you and for agents (flows/history.md). Views of one journal (data/journal.ts),
+// Version history, for you and for agents (flows/history.md). A timeline over the sample histories (data/journal.ts),
 // drawn as a minimal vertical timeline, as VS Code's Timeline is: one line per entry, an icon for who,
 // and what was done as a verb with the page it was done to ("Edited Monday, rain").
 //
@@ -15,7 +15,7 @@ import { notify } from "@/components/ui/notice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
 import {
-  changeById, currentVersion, diffWords, journal, linesFor, snapshotAt,
+  changeById, currentVersion, diffWords, historyLines, linesFor, snapshotAt,
   type Actor, type ChangeLine, type ChangeOp, type DeadEnd, type Line, type SaveLine, type SessionLine, type Snapshot,
 } from "@/data/journal"
 import { byId, titleOf, type Doc } from "@/data/sample"
@@ -107,8 +107,8 @@ function ChangeTree({ node, before, after }: { node: string; before?: Snapshot; 
       const del = parts.filter(p => p.kind === "removed").reduce((n, p) => n + words(p.text), 0)
       rows.push({ name: "text", detail: `+${add} −${del}` })
     }
-    const place = (x: Snapshot) => (x.sublabel ? `${x.label} › ${x.sublabel}` : x.label)
-    if (place(before) !== place(after)) rows.push({ name: "first channel", detail: `${place(before)} → ${place(after)}` })
+    const place = (x: Snapshot) => (x.homeChannel?.replaceAll("/", " › ") ?? "")
+    if (place(before) !== place(after)) rows.push({ name: "home channel", detail: `${place(before)} → ${place(after)}` })
     if (JSON.stringify(before.channels ?? []) !== JSON.stringify(after.channels ?? [])) rows.push({ name: "channels", detail: `${(before.channels ?? []).join(", ") || "none"} → ${(after.channels ?? []).join(", ") || "none"}` })
     if (JSON.stringify(before.connect ?? []) !== JSON.stringify(after.connect ?? [])) rows.push({ name: "connections", detail: `${(before.connect ?? []).map(c => c.to).join(", ") || "none"} → ${(after.connect ?? []).map(c => c.to).join(", ") || "none"}` })
   }
@@ -252,13 +252,11 @@ function Timeline({ lines, inPage, picked, setPicked, onDone }: {
 // ─── The Days layer: one autosave per day ───────────────────────────────────────
 
 /**
- * Each day with changes has an autosave: every page as it was at the end of that day. the cortex
- * writes it as a save when the day closes; here it is read from the day's changes. Opening a day
- * shows its changes as the same lines as the other tabs, newest first.
+ * The sample Dates tab groups changes by day. Opening a day shows its changes, newest first.
  */
 function dailyAutosaves() {
   const days = new Map<string, ChangeLine[]>()
-  for (const l of journal) if (l.type === "change") { const k = dayKey(l.at); days.set(k, [...(days.get(k) ?? []), l]) }
+  for (const l of historyLines()) if (l.type === "change") { const k = dayKey(l.at); days.set(k, [...(days.get(k) ?? []), l]) }
   return [...days].sort(([a], [b]) => b.localeCompare(a)).map(([day, lines]) => {
     const sorted = [...lines].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     return { day, at: sorted[0].at, lines: sorted, pages: new Set(lines.map(l => l.node)).size }
@@ -287,7 +285,7 @@ function DaysLayer() {
 // ─── Revert and restore: one pair of tools for every view that shows them ──────
 
 /**
- * Revert this change and Restore this version are buttons in both the repository's history and a
+ * Revert this change and Restore this version are buttons in both the home’s history and a
  * page's versions, so their tools exist while either is on screen: registered by the first view to
  * mount and withdrawn when the last one goes. They name the change or page, so they work the same
  * from both, and call the same handlers as the buttons.
@@ -344,7 +342,7 @@ function useChangeTools() {
 function linesForPage(id: string): Line[] {
   const changes = linesFor(id)
   const from = changes[0] ? Date.parse(changes[0].at) : Infinity
-  const saves = journal.filter(l => l.type === "save" && Date.parse(l.at) >= from)
+  const saves = historyLines(changes[0]?.owner).filter(l => l.type === "save" && Date.parse(l.at) >= from)
   return [...changes, ...saves].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
 }
 
@@ -411,15 +409,15 @@ type Tab = "dates" | "you" | "agents"
 
 /** One tab's lines: yours (changes and saves), or agents' (sessions, with the changes they made inside). */
 function topLevel(who: "human" | "agent"): Line[] {
-  const grouped = new Set(journal.flatMap(l => (l.type === "session" ? l.changes : [])))
-  return [...journal].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+  const grouped = new Set(historyLines("cortex").flatMap(l => (l.type === "session" ? l.changes : [])))
+  return [...historyLines()].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     .filter(l => l.actor.kind === who && !(l.type === "change" && grouped.has(l.id)))
 }
 
 /** An entry as a tool returns it. */
 function asTool(l: Line) {
   switch (l.type) {
-    case "change": return { type: "change", change: l.id, did: VERB[l.op], page: l.node, title: page(l.node), version: l.after, summary: l.summary, reason: l.reason, at: l.at, by: l.actor }
+    case "change": return { type: "change", change: l.id, did: VERB[l.op], owner: l.owner, page: l.node, title: page(l.node), version: l.after, summary: l.summary, reason: l.reason, at: l.at, by: l.actor }
     case "session": return { type: "session", session: l.id, done: l.done, changes: l.changes, deadEnds: l.deadEnds, at: l.at, by: l.actor }
     case "save": return { type: "save", name: l.name, note: l.note, at: l.at, by: l.actor }
   }
@@ -457,10 +455,10 @@ export function RepoHistory() {
       },
       outputSchema: { type: "object", properties: { lines: { type: "array" }, deadEnds: { type: "array" }, next: { const: "history.session" } } },
       run: withAgent("Reading history", async ({ who: w = "all", node, since, limit = 30 }) => ({
-        lines: [...journal].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+        lines: [...historyLines()].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
           .filter(l => (w === "all" || l.actor.kind === w) && (!node || ("node" in l && l.node === node)) && (!since || l.at >= since))
           .slice(0, limit).map(asTool),
-        deadEnds: journal.filter((l): l is SessionLine => l.type === "session").flatMap(s => s.deadEnds.map(d => ({ ...d, by: s.actor.name, at: s.at }))),
+        deadEnds: historyLines("cortex").filter((l): l is SessionLine => l.type === "session").flatMap(s => s.deadEnds.map(d => ({ ...d, by: s.actor.name, at: s.at }))),
         next: "history.session",
       })),
     }, ac.signal).catch(console.error)
@@ -480,7 +478,7 @@ export function RepoHistory() {
     }, ac.signal).catch(console.error)
     if (offered["history.save"]) registerStepTool<{ name: string; note?: string }, unknown>({
       name: "history.save", title: "Save",
-      description: "Names the repository as it is now, so it can be found and compared later. It changes no page. Returns the save's name and its place in the history.",
+      description: "Names the sample vault as it is now, so it can be found and compared later. It changes no page. Returns the save's name and its place in the history.",
       inputSchema: { type: "object", properties: { name: { type: "string", minLength: 1, maxLength: 80 }, note: { type: "string", maxLength: 300 } }, required: ["name"], additionalProperties: false },
       outputSchema: { type: "object", properties: { name: { type: "string" }, seq: { type: "integer" }, next: { const: "history.list" } } },
       run: withAgent("Saving", async ({ name: n, note }) => ({ ...save(n, note), next: "history.list" })),

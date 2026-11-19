@@ -1,6 +1,7 @@
 // Search, after agentic-twitter's lookup: a sheet centred over the dimmed workspace, category
 // filters on top, an input shaped like a composer, and matches grouped by kind below. It searches
 // through `search`, the same path as the workspace.search WebMCP tool.
+import { isBlockKind } from "@/data/sample"
 import { useEffect, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import { ArrowUpIcon, BrainIcon, ChevronRightIcon, FileTextIcon, SettingsIcon, UserIcon } from "lucide-react"
@@ -14,15 +15,15 @@ import { open, openSettings, setSearchOpen, showGraph, useWorkspace } from "./st
 
 type Category = { scope: Exclude<SearchScope, "all">; label: string; icon: LucideIcon; has: (h: SearchHit) => boolean }
 const CATEGORIES: Category[] = [
-  { scope: "vault", label: "Vault", icon: FileTextIcon, has: h => h.kind === "post" },
-  { scope: "cortex", label: "Cortex", icon: BrainIcon, has: h => ["memory", "observation", "skill", "tool"].includes(h.kind) },
-  { scope: "people", label: "People", icon: UserIcon, has: h => h.kind === "person" },
+  { scope: "vault", label: "Vault", icon: FileTextIcon, has: h => isBlockKind(h.kind) },
+  { scope: "cortex", label: "Cortex", icon: BrainIcon, has: h => !isBlockKind(h.kind) && h.kind !== "entity" && h.kind !== "setting" },
+  { scope: "entities", label: "Entities", icon: UserIcon, has: h => h.kind === "entity" },
   { scope: "settings", label: "Settings", icon: SettingsIcon, has: h => h.kind === "setting" },
 ]
 
 function go(hit: SearchHit) {
   if (hit.kind === "setting") return openSettings(hit.id.slice("setting:".length) as SettingsTab)
-  if (hit.kind === "person") return showGraph(hit.excerpt.slice(1))
+  if (hit.kind === "entity") return showGraph(hit.excerpt.slice(1))
   open(hit.id)
 }
 
@@ -141,7 +142,7 @@ export function SearchOverlay() {
                             <Icon icon={g.icon} size="sm" className="text-muted-foreground" />
                             <span className="min-w-0 flex-1">
                               <strong className="block truncate text-body font-medium">{h.title}</strong>
-                              <small className="mt-1 block truncate text-small text-muted-foreground">{h.label} · {h.excerpt}</small>
+                              <small className="mt-1 block truncate text-small text-muted-foreground">{h.location} · {h.excerpt}</small>
                             </span>
                             <Icon icon={ChevronRightIcon} size="sm" className="text-muted-foreground" />
                           </button>

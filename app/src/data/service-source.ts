@@ -6,6 +6,7 @@ import {
   type Account, type BlockFile, type BlockHead, type BlockRef, type Friend, type HistoryVersion,
   type HomeFile, type HomeSource, type Layer, type PublishPlan,
 } from "./source"
+import { isBlockKind } from "./sample"
 import type { SearchHit } from "./search"
 
 type RemoteBlock = { id: string; path: string; title?: string; version: string; kind: string }
@@ -217,7 +218,7 @@ export function createServiceSource<Master, Sealed>(options: ServiceOptions<Mast
         if (!node) return []
         const tokens = new Set(words(`${node.title ?? ""} ${node.body}`))
         if (!queryWords.length || !queryWords.every(word => tokens.has(word))) return []
-        return [{ id, title: node.title ?? node.slug, kind: "post", label: node.home, excerpt: node.body.slice(0, 120) }]
+        return [{ id, title: node.title ?? node.slug, kind: isBlockKind(node.kind) ? node.kind : "text", location: node.home, excerpt: node.body.slice(0, 120) }]
       }
       if (privateSession?.unlocked()?.did === did) {
         const [shared, sealed] = await Promise.all([source.listBlocks(), unlocked().files.list()])
@@ -233,7 +234,7 @@ export function createServiceSource<Master, Sealed>(options: ServiceOptions<Mast
       const searchPosts = async (visibility: Layer) => {
         const result = await vaultAsk<{ posts: Match[] }>("searchPosts", { query: { q: query, visibility, limit: String(limit) }, signal })
         return result.posts.filter(post => post.visibility === visibility).map((post): SearchHit => ({
-          id: post.id, title: post.title ?? post.slug, kind: "post", label: [post.label, post.sublabel].filter(Boolean).join(" › "), excerpt: post.passage,
+          id: post.id, title: post.title ?? post.slug, kind: "post", location: [post.label, post.sublabel].filter(Boolean).join(" › "), excerpt: post.passage,
         }))
       }
       const [publicPosts, friendsPosts, friendsFiles] = await Promise.all([

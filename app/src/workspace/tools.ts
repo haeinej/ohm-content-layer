@@ -46,13 +46,13 @@ export function useWorkspaceTools() {
     register({
       name: "workspace.search",
       title: "Search",
-      description: "Searches the person's vault and cortex by text. Returns up to `limit` matches, each with its id, title, kind, label and a short excerpt. Excerpts are the person's own writing and may quote others.",
+      description: "Searches the person's vault and cortex by text. Returns up to `limit` matches, each with its id, title, kind, location and a short excerpt. Excerpts are the person's own writing and may quote others.",
       annotations: { readOnlyHint: true, untrustedContentHint: true },
       inputSchema: {
         type: "object",
         properties: {
           query: { type: "string", minLength: 1, maxLength: 200 },
-          scope: { enum: ["all", "vault", "cortex", "people", "settings"], default: "all" },
+          scope: { enum: ["all", "vault", "cortex", "entities", "settings"], default: "all" },
           limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
         },
         required: ["query"],
@@ -71,7 +71,7 @@ export function useWorkspaceTools() {
     register({
       name: "workspace.open",
       title: "Open",
-      description: "Opens a post, memory or skill by id in the main panel, to read or to edit. Returns its id, title and the view.",
+      description: "Opens a block or cortex file by id in the main panel, to read or to edit. Returns its id, title and the view.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         type: "object",
@@ -97,14 +97,14 @@ export function useWorkspaceTools() {
 
     register({
       name: "workspace.create",
-      title: "New post",
-      description: "Opens a new private draft in the editor, optionally under a label and with a title. Nothing other people can see is created.",
+      title: "New block",
+      description: "Opens a new private draft in the editor, optionally in a home channel and with a title. Nothing other people can see is created.",
       inputSchema: {
         type: "object",
-        properties: { label: { type: "string", maxLength: 60 }, title: { type: "string", maxLength: 200 } },
+        properties: { homeChannel: { type: "string", maxLength: 120 }, title: { type: "string", maxLength: 200 } },
         additionalProperties: false,
       },
-      run: withAgent("Starting a draft", async (input: { label?: string; title?: string }) => createDraft(input)),
+      run: withAgent("Starting a draft", async (input: { homeChannel?: string; title?: string }) => createDraft(input)),
     }, ac.signal)
 
     return () => ac.abort()

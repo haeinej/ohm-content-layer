@@ -1,11 +1,11 @@
 # History
 
-You see everything that happened in your repository: what you did and what agents did, each change marked with who made it. You revert what you don't want, restore any earlier version, and save a point to come back to. When an agent finishes a task it says what it did and where it got stuck. History only grows: nothing in it is rewritten.
+You see everything that happened in your home: what you did and what agents did, each change marked with who made it. You revert what you don't want, restore any earlier version, and save a point to come back to. When an agent finishes a task it says what it did and where it got stuck. History only grows: nothing in it is rewritten.
 
-This is the cortex's journal ([cortex/docs/journal-and-history.md](https://github.com/haeinej/ohmmmm/blob/main/cortex/docs/journal-and-history.md) in ohmmmm) as a person and an agent use it. Keeping an agent's dead ends follows [ANVC](https://github.com/yodering/anvc). The wireframe keeps the journal in memory, in `src/data/journal.ts`.
+The vault keeps versions of blocks and channels. Cortex keeps versions of its own files and records agent sessions. The sample home shows these histories together, using in-memory fixtures in `src/data/journal.ts`.
 
 - **Flow id:** `history`. It prefixes every tool name.
-- **Starts from:** the history button in the repository's header (the whole repository), or the clock in a page's toolbar (that page).
+- **Starts from:** the history button in the home’s header (the whole home), or the clock in a page's toolbar (that page).
 - **Ends in:** a change read; a change reverted or a version restored; a save made; an agent's session recorded; or nothing changed.
 
 ## How history is kept
@@ -15,10 +15,10 @@ This is the cortex's journal ([cortex/docs/journal-and-history.md](https://githu
 - **Typing makes one change, not one per key.** Edits to the text by the same person or agent within five minutes join one line.
 - **Sessions are for agents, written when a task is done.** In one line, the session says what the agent did. It groups the changes the agent made since its last session, and lists its **dead ends**: what it tried and dropped, why, and how to recheck. A later agent reads them before it starts, so it doesn't retry them.
 - **A save names a point.** It changes nothing.
-- **Daily autosaves are a layer of their own.** Each day with changes has an autosave: every page as it was at the end of that day. The cortex writes it when the day closes; the wireframe reads it from the day's changes.
+- **Dates groups sample changes by day.** Vault block and channel autosave is planned for the vault. Cortex owns daily states for its own files.
 - **There are no traces.** What an agent reads is not recorded; only what it changes, and what it says it did.
 - **Pages others can see are not changed from here.** Changing what others see asks first, which is not part of this wireframe yet; their history is read-only here.
-- **Organising is not changing what others see.** Moving a block between channels, adding it to one, and reordering are yours, on any page: they reach your site only when you publish, and moving a page out of its first channel says its address will change then. Its text, its connections, and restoring or reverting it are its content, so for a page others can see they ask first.
+- **Organising is not changing what others see.** Moving a block between channels, adding it to one, and reordering are yours, on any page: they reach your site only when you publish, and moving a page out of its home channel says its address will change then. Its text, its connections, and restoring or reverting it are its content, so for a page others can see they ask first.
 
 ## How it looks
 
@@ -33,7 +33,7 @@ A minimal timeline drawn vertically, as VS Code's Timeline is: one thin line dow
 
 **Each line says what was done as a verb, then the page:** Created, Edited, Moved, Filed (changed its channels), Connected, Restored, Reverted, Deleted. For example, "Edited **Monday, rain**". An agent's session reads "Muse: Looked for pages that belong together · 1 dead end".
 
-**The repository's history has three tabs: Dates, You, Agents.**
+**The home’s history has three tabs: Dates, You, Agents.**
 
 - **Dates:** one autosave per day, newest first. Open a day for its changes, as the same lines as the other tabs, by you and by agents.
 - **You:** your changes and saves, by day.
@@ -55,7 +55,7 @@ Reverting and restoring are new changes, so either can itself be reverted.
 
 | # | Step | Screen (ohm-ui) | Primary action (forest) | Tool | Annotations | Approval |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The repository's history | Side panel: Dates / You / Agents and a quiet Save, then the timeline | Save | `history.save` | none: it changes nothing | none |
+| 1 | The home’s history | Side panel: Dates / You / Agents and a quiet Save, then the timeline | Save | `history.save` | none: it changes nothing | none |
 | 1a | Read it | the same | (reading) | `history.list` | `readOnlyHint`, `untrustedContentHint` | none |
 | 1b | Finish a task (agents) | none: an agent's step | (Finish task) | `history.session` | none: it changes no page | none |
 | 1c | A change, opened (here or in a page's versions) | Its details | Revert this change | `history.revert` | none: private pages only, and a revert can itself be reverted | none |
@@ -65,12 +65,12 @@ Reverting and restoring are new changes, so either can itself be reverted.
 
 ## Tools
 
-`history.revert` and `history.restore` exist while the repository's history or a page's versions is on screen, since both show those buttons: the first view to open registers them, the last to close withdraws them. `history.session` is the one tool without a button: finishing a task is an agent's step, and a person's work needs no session.
+`history.revert` and `history.restore` exist while the home’s history or a page's versions is on screen, since both show those buttons: the first view to open registers them, the last to close withdraws them. `history.session` is the one tool without a button: finishing a task is an agent's step, and a person's work needs no session.
 
 ### `history.list`
 
 - **title:** History
-- **description:** Lists the repository's history, newest first: changes (what was done, to which page, by whom, why), agents' sessions with the changes they made and their dead ends, and saves. Filter by who, page id or a since date. Returns the lines and the dead ends a new task should not retry.
+- **description:** Lists the home’s history, newest first: changes (what was done, to which page, by whom, why), agents' sessions with the changes they made and their dead ends, and saves. Filter by who, page id or a since date. Returns the lines and the dead ends a new task should not retry.
 - **inputSchema:** `{ "who"?: "all" | "human" | "agent", "node"?: string, "since"?: date, "limit"?: 1–100 }`
 - **outputSchema:** `{ "lines": [...], "deadEnds": [...], "next": "history.session" }`
 
@@ -93,7 +93,7 @@ Reverting and restoring are new changes, so either can itself be reverted.
 ### `history.save`
 
 - **title:** Save
-- **description:** Names the repository as it is now, so it can be found and compared later. It changes no page. Returns the save's name and its place in the history.
+- **description:** Names the sample vault as it is now, so it can be found and compared later. It changes no page. Returns the save's name and its place in the history.
 - **inputSchema:** `{ "name": string (1–80), "note"?: string (≤300) }`
 - **Handler:** `src/workspace/store.ts#saveNow`
 
@@ -121,7 +121,7 @@ Reverting and restoring are new changes, so either can itself be reverted.
 
 ## Not yet
 
-- **The whole repository as of a save or a day.** One page's version at a save or a day is readable now; the whole tree as it was is the cortex's `cortex_as_of`, not drawn here yet.
+- **The whole home as of a save or a day.** One page's version at a save or a day is readable now; the whole tree as it was is the cortex's `cortex_as_of`, not drawn here yet.
 - **What changed since a save**, as one comparison.
 - **Changing a page others can see**, which needs the approval step.
 
@@ -132,5 +132,5 @@ None.
 ## Checked
 
 - [x] By hand: Dates, You and Agents; a day opening into its changes; an agent's session opening into its change; reverting Muse's connection, which showed under You as "Reverted Reading list"; restoring your own change
-- [x] By tools: `getTools()` lists `history.list`, `history.revert`, `history.session` and `history.save` only while the repository's history shows
+- [x] By tools: `getTools()` lists `history.list`, `history.revert`, `history.session` and `history.save` only while the home’s history shows
 - [ ] In dark, and on a phone
