@@ -12,3 +12,6 @@ Thumbs.db
 # Which vault this machine reads, and how far it has read it. Each machine connects its own.
 .cortex/vault.json
 .cortex/vault-cursor.json
+
+# The hooks' checkpoints for this machine's sessions: when to ask an agent to distill.
+.cortex/hooks.jsonl

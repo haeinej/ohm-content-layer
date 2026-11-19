@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appendFile, cp, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -20,15 +20,16 @@ const fresh = async () => {
 const journal = async dir => (await readFile(join(dir, '.cortex', 'journal.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 const exists = path => stat(path).then(() => true, () => false);
 
-test('notes, settlements and distills are lines in one journal, each with seq, id, time, actor and type', async () => {
+test('notes, settlements and sessions are lines in one journal, each with seq, id, time, actor and type', async () => {
   const dir = await fresh();
   const agent = openCortex(dir, { actor: 'claude-code' });
   await agent.addNote({ id: 'n1', note: 'Shortened a title again', session: 's1' });
   await agent.settle({ notes: [{ id: 'n1', outcome: 'kept' }] });
   await createTools(agent).call('cortex_distill', { session: 's1', working: 'Open: nothing.' });
+  await createTools(agent).call('cortex_session', { summary: 'Filed two reading notes', session: 's1' });
 
   const lines = (await journal(dir)).filter(line => line.type !== 'change');
-  assert.deepEqual(lines.map(line => [line.type, line.event ?? line.outcome ?? line.text]), [['note', 'Shortened a title again'], ['decision', 'kept'], ['session', 'distill']]);
+  assert.deepEqual(lines.map(line => [line.type, line.summary ?? line.outcome ?? line.text]), [['note', 'Shortened a title again'], ['decision', 'kept'], ['session', 'Filed two reading notes']]);
   for (const line of lines) {
     assert.ok(Number.isSafeInteger(line.seq));
     assert.match(line.id, /^[a-z0-9]+-[0-9a-f]{12}$/);
@@ -41,6 +42,8 @@ test('notes, settlements and distills are lines in one journal, each with seq, i
   assert.equal(new Set(all.map(line => line.id)).size, all.length, 'every line has its own ID');
   assert.equal(await exists(join(dir, '.cortex', 'notes.jsonl')), false, 'the old notes file is not written');
   assert.equal(await exists(join(dir, '.cortex', 'sessions.jsonl')), false, 'nor the old sessions file');
+  // A distill's checkpoint is the hooks' bookkeeping, not history.
+  assert.match(await readFile(join(dir, '.cortex', 'hooks.jsonl'), 'utf8'), /"distilled"/);
   // The person is a human actor; an agent can never take the person's name.
   await openCortex(dir, { actor: 'member' }).addNote({ id: 'n2', note: 'Said they file on Fridays', session: 'event' });
   assert.deepEqual((await journal(dir)).at(-1).actor, { kind: 'human', name: 'member' });
@@ -105,77 +108,95 @@ test('a cortex made before the journal keeps its notes, settlements and sessions
   assert.equal(stop(), '', 'nothing changed since the old start');
   await cortex.writeWorking('Changed after the old start.', { replaces: version });
   assert.match(stop(), /cortex_distill/);
-  assert.equal(stop(), '', 'asked once; the ask is in the journal');
-  assert.equal((await journal(dir)).filter(line => line.type === 'session' && line.event === 'ask').length, 1);
+  assert.equal(stop(), '', 'asked once; the ask is kept with the hooks\' checkpoints');
+  assert.equal((await readFile(join(dir, '.cortex', 'hooks.jsonl'), 'utf8')).trim().split('\n').filter(line => JSON.parse(line).asked).length, 1);
 });
 
-test('every write to the cortex is a change line: node, op, versions before and after, and who', async () => {
+test('an agent\'s edit is a proposal; only the person accepting it makes the change, on every kind of node', async () => {
   const dir = await fresh();
   const vault = join(dir, '..', 'vault');
   await mkdir(join(vault, 'essays'), { recursive: true });
   await writeFile(join(vault, 'essays', 'one.md'), '---\nid: "p1"\ntitle: "On slowness"\n---\nWalking is slow.\n');
   const person = openCortex(dir, { actor: 'member' });
   const agent = openCortex(dir, { actor: 'claude-code' });
-  const changes = async () => (await journal(dir)).filter(line => line.type === 'change');
-  const last = async () => (await changes()).at(-1);
+  const lines = async type => (await journal(dir)).filter(line => line.type === type);
+  const lastChange = async () => (await lines('change')).at(-1);
+  await person.connectVault({ kind: 'folder', path: vault });
 
-  // Memory: create, update, the seen count when settled, remove.
+  // Each kind of node an agent edits waits as a proposal, and nothing in the folder changes.
   const memory = { name: 'likes-short-titles', description: 'Titles of four words or fewer', kind: 'preference', stated: true, body: 'Short titles.' };
-  const one = await agent.write(memory);
-  assert.deepEqual(await last().then(line => [line.node, line.op, line.before, line.after, line.actor]), ['memory/likes-short-titles.md', 'create', null, one.version, { kind: 'agent', name: 'claude-code' }]);
-  const two = await agent.write({ ...memory, body: 'Short titles, no colons.' }, { replaces: one.version });
-  assert.deepEqual(await last().then(line => [line.op, line.before, line.after]), ['update', one.version, two.version]);
+  const before = await readdir(dir, { recursive: true });
+  const proposed = [
+    await agent.write(memory, { reason: 'They said so' }),
+    await agent.describeChannel({ channel: 'essays', meaning: 'Finished essays, one idea each' }),
+    await agent.proposeSkill({ text: '---\nname: file-a-receipt\ndescription: How receipts are filed\n---\nFile by month.\n' }),
+    await agent.proposeTool({ name: 'calendar', description: 'Reads the calendar', inputs: 'A day', outputs: 'Events' }),
+  ];
+  assert.deepEqual(proposed.map(item => [item.node, item.op, item.waiting]), [['memory/likes-short-titles', 'create', true], ['channel/essays', 'create', true], ['skill/file-a-receipt', 'create', true], ['tool/calendar', 'create', true]]);
+  assert.deepEqual(await readdir(dir, { recursive: true }), before, 'no file changed');
+  assert.equal((await lines('change')).length, 0);
+  const [line] = await lines('proposal');
+  assert.deepEqual([line.proposal, line.node, line.op, line.before, line.after, line.reason, line.actor.name], [proposed[0].proposed, 'memory/likes-short-titles', 'create', null, proposed[0].version, 'They said so', 'claude-code']);
+  assert.match(line.content, /Short titles\./, 'the whole change is in the proposal');
+
+  // An agent cannot accept or reject; the person can.
+  await assert.rejects(agent.accept(proposed[0].proposed), problem => problem.code === 'PersonOnly');
+  await assert.rejects(agent.reject(proposed[0].proposed), problem => problem.code === 'PersonOnly');
+  for (const item of proposed) await person.accept(item.proposed, { reason: 'Fine' });
+  const decisions = await lines('decision');
+  assert.deepEqual(decisions.map(item => [item.proposal, item.outcome, item.reason, item.actor.kind]), proposed.map(item => [item.proposed, 'accepted', 'Fine', 'human']));
+  const changes = await lines('change');
+  assert.deepEqual(changes.map(item => [item.node, item.op, item.before, item.after, item.actor.name, item.proposal, item.decision]), proposed.map((item, index) => [item.node, 'create', null, item.version, 'claude-code', item.proposed, decisions[index].id]));
+  assert.match(await readFile(join(dir, 'vault.md'), 'utf8'), /## essays\n1 block\.\nMeaning: Finished essays, one idea each/);
+  assert.match(await readFile(join(dir, 'skills', 'file-a-receipt', 'SKILL.md'), 'utf8'), /File by month/);
+  assert.match(await readFile(join(dir, 'tools', 'calendar.md'), 'utf8'), /on: false/, 'an accepted tool is added switched off');
+  assert.deepEqual((await person.start()).tools, []);
+  await assert.rejects(person.accept(proposed[0].proposed), problem => problem.code === 'Decided');
+
+  // A proposal against a version that is no longer current is stale, and cannot be accepted.
+  const one = proposed[0].version;
+  const late = await agent.write({ ...memory, body: 'Short titles, no colons.' }, { replaces: one });
+  const other = await openCortex(dir, { actor: 'codex' }).write({ ...memory, body: 'Short titles, in sentence case.' }, { replaces: one });
+  await person.accept(other.proposed);
+  assert.equal((await person.proposals()).find(item => item.id === late.proposed).stale, true);
+  await assert.rejects(person.accept(late.proposed), problem => problem.code === 'Stale');
+  await person.reject(late.proposed, { reason: 'Codex got there first' });
+  assert.deepEqual((await lines('decision')).at(-1).outcome, 'rejected');
+  assert.equal((await person.proposals()).some(item => item.id === late.proposed), false);
+
+  // The same edit proposed twice is one proposal.
+  const again = { ...memory, body: 'Short titles, again.' };
+  const first = await agent.write(again, { replaces: other.version });
+  assert.equal((await agent.write(again, { replaces: other.version })).proposed, first.proposed);
+
+  // Settling: the outcome is recorded at once; the memory's new seen count is a proposal.
+  await person.reject(first.proposed);
   await agent.addNote({ id: 'n1', note: 'Cut a title short again', session: 's1' });
-  await agent.settle({ notes: [{ id: 'n1', outcome: 'likes-short-titles' }] });
-  const seen = await last();
-  const three = (await agent.read('likes-short-titles')).version;
-  assert.deepEqual([seen.op, seen.before, seen.after, seen.reason], ['update', two.version, three, 'seen again in 1 settled note']);
-  assert.equal((await agent.read('likes-short-titles', { version: two.version })).version, two.version, 'the version before the count is kept');
-  await agent.remove('likes-short-titles', { replaces: three });
-  assert.deepEqual(await last().then(line => [line.op, line.before, line.after]), ['remove', three, null]);
+  const settled = await agent.settle({ notes: [{ id: 'n1', outcome: 'likes-short-titles' }] });
+  assert.equal((await agent.listNotes()).notes.some(note => note.id === 'n1'), false, 'settled at once');
+  assert.equal(settled.memories[0].waiting, true);
+  await person.accept(settled.memories[0].proposed);
+  assert.deepEqual(await lastChange().then(item => [item.op, item.before, item.reason]), ['update', other.version, 'seen again in 1 settled note']);
+  assert.equal((await agent.read('likes-short-titles')).memory.seen.count, 1);
 
-  // Working memory: create, update, clear.
-  const w1 = await agent.writeWorking('Filing two notes.');
-  const w2 = await agent.writeWorking('Filing two notes. One done.', { replaces: w1.version });
-  await agent.writeWorking('', { replaces: w2.version });
-  assert.deepEqual((await changes()).slice(-3).map(line => [line.node, line.op, line.before, line.after]), [
-    ['.cortex/working/claude-code.md', 'create', null, w1.version],
-    ['.cortex/working/claude-code.md', 'update', w1.version, w2.version],
-    ['.cortex/working/claude-code.md', 'remove', w2.version, null],
-  ]);
-
-  // Identity, by the person.
+  // The person's own edit is a change at once, with no proposal.
   await person.proposeIdentity({ field: 'city', value: 'Lisbon', source: { kind: 'person', quote: 'I live in Lisbon' } });
   await person.confirmIdentity('city');
-  const identity = await last();
-  assert.deepEqual([identity.node, identity.op, identity.actor, identity.after], ['identity.md', 'update', { kind: 'human', name: 'member' }, (await person.identity()).version]);
+  assert.deepEqual(await lastChange().then(item => [item.node, item.op, item.actor.kind]), ['identity', 'update', 'human']);
+  // An agent's identity fact is a proposal line too, and the change is the agent's once confirmed.
+  const fact = await agent.proposeIdentity({ field: 'occupation', value: 'Cartographer', source: { kind: 'person', quote: 'I am a cartographer' } });
+  assert.equal((await person.proposals()).find(item => item.id === fact.id).field, 'occupation');
+  await person.accept(fact.id);
+  assert.deepEqual(await lastChange().then(item => [item.node, item.actor.name, item.proposal]), ['identity', 'claude-code', fact.id]);
 
-  // vault.md: written when the vault is connected, and when a channel is described.
-  await person.connectVault({ kind: 'folder', path: vault });
-  const map = await last();
-  assert.deepEqual([map.node, map.op, map.before], ['vault.md', 'create', null]);
-  await agent.describeChannel({ channel: 'essays', meaning: 'Finished essays, one idea each' });
-  const described = await last();
-  assert.deepEqual([described.node, described.op, described.before, described.actor.name], ['vault.md', 'update', map.after, 'claude-code']);
-  assert.match(described.reason, /essays/);
+  // Working memory is the one thing an agent writes at once.
+  const w1 = await agent.writeWorking('Filing two notes.');
+  assert.deepEqual(await lastChange().then(item => [item.node, item.op, item.after, item.actor.name, item.proposal]), ['working/claude-code', 'create', w1.version, 'claude-code', undefined]);
 
-  // Skill and tool proposals, and approving a skill.
-  const skill = '---\nname: file-a-receipt\ndescription: How receipts are filed\n---\nFile by month.\n';
-  const p1 = await agent.proposeSkill({ text: skill });
-  const p2 = await agent.proposeSkill({ text: `${skill}Keep the total.\n` });
-  assert.deepEqual((await changes()).slice(-2).map(line => [line.node, line.op, line.before, line.after]), [
-    ['.cortex/proposed/skills/file-a-receipt', 'create', null, p1.version],
-    ['.cortex/proposed/skills/file-a-receipt', 'update', p1.version, p2.version],
-  ]);
-  await person.approveSkill('file-a-receipt');
-  assert.deepEqual((await changes()).slice(-2).map(line => [line.node, line.op, line.actor.kind]), [['.cortex/proposed/skills/file-a-receipt', 'remove', 'human'], ['skills/file-a-receipt', 'create', 'human']]);
-  await agent.proposeTool({ name: 'calendar', description: 'Reads the calendar', inputs: 'A day', outputs: 'Events' });
-  assert.deepEqual(await last().then(line => [line.node, line.op]), ['.cortex/proposed/tools/calendar.md', 'create']);
-
-  // Each line's before is the after of the line before it for the same node.
-  const all = await changes();
-  for (const [index, line] of all.entries()) {
-    const previous = all.slice(0, index).filter(other => other.node === line.node).at(-1);
-    if (previous) assert.equal(line.before, previous.after, `${line.node} at ${line.seq}`);
+  // Each change's before is the after of the change before it on the same node.
+  const all = await lines('change');
+  for (const [index, item] of all.entries()) {
+    const previous = all.slice(0, index).filter(other => other.node === item.node).at(-1);
+    if (previous) assert.equal(item.before, previous.after, `${item.node} at ${item.seq}`);
   }
 });

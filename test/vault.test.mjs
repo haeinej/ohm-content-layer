@@ -31,6 +31,15 @@ async function setup() {
   return { vault, dir, person, agent: openCortex(dir, { actor: 'claude-code' }) };
 }
 const map = dir => readFile(join(dir, 'vault.md'), 'utf8');
+// The person accepts every proposal waiting, one at a time.
+const acceptAll = async dir => {
+  const person = openCortex(dir, { actor: 'member' });
+  for (;;) {
+    const next = (await person.proposals()).find(item => item.node !== 'identity' && !item.stale);
+    if (!next) return;
+    await person.accept(next.id);
+  }
+};
 
 test('a folder vault answers the contract', async () => {
   const { vault } = await setup();
@@ -74,17 +83,22 @@ test('connecting a vault writes vault.md, and asks the agent to describe each ch
 test('the agent describes a channel without asking, and what the person writes stands', async () => {
   const { dir, vault, agent, person } = await setup();
   const tools = createTools(agent);
-  await tools.call('cortex_describe_channel', { channel: 'essays', meaning: 'Finished long-form writing, one idea each', conventions: 'Titles start with "On"' });
+  const proposed = await tools.call('cortex_describe_channel', { channel: 'essays', meaning: 'Finished long-form writing, one idea each', conventions: 'Titles start with "On"' });
+  assert.deepEqual([proposed.node, proposed.waiting], ['channel/essays', true]);
+  assert.doesNotMatch(await map(dir), /Meaning:/, 'vault.md changes when the person accepts');
+  await acceptAll(dir);
   assert.match(await map(dir), /## essays\n2 blocks\.\nMeaning: Finished long-form writing, one idea each\nConventions: Titles start with "On"/);
   assert.deepEqual((await agent.start()).vault.channels[0], { channel: 'essays', blocks: 2, meaning: 'Finished long-form writing, one idea each', conventions: 'Titles start with "On"' });
   // The agent may rewrite its own words.
   await agent.describeChannel({ channel: 'essays', meaning: 'Finished essays, one idea each' });
+  await acceptAll(dir);
   assert.equal((await agent.describeChannel({ channel: 'essays', meaning: 'Finished essays, one idea each' })).unchanged, true);
 
   // The person writes over it by hand, and adds a line of their own.
   await writeFile(join(dir, 'vault.md'), (await map(dir)).replace('Meaning: Finished essays, one idea each', 'Meaning: Essays I am proud of\nOnly the ones I would show a stranger.').replace('-->\n', '-->\nMost of what matters is in essays.\n'));
   await assert.rejects(agent.describeChannel({ channel: 'essays', meaning: 'Something else' }), refused('PersonWrote'));
   await agent.describeChannel({ channel: 'essays', conventions: 'Titles start with "On", in sentence case' });
+  await acceptAll(dir);
 
   // The counts follow the vault; the words stay.
   await writeBlock(vault, 'essays/on-tides.md', { id: 'p4', title: 'On tides' });
@@ -100,8 +114,8 @@ test('the agent describes a channel without asking, and what the person writes s
 
 test('removing a block flags the memory that pointed at it', async () => {
   const { vault, agent, person } = await setup();
-  await agent.write({ name: 'map-essays', description: 'Where their essays about maps are', kind: 'reference', stated: false, body: 'Their essay on maps.', blocks: ['p1'] });
-  await agent.write({ name: 'river-essay', description: 'Where the river essay is', kind: 'reference', stated: false, body: 'The river essay.', blocks: ['p2'] });
+  await person.write({ name: 'map-essays', description: 'Where their essays about maps are', kind: 'reference', stated: false, body: 'Their essay on maps.', blocks: ['p1'] });
+  await person.write({ name: 'river-essay', description: 'Where the river essay is', kind: 'reference', stated: false, body: 'The river essay.', blocks: ['p2'] });
   assert.equal((await agent.start()).vault.broken, undefined);
 
   await rm(join(vault, 'essays/on-maps.md'));
@@ -117,6 +131,7 @@ test('removing a block flags the memory that pointed at it', async () => {
 test('a channel that leaves the vault keeps what was written about it', async () => {
   const { dir, vault, agent } = await setup();
   await agent.describeChannel({ channel: 'notes/reading', meaning: 'Notes on books' });
+  await acceptAll(dir);
   await rm(join(vault, 'notes'), { recursive: true });
   const start = await agent.start();
   assert.match(await map(dir), /### notes\/reading\nNot in the vault any more\.\nMeaning: Notes on books/);
@@ -132,12 +147,14 @@ test('with a vault connected, identity evidence must be in the block it names', 
 });
 
 test('a memory points at blocks by ID, and keeps them when rewritten without them', async () => {
-  const { agent } = await setup();
+  const { dir, agent } = await setup();
   await assert.rejects(agent.write({ name: 'bad', description: 'x', kind: 'reference', stated: false, body: 'x', blocks: [] }), refused('InvalidMemory'));
   await assert.rejects(agent.write({ name: 'bad', description: 'x', kind: 'reference', stated: false, body: 'x', blocks: ['p1', 'p1'] }), refused('InvalidMemory'));
   const tools = createTools(agent);
   const saved = await tools.call('cortex_remember', { memory: { name: 'map-essays', description: 'Where the map essays are', kind: 'reference', stated: false, body: 'One.', blocks: ['p1'] } });
+  await acceptAll(dir);
   await tools.call('cortex_remember', { memory: { name: 'map-essays', description: 'Where the map essays are', kind: 'reference', stated: false, body: 'One essay.' }, version: saved.version });
+  await acceptAll(dir);
   assert.deepEqual((await agent.read('map-essays')).memory.blocks, ['p1']);
 });
 
@@ -186,8 +203,8 @@ test('two blocks with one ID: the first stands and the clash is reported', async
 });
 
 test('one session start reads the vault a fixed number of times, however many pointers there are', async () => {
-  const { dir, vault, agent } = await setup();
-  for (const name of ['ref-a', 'ref-b', 'ref-c', 'ref-d', 'ref-e', 'ref-f']) await agent.write({ name, description: 'x', kind: 'reference', stated: false, body: 'x', blocks: ['p1', 'p2'] });
+  const { dir, vault, person } = await setup();
+  for (const name of ['ref-a', 'ref-b', 'ref-c', 'ref-d', 'ref-e', 'ref-f']) await person.write({ name, description: 'x', kind: 'reference', stated: false, body: 'x', blocks: ['p1', 'p2'] });
   const real = folderVault(vault);
   let calls = 0;
   const counted = Object.fromEntries(Object.entries(real).map(([key, value]) => [key, typeof value === 'function' ? (...args) => { calls += 1; return value(...args); } : value]));
@@ -200,13 +217,16 @@ test('cortex_describe_channel replaces cortex_describe_section, which still answ
   const tools = createTools(agent);
   assert.ok(tools.list.some(tool => tool.name === 'cortex_describe_channel'));
   assert.equal(tools.list.some(tool => tool.name === 'cortex_describe_section'), false);
-  assert.deepEqual(await tools.call('cortex_describe_section', { section: 'essays', meaning: 'Finished essays' }), { section: 'essays', meaning: 'Finished essays' });
+  const old = await tools.call('cortex_describe_section', { section: 'essays', meaning: 'Finished essays' });
+  assert.deepEqual([old.section, old.meaning, old.channel, old.waiting], ['essays', 'Finished essays', undefined, true]);
+  await acceptAll(dir);
   assert.match(await map(dir), /## essays\n2 blocks\.\nMeaning: Finished essays/);
   assert.equal((await tools.call('cortex_describe_section', { section: 'essays', meaning: 'Finished essays' })).unchanged, true);
   await assert.rejects(tools.call('cortex_describe_section', { section: 'nowhere', meaning: 'x' }), problem => JSON.parse(problem.message).error === 'NotFound');
   await assert.rejects(tools.call('cortex_describe_section', { meaning: 'x' }), refused('InvalidRequest'));
   // The folder's old name answers too.
-  assert.deepEqual(await agent.describeSection({ section: 'notes', meaning: 'Short notes' }), { section: 'notes', meaning: 'Short notes' });
+  const folderOld = await agent.describeSection({ section: 'notes', meaning: 'Short notes' });
+  assert.deepEqual([folderOld.section, folderOld.meaning], ['notes', 'Short notes']);
 });
 
 test('a cortex made before channels keeps its vault.md, memories, identity sources and cursor', async () => {
@@ -245,14 +265,14 @@ test('a cortex made before channels keeps its vault.md, memories, identity sourc
   assert.equal(text.split('<!--').length, 2, 'the old header is not kept as the person\'s words');
   assert.deepEqual(start.vault.channels.map(channel => channel.channel), ['essays', 'notes', 'notes/reading']);
   // The agent's own words, logged by section, are still the agent's: it may rewrite them.
-  await agent.describeChannel({ channel: 'essays', meaning: 'Finished essays, one idea each' });
+  assert.equal((await agent.describeChannel({ channel: 'essays', meaning: 'Finished essays, one idea each' })).waiting, true);
   // The old memory reads with blocks, and a missing block is flagged.
   assert.deepEqual((await agent.read('map-essays')).memory.blocks, ['p1']);
   await rm(join(vault, 'essays/on-maps.md'));
   assert.deepEqual((await agent.start()).vault.broken, [{ memory: 'map-essays', block: 'p1' }]);
   // The old cursor's places are read; moving the atlas is a move, not a removal.
   await rename(join(vault, 'notes/reading/atlas.md'), join(vault, 'essays/atlas.md'));
-  await agent.write({ name: 'atlas', description: 'Where the atlas note is', kind: 'reference', stated: false, body: 'x', blocks: ['p3'] });
+  await person.write({ name: 'atlas', description: 'Where the atlas note is', kind: 'reference', stated: false, body: 'x', blocks: ['p3'] });
   await writeFile(join(dir, '.cortex', 'vault-cursor.json'), JSON.stringify(cursor));
   const synced = await person.syncVault();
   assert.ok((await agent.listNotes()).notes.some(note => note.text.startsWith('Block "Reading: an atlas" (p3) moved from notes/reading to essays')), JSON.stringify(synced));
@@ -265,9 +285,10 @@ test('a cortex made before channels keeps its vault.md, memories, identity sourc
 });
 
 test('a client still sending posts on a memory has them kept as blocks', async () => {
-  const { agent } = await setup();
+  const { dir, agent } = await setup();
   const tools = createTools(agent);
   await tools.call('cortex_remember', { memory: { name: 'map-essays', description: 'Where the map essays are', kind: 'reference', stated: false, body: 'One.', posts: ['p1'] } });
+  await acceptAll(dir);
   const { memory } = await agent.read('map-essays');
   assert.deepEqual([memory.blocks, memory.posts], [['p1'], undefined]);
   await assert.rejects(agent.write({ name: 'both', description: 'x', kind: 'reference', stated: false, body: 'x', posts: ['p1'], blocks: ['p2'] }), refused('InvalidMemory'));

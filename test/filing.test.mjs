@@ -32,9 +32,9 @@ async function setup() {
   await person.connectVault({ kind: 'folder', path: vault });
   const agent = openCortex(dir, { actor: 'claude-code' });
   await agent.start();
-  await agent.describeChannel({ channel: 'meetings', meaning: 'Transcripts of meetings I was in, one per meeting', conventions: 'Titled by the group and the month, such as "Harbour board, March"' });
-  await agent.describeChannel({ channel: 'essays', meaning: 'Finished long-form writing, one idea each', conventions: 'Titles start with "On"' });
-  await agent.describeChannel({ channel: 'notes/reading', meaning: 'Notes on books and articles I read', conventions: 'Titles start with "Reading:"' });
+  await person.describeChannel({ channel: 'meetings', meaning: 'Transcripts of meetings I was in, one per meeting', conventions: 'Titled by the group and the month, such as "Harbour board, March"' });
+  await person.describeChannel({ channel: 'essays', meaning: 'Finished long-form writing, one idea each', conventions: 'Titles start with "On"' });
+  await person.describeChannel({ channel: 'notes/reading', meaning: 'Notes on books and articles I read', conventions: 'Titles start with "Reading:"' });
   return { base, vault, dir, person, agent, tools: createTools(agent) };
 }
 
@@ -217,11 +217,11 @@ test('one piece of advice reads each block once, and search still sees a block t
 });
 
 test('a channel and its own sub-channel are not both offered', async () => {
-  const { vault, dir, agent, tools } = await setup();
+  const { vault, dir, tools } = await setup();
   await writeBlock(vault, 'notes/daily/monday.md', { id: 'd1', title: 'Monday', body: '' });
   await openCortex(dir, { actor: 'member' }).syncVault();
-  await agent.describeChannel({ channel: 'notes', meaning: 'Short notes of every kind' });
-  await agent.describeChannel({ channel: 'notes/daily', meaning: 'A note for each day' });
+  await openCortex(dir, { actor: 'member' }).describeChannel({ channel: 'notes', meaning: 'Short notes of every kind' });
+  await openCortex(dir, { actor: 'member' }).describeChannel({ channel: 'notes/daily', meaning: 'A note for each day' });
   const advice = await tools.call('cortex_file_advice', { kind: 'reading note' });
   const channels = advice.channels.map(channel => channel.channel);
   assert.equal(channels[0], 'notes/reading');

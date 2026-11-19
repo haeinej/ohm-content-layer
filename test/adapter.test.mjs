@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -45,8 +45,9 @@ const contextOf = out => JSON.parse(out).hookSpecificOutput.additionalContext;
 const asked = out => out !== '' && JSON.parse(out).decision === 'block';
 // Memory names are lowercase words, so a number is spelled in letters: 0 is a, 27 is bb.
 const word = n => n.toString(26).split('').map(digit => String.fromCharCode(97 + parseInt(digit, 26))).join('');
-// The session lines the hooks wrote to the journal.
-const lines = async dir => (await readFile(join(dir, '.cortex', 'journal.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)).filter(entry => entry.type === 'session');
+// The hooks' checkpoints: starts, asks and distills.
+const lines = async dir => (await readFile(join(dir, '.cortex', 'hooks.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+const journalLines = async dir => (await readFile(join(dir, '.cortex', 'journal.jsonl'), 'utf8').catch(() => '')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
 // Rewrites an agent's own working memory, as cortex_working does.
 const work = async (dir, agent, text) => {
   const cortex = openCortex(dir, { actor: agent });
@@ -94,12 +95,13 @@ test('session-start gives the playbook and working memory within each client\'s 
     if (agent === 'codex') assert.match(context, new RegExp(`### [a-z-]+, updated \\d{4}-\\d\\d-\\d\\dT[^\\n]+\\n${other}`));
     else assert.doesNotMatch(context, new RegExp(other), 'cut before the playbook');
   }
-  assert.deepEqual((await lines(dir)).map(entry => [entry.actor, entry.session, entry.event, entry.version.startsWith('c')]), [[{ kind: 'agent', name: 'claude-code' }, 'claude-code-s1', 'start', true], [{ kind: 'agent', name: 'codex' }, 'codex-s1', 'start', true]]);
+  assert.deepEqual((await lines(dir)).map(entry => [entry.agent, entry.session, typeof entry.started, entry.version.startsWith('c')]), [['claude-code', 'claude-code-s1', 'string', true], ['codex', 'codex-s1', 'string', true]]);
+  assert.equal((await journalLines(dir)).some(line => line.type === 'session'), false, 'a hook writes no session line');
 });
 
 test('session-start cuts the index first, then other agents\' working memory, then points to the playbook and brings the index back', async () => {
   const dir = await fresh();
-  const cortex = openCortex(dir, { actor: 'claude-code' });
+  const cortex = openCortex(dir, { actor: 'member' });
   for (let n = 0; n < 12; n++) await cortex.write({ name: `filing-habit-${word(n)}`, description: `How Sam files a kind of source, number ${n}, long enough to fill the index`, kind: 'preference', body: 'x', stated: false });
   await cortex.reindex();
   let context = contextOf(run('session-start', dir, 'claude-code', claude['session-start']('s1')).out);
@@ -166,8 +168,9 @@ test('stop asks only when working memory changed and was not distilled, and once
     assert.ok(asked(run('stop', dir, agent, shape.stop('s1')).out), 'a change after the distill is asked about');
 
     assert.equal(run('session-end', dir, agent, shape['session-end']('s1')).out, '');
-    const [ended] = (await lines(dir)).filter(entry => entry.event === 'end');
-    assert.deepEqual([ended.session, ended.distilled], ['s1', false]);
+    // session-end records nothing: a session is what the agent writes when it finishes a task.
+    assert.equal((await lines(dir)).some(entry => entry.ended), false);
+    assert.equal((await journalLines(dir)).some(line => line.type === 'session'), false);
   }
 });
 
@@ -194,13 +197,13 @@ test('tracking is per session: another session\'s start, ask or distill never co
 
   // A Stop for a session with no start line starts it now, with the state as it is.
   assert.equal(run('stop', dir, 'claude-code', claude.stop('c')).out, '');
-  assert.ok((await lines(dir)).some(entry => entry.session === 'c' && entry.event === 'start'));
+  assert.ok((await lines(dir)).some(entry => entry.session === 'c' && entry.started));
   assert.equal(run('stop', dir, 'claude-code', claude.stop('c')).out, '');
   await work(dir, 'claude-code', 'Session c changed it.');
   assert.ok(asked(run('stop', dir, 'claude-code', claude.stop('c')).out));
 });
 
-test('session-start answers in full without .cortex/, and when the journal cannot be written', async () => {
+test('session-start answers in full without .cortex/, and when the hooks\' log cannot be written', async () => {
   const dir = await fresh();
   await rm(join(dir, '.cortex'), { recursive: true, force: true });
   const { status, out } = run('session-start', dir, 'claude-code', claude['session-start']('s1'));
@@ -208,12 +211,15 @@ test('session-start answers in full without .cortex/, and when the journal canno
   assert.match(contextOf(out), /## The playbook/);
   assert.equal((await lines(dir))[0].session, 's1', 'the folder is made');
 
-  // The journal can be read and not written.
-  await chmod(join(dir, '.cortex', 'journal.jsonl'), 0o444);
+  await rm(join(dir, '.cortex', 'hooks.jsonl'));
+  await mkdir(join(dir, '.cortex', 'hooks.jsonl'));
   const broken = run('session-start', dir, 'codex', codex['session-start']('s2'));
   assert.equal(broken.status, 0);
   assert.match(contextOf(broken.out), /## Identity/);
-  assert.equal((await lines(dir)).length, 1, 'the second start could not be recorded, and the hook still answered');
+  // A distill whose checkpoint cannot be written still saves, and does not throw.
+  const done = await distill(dir, 'codex', 'Left for next time.');
+  assert.equal(done.working.agent, 'codex');
+  assert.equal((await openCortex(dir, { actor: 'codex' }).working()).mine.text, 'Left for next time.');
 });
 
 test('prompt answers with nothing, without waiting for standard input', async () => {
@@ -267,7 +273,7 @@ test('a broken cortex folder makes every moment exit 0 with no output', async ()
 
 test('no moment takes longer than 200 ms on a cortex with 100 memories', async () => {
   const dir = await fresh();
-  const cortex = openCortex(dir, { actor: 'claude-code' });
+  const cortex = openCortex(dir, { actor: 'member' });
   for (let n = 0; n < 100; n++) await cortex.write({ name: `memory-${word(n)}`, description: `Something learned about how Sam works, ${n}`, kind: 'preference', body: `Detail ${n}.`, stated: false, always: n < 3 });
   await cortex.reindex();
   await work(dir, 'claude-code', 'Working on the index.');

@@ -44,16 +44,36 @@ test('identity proposals clear when confirmed or rejected', async t => {
   }
 });
 
-test('skill and tool proposals each say how to stop waiting', async t => {
-  const { dir, cortex } = await fresh(t);
-  await cortex.proposeSkill({ text: '---\nname: reading-notes\ndescription: File reading notes\n---\nRead it.' });
-  await has(cortex, 'skill-proposal');
-  await cortex.approveSkill('reading-notes');
-  await has(cortex, 'skill-proposal', false);
-  await cortex.proposeTool({ name: 'read-links', description: 'Read links', inputs: 'URL', outputs: 'Text' });
-  await has(cortex, 'tool-proposal');
-  await rm(join(dir, '.cortex/proposed/tools/read-links.md'));
-  await has(cortex, 'tool-proposal', false);
+test('proposals each say how to stop waiting, and a stale one says so', async t => {
+  const { dir, cortex: person } = await fresh(t);
+  const agent = openCortex(dir, { actor: 'codex' });
+  const skill = await agent.proposeSkill({ text: '---\nname: reading-notes\ndescription: File reading notes\n---\nRead it.' });
+  const [item] = await has(person, 'proposal');
+  assert.match(item.what, /codex proposes to create skill\/reading-notes/);
+  assert.match(item.clear, new RegExp(`cortex accept ${skill.proposed}`));
+  await person.approveSkill('reading-notes');
+  await has(person, 'proposal', false);
+  const tool = await agent.proposeTool({ name: 'read-links', description: 'Read links', inputs: 'URL', outputs: 'Text' });
+  await has(person, 'proposal');
+  await person.reject(tool.proposed);
+  await has(person, 'proposal', false);
+  // A proposal whose node changed since is stale: it is rejected, and proposed again.
+  const memory = { name: 'likes-maps', description: 'Likes maps', kind: 'preference', stated: true, body: 'Maps.' };
+  await agent.write(memory);
+  await person.write({ ...memory, body: 'Maps, mostly old ones.' });
+  const [stale] = await has(person, 'stale-proposal');
+  assert.match(stale.clear, /cortex reject/);
+  // Proposals made before they were journal lines are still listed, and cleared as before.
+  await mkdir(join(dir, '.cortex/proposed/skills/old-notes'), { recursive: true });
+  await writeFile(join(dir, '.cortex/proposed/skills/old-notes/SKILL.md'), '---\nname: old-notes\ndescription: Old notes\n---\nOld.');
+  await has(person, 'skill-proposal');
+  await person.approveSkill('old-notes');
+  await has(person, 'skill-proposal', false);
+  await mkdir(join(dir, '.cortex/proposed/tools'), { recursive: true });
+  await writeFile(join(dir, '.cortex/proposed/tools/old-links.md'), '---\nname: old-links\ndescription: Old links\non: false\n---\n');
+  await has(person, 'tool-proposal');
+  await rm(join(dir, '.cortex/proposed/tools/old-links.md'));
+  await has(person, 'tool-proposal', false);
 });
 
 test('observations clear when the next agent settles them', async t => {

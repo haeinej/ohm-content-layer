@@ -7,8 +7,10 @@
 // cortex event <text> [dir]    report a change from outside, for the agent to settle
 // cortex vault connect <folder> [dir]   read the vault kept in that folder
 // cortex vault [sync] [dir]         bring the cortex in step with the vault, and show how it reads it
+// cortex proposals [dir] [--json]   what agents proposed, waiting for the person, in full
+// cortex accept <id> [dir] [--reason <why>]   accept a proposal; the change is made
+// cortex reject <id|field> [dir] [--reason <why>]   turn one down; an identity value is not proposed again
 // cortex confirm <field|id> [dir]   accept an identity fact an agent proposed
-// cortex reject <field|id> [dir]    turn one down; that value is not proposed again
 // cortex clear <field> [dir]        remove an identity field
 // cortex hook <moment> [dir] --agent <name>   answer a Claude Code or Codex hook: session-start, prompt, stop, session-end
 // cortex install-hooks claude-code|codex      print the hooks to add; writes nothing
@@ -16,6 +18,7 @@
 // cortex as-of <node> <save|date|seq> [dir]     a node of the cortex as it was then
 // cortex save <name> <note> [dir]              name this point in history, to read the cortex as it was here; changes nothing
 // cortex restore <node> <version> [dir]        bring a node back to an earlier version, as a new change
+// cortex revert <change> [dir]                 undo one change, as a new change
 // The folder is the one named, or CORTEX_DIR, or ~/cortex.
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -35,6 +38,14 @@ import { cortexStatus } from '../src/status.mjs';
 const template = fileURLToPath(new URL('../template', import.meta.url));
 const [command, ...rest] = process.argv.slice(2);
 const folder = given => resolve(given ?? process.env.CORTEX_DIR ?? join(homedir(), 'cortex'));
+// Takes `--flag value` out of the arguments, and returns the value.
+const take = flag => {
+  const at = rest.indexOf(flag);
+  if (at < 0) return undefined;
+  const [, value] = rest.splice(at, 2);
+  if (!value) throw new Refused('InvalidRequest', `Give ${flag} a value`);
+  return value;
+};
 
 try {
   if (command === 'init') {
@@ -85,10 +96,21 @@ try {
   } else if (command === 'approve' && rest[0]) {
     const done = await openCortex(folder(rest[1])).approveSkill(rest[0]);
     console.log(`${done.name} is approved, and is now in skills/`);
-  } else if (['confirm', 'reject'].includes(command) && rest[0]) {
+  } else if (['confirm', 'accept', 'reject'].includes(command) && rest[0]) {
+    const reason = take('--reason');
     const cortex = openCortex(folder(rest[1]), { actor: 'member' });
-    const done = command === 'confirm' ? await cortex.confirmIdentity(rest[0]) : await cortex.rejectIdentity(rest[0]);
-    console.log(command === 'confirm' ? `${done.field} is now ${JSON.stringify(done.value)}` : `${done.field}: proposal ${done.id} turned down`);
+    const done = command === 'reject' ? await cortex.reject(rest[0], { reason }) : await cortex.accept(rest[0], { reason });
+    if (done.field !== undefined) console.log(done.rejected ? `${done.field}: proposal ${done.id} turned down` : `${done.field} is now ${JSON.stringify(done.value)}`);
+    else console.log(done.rejected ? `Proposal ${done.id} for ${done.node} turned down` : `Proposal ${done.id} accepted: ${done.node} changed`);
+  } else if (command === 'proposals') {
+    const json = rest.includes('--json');
+    const waiting = await openCortex(folder(rest.filter(arg => arg !== '--json')[0]), { actor: 'member' }).proposals();
+    if (json) console.log(JSON.stringify(waiting, null, 2));
+    else if (!waiting.length) console.log('Nothing is waiting.');
+    else for (const item of waiting) {
+      const what = item.field !== undefined ? `${item.field}: ${JSON.stringify(item.value)}` : typeof item.content === 'string' ? item.content : item.content === null ? '(removes it)' : JSON.stringify(item.content, null, 2);
+      console.log(`${item.id}  ${item.actor.name} proposes to ${item.op} ${item.node}${item.stale ? '  (stale: it changed since; reject this, and the agent proposes again)' : ''}${item.reason ? `\n  why: ${item.reason}` : ''}\n${what.replace(/^/gm, '  | ')}\n`);
+    }
   } else if (command === 'clear' && rest[0]) {
     await openCortex(folder(rest[1]), { actor: 'member' }).clearIdentity(rest[0]);
     console.log(`${rest[0]} is cleared`);
@@ -128,13 +150,6 @@ try {
     console.error(`${where} The commands run \`cortex\` (npm link this folder) on the cortex in CORTEX_DIR, or ~/cortex. Set CORTEX_AGENT=${rest[0]} for the MCP server too, so its distill counts. Nothing was written.`);
     process.stdout.write(readFileSync(fileURLToPath(new URL(`../hooks/${file}`, import.meta.url)), 'utf8'));
   } else if (command === 'history') {
-    const take = flag => {
-      const at = rest.indexOf(flag);
-      if (at < 0) return undefined;
-      const [, value] = rest.splice(at, 2);
-      if (!value) throw new Refused('InvalidRequest', `Give ${flag} a value`);
-      return value;
-    };
     const json = rest.includes('--json');
     if (json) rest.splice(rest.indexOf('--json'), 1);
     const [node, since, actor] = [take('--node'), take('--since'), take('--actor')];
@@ -157,8 +172,11 @@ try {
   } else if (command === 'restore' && rest[0] && rest[1]) {
     const done = await openCortex(folder(rest[2]), { actor: 'member' }).restore({ node: rest[0], version: rest[1] });
     console.log(done.unchanged ? `${rest[0]} is already version ${rest[1]}` : `${rest[0]} is back to ${done.restored}. What it replaced is kept.`);
+  } else if (command === 'revert' && rest[0]) {
+    const done = await openCortex(folder(rest[1]), { actor: 'member' }).revert({ change: rest[0] });
+    console.log(`Change ${rest[0]} is undone: ${done.node} is back as it was. What it replaced is kept.`);
   } else {
-    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | confirm <field|id> [dir] | reject <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex | history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json] | as-of <node> <save|date|seq> [dir] | save <name> <note> [dir] | restore <node> <version> [dir]');
+    console.log('cortex init [dir] [--account <did>] | mcp [dir] | serve [dir] [--port 8765] [--host 127.0.0.1] | token [dir] [--replace] | vault connect <folder> [dir] | vault [dir] | identity [dir] | proposals [dir] [--json] | accept <id> [dir] [--reason <why>] | reject <id|field> [dir] [--reason <why>] | confirm <field|id> [dir] | clear <field> [dir] | approve <skill> [dir] | event <text> [dir] | status [dir] [--json] | hook <moment> [dir] --agent <name> | install-hooks claude-code|codex | history [dir] [--node <path>] [--since <seq|date>] [--actor <name>] [--json] | as-of <node> <save|date|seq> [dir] | save <name> <note> [dir] | restore <node> <version> [dir] | revert <change> [dir]');
     process.exitCode = command ? 1 : 0;
   }
 } catch (problem) {

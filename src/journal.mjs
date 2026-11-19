@@ -5,20 +5,21 @@
 // (unique, so lines from two machines joined by a union merge never clash), `at`, `actor`
 // ({ kind: human or agent, name }), `session` when there is one, and `type`:
 //
-//   session   a session started, was asked to distill, distilled, or ended   (was .cortex/sessions.jsonl)
-//   change    a file of the cortex was created, updated, removed or restored, with its versions before and after
-//   note      one observation, waiting to be settled                         (was .cortex/notes.jsonl)
-//   decision  what became of a note when it was settled                      (was the `settled` lines)
+//   proposal  an agent's edit, whole: node, op, the version it applies to, the content after, why
+//   decision  the person accepting or rejecting a proposal; or what became of a note when settled
+//   change    a node was created, updated, removed or restored, with its versions before and after.
+//             The person's own edits are changes at once; an agent's is a change only once accepted,
+//             and points at its proposal and decision
+//   note      one observation, waiting to be settled. It changes no file   (was .cortex/notes.jsonl)
+//   session   an agent's record of a task it finished or gave up: what was done, the proposals and
+//             changes it made, and the dead ends
 //   save      a name and a note for this point in history, to read the cortex as it was here.
 //             It changes nothing. Lines written as `stamp` before the name changed are read as saves.
-//
-// `proposal` is named in docs/journal-and-history.md and reserved: nothing writes it yet.
 import { randomBytes } from 'node:crypto';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-export const TYPES = ['session', 'change', 'note', 'decision', 'save'];
-export const RESERVED_TYPES = ['proposal'];
+export const TYPES = ['proposal', 'decision', 'change', 'note', 'session', 'save'];
 export const OPS = ['create', 'update', 'remove', 'restore'];
 // Names that mean the person, or the signed-in account. Everyone else is an agent.
 export const PEOPLE = ['member', 'account'];

@@ -20,14 +20,21 @@ const refused = code => problem => problem.code === code || JSON.parse(problem.m
 // A cortex opened on a given day, so the journal's times are known.
 const on = (dir, actor, day) => openCortex(dir, { actor, now: () => new Date(`${day}T12:00:00.000Z`) });
 const tools = (dir, actor, day) => createTools(on(dir, actor, day));
+// The person accepts what is waiting, on a given day.
+const accept = async (dir, day) => {
+  const person = on(dir, 'member', day);
+  for (const item of await person.proposals()) if (item.node !== 'identity') await person.accept(item.id);
+};
 const memory = body => ({ name: 'likes-short-titles', description: 'Titles of four words or fewer', kind: 'preference', stated: true, body });
 
 // Three days: Claude Code writes a memory, Codex rewrites it, the person confirms a birthdate. A save in between.
 async function threeDays() {
   const dir = await fresh();
   const one = await on(dir, 'claude-code', '2026-11-01').write(memory('Short titles.'));
+  await accept(dir, '2026-11-01');
   await tools(dir, 'claude-code', '2026-11-01').call('cortex_save', { name: 'before-codex', note: 'Before Codex took over the titles' });
   const two = await on(dir, 'codex', '2026-11-02').write(memory('Short titles, no colons.'), { replaces: one.version });
+  await accept(dir, '2026-11-02');
   const person = on(dir, 'member', '2026-11-03');
   await person.proposeIdentity({ field: 'birthdate', value: '1990-04-02', source: { kind: 'person', quote: 'born 2 April 1990' } });
   await person.confirmIdentity('birthdate');
@@ -40,15 +47,18 @@ test('cortex_history lists changes, filtered by node, since a seq or a date, and
 
   const all = await call();
   assert.deepEqual(all.changes.map(line => [line.node, line.op, line.actor.name]), [
-    ['memory/likes-short-titles.md', 'create', 'claude-code'],
-    ['memory/likes-short-titles.md', 'update', 'codex'],
-    ['identity.md', 'update', 'member'],
+    ['memory/likes-short-titles', 'create', 'claude-code'],
+    ['memory/likes-short-titles', 'update', 'codex'],
+    ['identity', 'update', 'member'],
   ]);
+  // An agent's change points at its proposal and the person's decision.
+  assert.ok(all.changes[0].proposal && all.changes[0].decision);
+  assert.equal(all.changes[2].actor.name, 'member', 'the person proposed it, and confirmed it');
   assert.deepEqual(all.saves.map(save => [save.name, save.note]), [['before-codex', 'Before Codex took over the titles']]);
-  assert.deepEqual((await call({ node: 'memory/likes-short-titles.md' })).changes.map(line => [line.before, line.after]), [[null, one.version], [one.version, two.version]]);
+  assert.deepEqual((await call({ node: 'memory/likes-short-titles' })).changes.map(line => [line.before, line.after]), [[null, one.version], [one.version, two.version]]);
   assert.equal((await call({ node: 'memory/' })).changes.length, 2, 'a folder ending in / takes every node in it');
   assert.deepEqual((await call({ actor: 'codex' })).changes.map(line => line.op), ['update']);
-  assert.deepEqual((await call({ actor: 'human' })).changes.map(line => line.node), ['identity.md']);
+  assert.deepEqual((await call({ actor: 'human' })).changes.map(line => line.node), ['identity']);
   assert.deepEqual((await call({ actor: 'agent' })).changes.length, 2);
   const seq = all.changes[0].seq;
   assert.deepEqual((await call({ since: seq })).changes.map(line => line.actor.name), ['codex', 'member'], 'since a seq: after it');
@@ -63,7 +73,7 @@ test('cortex_history lists changes, filtered by node, since a seq or a date, and
 
 test('cortex_as_of reads a node back as it was at a save, a date or a seq', async () => {
   const { dir, one, two } = await threeDays();
-  const asOf = at => tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'memory/likes-short-titles.md', at });
+  const asOf = at => tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'memory/likes-short-titles', at });
   const atSave = await asOf('before-codex');
   assert.deepEqual([atSave.version, atSave.as.save], [one.version, 'before-codex']);
   assert.match(atSave.text, /^---\n[\s\S]*\n---\nShort titles\.$/);
@@ -71,32 +81,32 @@ test('cortex_as_of reads a node back as it was at a save, a date or a seq', asyn
   assert.equal((await asOf('2026-11-02')).version, two.version);
   assert.match((await asOf('2026-11-02')).text, /no colons/);
   assert.equal((await asOf('2026-10-31')).exists, false, 'before it was written');
-  const { changes } = await tools(dir, 'claude-code', '2026-11-04').call('cortex_history', { node: 'memory/likes-short-titles.md' });
+  const { changes } = await tools(dir, 'claude-code', '2026-11-04').call('cortex_history', { node: 'memory/likes-short-titles' });
   assert.equal((await asOf(changes[0].seq)).version, one.version);
   assert.equal((await asOf(String(changes[1].seq))).version, two.version);
   await assert.rejects(asOf('no-such-save'), refused('NotFound'));
   await assert.rejects(tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'agents/secrets/key', at: 1 }), refused('NotFound'));
 
   // A node that has not changed since the journal began reads as it is now.
-  const style = await tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'memory/working-style.md', at: 1 });
+  const style = await tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'memory/working-style', at: 1 });
   assert.match(style.text, /No working preferences have been stated yet/);
 
   // An agent reads identity as it was, as an agent sees it: the birthdate is never shown.
-  const identity = await tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'identity.md', at: '2026-11-03' });
+  const identity = await tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'identity', at: '2026-11-03' });
   assert.deepEqual(identity.identity.hidden, ['birthdate']);
   assert.equal(identity.text, undefined);
   assert.doesNotMatch(JSON.stringify(identity), /1990/);
-  const before = await tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'identity.md', at: '2026-11-02' });
+  const before = await tools(dir, 'claude-code', '2026-11-04').call('cortex_as_of', { node: 'identity', at: '2026-11-02' });
   assert.equal(before.identity.hidden, undefined);
   // The person reads it in full.
-  assert.match(execFileSync('node', [cli, 'as-of', 'identity.md', '2026-11-03', dir], { encoding: 'utf8' }), /birthdate: "1990-04-02"/);
+  assert.match(execFileSync('node', [cli, 'as-of', 'identity', '2026-11-03', dir], { encoding: 'utf8' }), /birthdate: "1990-04-02"/);
 
   // Working memory rewritten within a session is not kept, and as_of says so.
   const agent = on(dir, 'claude-code', '2026-11-05');
   const w1 = await agent.writeWorking('First draft of today.');
   await createTools(agent).call('cortex_save', { name: 'mid-session', note: 'Halfway' });
   await agent.writeWorking('Second draft of today.', { replaces: w1.version });
-  const kept = await createTools(agent).call('cortex_as_of', { node: '.cortex/working/claude-code.md', at: 'mid-session' });
+  const kept = await createTools(agent).call('cortex_as_of', { node: 'working/claude-code', at: 'mid-session' });
   assert.deepEqual([kept.version, kept.kept, kept.text], [w1.version, false, undefined]);
 });
 
@@ -118,7 +128,7 @@ test('cortex_save names a point with a note, once, and changes nothing', async (
   assert.equal((await tools(dir, 'codex', '2026-11-10').call('cortex_history')).changes.length, 0);
   // A line written as a stamp, before the name changed, reads as a save.
   await appendFile(join(dir, '.cortex', 'journal.jsonl'), `${JSON.stringify({ seq: 99, id: 'old-stamp', at: '2026-11-10T13:00:00.000Z', actor: { kind: 'agent', name: 'codex' }, type: 'stamp', name: 'from-before', note: 'Written as a stamp' })}\n`);
-  assert.equal((await tools(dir, 'codex', '2026-11-10').call('cortex_as_of', { node: 'memory/working-style.md', at: 'from-before' })).as.save, 'from-before');
+  assert.equal((await tools(dir, 'codex', '2026-11-10').call('cortex_as_of', { node: 'memory/working-style', at: 'from-before' })).as.save, 'from-before');
   // The person saves from the command line.
   assert.match(execFileSync('node', [cli, 'save', 'end-of-year', 'Kept as it was in December', dir], { encoding: 'utf8' }), /Saved end-of-year/);
   const history = JSON.parse(execFileSync('node', [cli, 'history', dir, '--json'], { encoding: 'utf8' }));
@@ -130,33 +140,36 @@ test('restoring is a new change: what it replaces is kept, and no line is rewrit
   const journal = () => readFile(join(dir, '.cortex', 'journal.jsonl'), 'utf8');
   const before = await journal();
   const codex = tools(dir, 'codex', '2026-11-06');
-  await assert.rejects(codex.call('cortex_restore', { node: 'memory/likes-short-titles.md', to: one.version, version: 'cstale' }), refused('Changed'));
-  const done = await codex.call('cortex_restore', { node: 'memory/likes-short-titles.md', to: one.version, version: two.version, reason: 'The person wants colons back' });
-  assert.deepEqual([done.restored, done.version], [one.version, one.version]);
+  await assert.rejects(codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: one.version, version: 'cstale' }), refused('Changed'));
+  const done = await codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: one.version, version: two.version, reason: 'The person wants colons back' });
+  assert.deepEqual([done.restored, done.version, done.waiting], [one.version, one.version, true]);
+  await accept(dir, '2026-11-06');
   const after = await journal();
   assert.ok(after.startsWith(before), 'every earlier line is as it was');
   const line = JSON.parse(after.trim().split('\n').at(-1));
-  assert.deepEqual([line.type, line.node, line.op, line.before, line.after, line.reason, line.actor.name], ['change', 'memory/likes-short-titles.md', 'restore', two.version, one.version, 'The person wants colons back', 'codex']);
+  assert.deepEqual([line.type, line.node, line.op, line.before, line.after, line.reason, line.actor.name], ['change', 'memory/likes-short-titles', 'restore', two.version, one.version, 'The person wants colons back', 'codex']);
   const cortex = on(dir, 'codex', '2026-11-06');
   assert.equal((await cortex.read('likes-short-titles')).memory.body, 'Short titles.');
   assert.equal((await cortex.read('likes-short-titles', { version: two.version })).memory.body, 'Short titles, no colons.', 'the replaced version is kept');
-  assert.equal((await codex.call('cortex_restore', { node: 'memory/likes-short-titles.md', to: one.version, version: one.version })).unchanged, true);
+  assert.equal((await codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: one.version, version: one.version })).unchanged, true);
 
   // A removed memory comes back the same way.
   await cortex.remove('likes-short-titles', { replaces: one.version });
-  await codex.call('cortex_restore', { node: 'memory/likes-short-titles.md', to: two.version });
+  await accept(dir, '2026-11-06');
+  await codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: two.version });
+  await accept(dir, '2026-11-06');
   assert.match(await readFile(join(dir, 'memory', 'MEMORY.md'), 'utf8'), /likes-short-titles/);
-  await assert.rejects(codex.call('cortex_restore', { node: 'memory/likes-short-titles.md', to: 'cnothing', version: two.version }), refused('NotFound'));
+  await assert.rejects(codex.call('cortex_restore', { node: 'memory/likes-short-titles', to: 'cnothing', version: two.version }), refused('NotFound'));
 
-  // An agent never restores identity, vault.md, a skill, or another agent's working memory.
-  const identity = (await codex.call('cortex_history', { node: 'identity.md' })).changes[0];
-  await assert.rejects(codex.call('cortex_restore', { node: 'identity.md', to: identity.before }), refused('PersonOnly'));
-  await assert.rejects(codex.call('cortex_restore', { node: 'skills/file-a-source', to: 'cx' }), refused('PersonOnly'));
-  await assert.rejects(codex.call('cortex_restore', { node: '.cortex/working/claude-code.md', to: 'cx' }), refused('PersonOnly'));
+  // An agent never restores identity, the playbook, or another agent's working memory.
+  const identity = (await codex.call('cortex_history', { node: 'identity' })).changes[0];
+  await assert.rejects(codex.call('cortex_restore', { node: 'identity', to: identity.before }), refused('PersonOnly'));
+  await assert.rejects(codex.call('cortex_restore', { node: 'playbook', to: 'cx' }), refused('PersonOnly'));
+  await assert.rejects(codex.call('cortex_restore', { node: 'working/claude-code', to: 'cx' }), refused('PersonOnly'));
   // The person does, from the command line.
-  assert.match(execFileSync('node', [cli, 'restore', 'identity.md', identity.before, dir], { encoding: 'utf8' }), /is back to/);
+  assert.match(execFileSync('node', [cli, 'restore', 'identity', identity.before, dir], { encoding: 'utf8' }), /is back to/);
   assert.equal((await cortex.identity()).fields.birthdate, undefined);
   const last = JSON.parse((await journal()).trim().split('\n').at(-1));
-  assert.deepEqual([last.node, last.op, last.actor], ['identity.md', 'restore', { kind: 'human', name: 'member' }]);
-  assert.match(execFileSync('node', [cli, 'history', dir, '--node', 'identity.md'], { encoding: 'utf8' }), /member {2}restore identity\.md/);
+  assert.deepEqual([last.node, last.op, last.actor], ['identity', 'restore', { kind: 'human', name: 'member' }]);
+  assert.match(execFileSync('node', [cli, 'history', dir, '--node', 'identity'], { encoding: 'utf8' }), /member {2}restore identity/);
 });
