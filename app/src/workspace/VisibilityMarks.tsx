@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { byId, titleOf, type Doc, type Visibility } from "@/data/sample"
+import { byId, titleOf, type Doc, type Visibility } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { setVisibility, useWorkspace } from "./store"
 

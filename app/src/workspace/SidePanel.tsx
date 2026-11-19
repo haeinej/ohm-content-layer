@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { FileTree, type FileTreeNode } from "@/components/ui/file-tree"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { byId, channelRecords, channelsOf, cortex, docIdOf, inbox, inOrder, PLACED, placedIn, posts, sectionOf, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/sample"
+import { byId, channelRecords, channelsOf, cortex, docIdOf, inbox, inOrder, PLACED, placedIn, posts, sectionOf, sees, titleOf, type Audience, type Doc, type InboxItem } from "@/data/workspace-data"
 import { cn } from "@/lib/cn"
 import { DOC_DRAG } from "./drop"
 import { GraphView } from "./GraphView"
@@ -51,7 +51,7 @@ function toTree(prime: string, docs: Doc[], order?: string[], placements = inSec
     subs.set(inner, [...(subs.get(inner) ?? []), { doc: d, id }])
     labels.set(top, subs)
   }
-  // Blocks in each channel's own order (data/sample.ts inOrder).
+  // Blocks in each channel's own order from the selected home source.
   const leaves = (path: string, list: { doc: Doc; id: string }[] = []): FileTreeNode[] => {
     const ordered = inOrder(path, list.map(l => l.doc))
     return ordered.map(d => list.find(l => l.doc === d)!).map(({ doc: d, id }) => ({ id, name: `${d.icon ? `${d.icon} ` : ""}${titleOf(d)}` }))

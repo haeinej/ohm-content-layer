@@ -1,11 +1,47 @@
 // Workspace state, and the handlers both the UI and the WebMCP tools call (AGENTS.md rule 2).
 import { useSyncExternalStore } from "react"
-import { all, byId, channelByPath, channelRecords, channelsOf, ensureChannel, inbox, inOrder, owner, posts, sectionOf, type Audience, type Doc, type Visibility } from "@/data/sample"
+import { blockVersion, byId, cortex, channelRecords, channelsOf, demoJournal, inbox, inOrder, owner, posts,
+  refreshSample, sampleWorkspace, sectionOf, selectSource, type Audience, type ChannelRecord, type Doc, type Visibility,
+} from "@/data/workspace-data"
+import { docOf, fileOf } from "@/data/block-document"
+import { newNodeId } from "../../../vault/vault/node.mjs"
+import { createServiceSource, type ServiceOptions } from "@/data/service-source"
+import type { BlockRef, HomeSource } from "@/data/source"
+import { sampleSource, type SampleSource } from "@/data/sample-source"
 import { buildGraph } from "@/graph/model"
 import type { AgentState } from "@/components/agent-status"
 import type { SettingsTab } from "./settings-tabs"
 import { NO_FILTERS, passes, type Filters } from "./filters"
-import { actor, applySnapshot, changeById, recordSession, save as saveJournal, snap, snapshotAt, syncJournal, type DeadEnd, type Snapshot } from "@/data/journal"
+import { applySnapshot, snap, type DeadEnd, type Snapshot } from "@/data/journal"
+
+const editable = () => {
+  const source: HomeSource<"sync"> | undefined = sampleWorkspace()
+  if (!source) throw new DOMException("Editing is available in the sample workspace.", "NotSupportedError")
+  return source
+}
+const draftOf = (id: string) => {
+  const doc = byId(id)
+  return doc && structuredClone(doc)
+}
+const persist = (doc: Doc, change?: Parameters<HomeSource["saveBlock"]>[3]) => {
+  const held = blockVersion(doc.id)
+  if (!held && cortex.some(node => node.id === doc.id)) {
+    sampleWorkspace()!.demo.saveCortex(doc, change)
+    return
+  }
+  const ref: BlockRef = held?.ref ?? { id: doc.id, layer: "private", store: "sealed" }
+  editable().saveBlock(ref, fileOf(doc), held?.version ?? null, change)
+}
+const updateChannels = (channels: ChannelRecord[]) => editable().saveChannels!(channels)
+function ensureChannel(channels: ChannelRecord[], path: string) {
+  const held = channels.find(channel => channel.path === path)
+  if (held) return held
+  const parent = path.split("/").slice(0, -1).join("/")
+  if (parent) ensureChannel(channels, parent)
+  const record = { id: newNodeId(), path, order: [], created: new Date().toISOString().slice(0, 10) }
+  channels.push(record)
+  return record
+}
 
 /** What the side panel shows. The rack chooses it. */
 export type Side = "repo" | "visibility" | "inbox" | "profile" | null
@@ -83,7 +119,6 @@ let state: State = {
 }
 const listeners = new Set<() => void>()
 let walking = false
-let pendingChange: Parameters<typeof syncJournal>[0]
 const set = (patch: Partial<State>) => {
   // The one place the open page changes: record it in history, and have the tree reveal it.
   const next = patch.view
@@ -95,12 +130,28 @@ const set = (patch: Partial<State>) => {
     patch = { ...patch, reveal: { target: next.id, n: (state.reveal?.n ?? 0) + 1 } }
   }
   if (patch.side) patch = { ...patch, lastSide: patch.side }
-  // Every change to the repository goes into the journal (data/journal.ts): who, what, when.
-  if (patch.rev !== undefined) { syncJournal(pendingChange); pendingChange = undefined }
   state = { ...state, ...patch }
   listeners.forEach(l => l())
 }
 const bump = () => ({ rev: state.rev + 1 })
+const refresh = () => {
+  const sample = sampleWorkspace()
+  if (sample) refreshSample(sample)
+  return bump()
+}
+
+export async function setSource<Master, Sealed>(
+  next: HomeSource | SampleSource | { service: ServiceOptions<Master, Sealed> } = sampleSource,
+) {
+  if (!await selectSource("service" in next ? createServiceSource(next.service) : next)) return
+  usedSlugs.clear()
+  for (const doc of [...posts, ...cortex]) usedSlugs.add(doc.slug)
+  bodyReplacements.clear()
+  sourceRevision = ++replacementSequence
+  Object.values(marks).forEach(mark => mark.clear())
+  set({ ...bump(), graphCenter: owner.handle, view: { kind: "empty" }, history: [], at: -1,
+    reveal: null, returnTo: null, restored: null, historyFocus: null, searchOpen: false })
+}
 
 export const useWorkspace = () =>
   useSyncExternalStore(cb => (listeners.add(cb), () => listeners.delete(cb)), () => state)
@@ -164,15 +215,16 @@ export const setShowVisibility = (showVisibility: boolean) =>
 export function setVisibility(id: string, visibility: Visibility) {
   const doc = byId(id)
   if (!doc || doc.kind !== "post") throw new DOMException("Only posts have a visibility", "DataError")
-  doc.visibility = visibility
-  set(bump())
+  const held = blockVersion(id)!
+  editable().markVisibility!(held.ref, visibility, held.version)
+  set(refresh())
 }
 
 // Inbox
 export function openInbox(id: string) {
   const item = inbox.find(i => i.id === id)
   if (!item) throw new DOMException(`Nothing in the inbox with id ${id}`, "NotFoundError")
-  item.unread = false
+  sampleWorkspace()?.demo.markInboxRead(id)
   set({ view: item.ref ? { kind: "doc", id: item.ref, mode: "read" } : { kind: "inbox", id }, ...bump(), ...sideAfterOpen() })
 }
 
@@ -206,6 +258,7 @@ export const setOffered = (name: ToolName, on: boolean) => set({ offered: { ...s
 export function open(id: string, mode: "read" | "edit" = "read") {
   const doc = byId(id)
   if (!doc) throw new DOMException(`Nothing with id ${id}`, "NotFoundError")
+  if (mode === "edit") editable()
   marks.unread.delete(id)
   set({ view: { kind: "doc", id, mode }, searchOpen: false, ...sideAfterOpen() })
   return { id, title: doc.title, view: mode, next: mode === "edit" ? "workspace.save-draft" : "workspace.open" }
@@ -219,7 +272,7 @@ export function showGraph(center?: string) {
 }
 
 let draftCount = 0
-const usedSlugs = new Set(all.map(doc => doc.slug))
+const usedSlugs = new Set([...posts, ...cortex].map(doc => doc.slug))
 export function createDraft(input: { label?: string; sublabel?: string; channels?: string[]; title?: string } = {}) {
   draftCount += 1
   const title = input.title?.trim() ?? ""
@@ -228,7 +281,6 @@ export function createDraft(input: { label?: string; sublabel?: string; channels
   for (let suffix = 2; usedSlugs.has(slug); suffix++) {
     slug = `${stem.slice(0, 59 - String(suffix).length)}-${suffix}`
   }
-  usedSlugs.add(slug)
   // Everything about the new page is set here, before the one change that records it.
   const doc: Doc = {
     id: `draft-${draftCount}`, kind: "post", slug, title,
@@ -236,10 +288,9 @@ export function createDraft(input: { label?: string; sublabel?: string; channels
     ...(input.channels?.length ? { channels: [...input.channels] } : {}), visibility: "private",
     updated: new Date().toISOString().slice(0, 10), body: "",
   }
-  for (const c of channelsOf(doc)) ensureChannel(c)
-  posts.push(doc)
-  all.push(doc)
-  set({ view: { kind: "doc", id: doc.id, mode: "edit" }, ...bump(), searchOpen: false, ...sideAfterOpen() })
+  persist(doc)
+  usedSlugs.add(slug)
+  set({ view: { kind: "doc", id: doc.id, mode: "edit" }, ...refresh(), searchOpen: false, ...sideAfterOpen() })
   return { id: doc.id, slug, view: "edit", next: "workspace.save-draft" }
 }
 
@@ -247,7 +298,7 @@ export function createDraft(input: { label?: string; sublabel?: string; channels
 export function saveDraft(input: { title?: string; body?: string }) {
   const v = state.view
   if (v.kind !== "doc") throw new DOMException("No post is open in the editor", "InvalidStateError")
-  const doc = byId(v.id)
+  const doc = draftOf(v.id)
   if (!doc || doc.kind !== "post") throw new DOMException("Only posts are edited here", "DataError")
   // Changing a post other people can see needs the person's approval (AGENTS.md rule 11): its own flow.
   if (doc.visibility !== "private") throw new DOMException("This post is not private; changing it needs approval", "NotAllowedError")
@@ -255,28 +306,31 @@ export function saveDraft(input: { title?: string; body?: string }) {
   if (input.body !== undefined) doc.body = input.body
   // The editor keeps the post open; saving changes nothing about what is on screen.
   doc.updated = new Date().toISOString().slice(0, 10)
-  set(bump())
+  persist(doc)
+  set(refresh())
   return { id: doc.id, slug: doc.slug, visibility: doc.visibility }
 }
 
 export const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60)
-export const me = owner
+export { owner as me }
 
 /** A page's icon: an emoji shown above its title. */
 export function setIcon(id: string, icon: string | undefined) {
-  const doc = byId(id)
+  const doc = draftOf(id)
   if (!doc) return
   doc.icon = icon
-  set(bump())
+  persist(doc)
+  set(refresh())
 }
 /** Saves as you type, for private posts only. */
 export function autosave(id: string, patch: { title?: string; body?: string }) {
-  const doc = byId(id)
+  const doc = draftOf(id)
   if (!doc || doc.kind !== "post" || doc.visibility !== "private") return
   if (patch.title !== undefined) doc.title = patch.title
   if (patch.body !== undefined) doc.body = patch.body
   doc.updated = new Date().toISOString().slice(0, 10)
-  set(bump())
+  persist(doc)
+  set(refresh())
 }
 
 /**
@@ -284,37 +338,24 @@ export function autosave(id: string, patch: { title?: string; body?: string }) {
  * number of them. Its first channel, its site section, is changed only by moving it (moveBlock).
  */
 export function collect(id: string, path: string) {
-  const doc = byId(id)
+  const doc = draftOf(id)
   if (!doc || doc.kind !== "post") throw new DOMException("Only blocks can be collected into channels", "DataError")
-  ensureChannel(path)
   if (sectionOf(doc) === path || doc.channels?.includes(path)) return { added: false }
   doc.channels = [...(doc.channels ?? []), path]
-  set(bump())
+  persist(doc)
+  set(refresh())
   return { added: true }
 }
 
-/** Puts a block before or after another in one channel's own order. */
-function place(path: string, id: string, at: { before?: string; after?: string }) {
-  const list = inOrder(path, posts.filter(p => channelsOf(p).includes(path))).map(d => d.id).filter(x => x !== id)
-  const i = at.before ? list.indexOf(at.before) : at.after ? list.indexOf(at.after) + 1 : -1
-  list.splice(i < 0 ? list.length : i, 0, id)
-  ensureChannel(path).order = list
-}
-
-/**
- * Moves a block's row from one channel to another, and to a place in it: what dragging a row does.
- * The first channel a block is in is its section, which sets its address when published; moving it
- * out of its section moves its section, so the address changes on the next publish. `keep` adds it to
- * the other channel and leaves it where it was (⌥ while dragging).
- */
+/** Moves or adds a block's placement and updates the destination's order. */
 export function moveBlock(id: string, from: string, to: string, opts: { before?: string; after?: string; keep?: boolean } = {}) {
-  const doc = byId(id)
+  const doc = draftOf(id)
   if (!doc || doc.kind !== "post") throw new DOMException("Only blocks move between channels", "DataError")
   let section = false
-  ensureChannel(to)
   if (from !== to) {
-    if (opts.keep) collect(id, to)
-    else if (sectionOf(doc) === from) {
+    if (opts.keep) {
+      if (!channelsOf(doc).includes(to)) doc.channels = [...(doc.channels ?? []), to]
+    } else if (sectionOf(doc) === from) {
       const [label, sublabel] = to.split("/")
       doc.label = label
       doc.sublabel = sublabel
@@ -324,9 +365,17 @@ export function moveBlock(id: string, from: string, to: string, opts: { before?:
       doc.channels = (doc.channels ?? []).filter(c => c !== from)
       if (sectionOf(doc) !== to && !doc.channels.includes(to)) doc.channels.push(to)
     }
+    persist(doc)
   }
-  if (opts.before || opts.after) place(to, id, opts)
-  set(bump())
+  if (opts.before || opts.after) {
+    const records = structuredClone(channelRecords)
+    const list = inOrder(to, posts.filter(post => channelsOf(post).includes(to))).map(post => post.id).filter(x => x !== id)
+    const index = opts.before ? list.indexOf(opts.before) : list.indexOf(opts.after!) + 1
+    list.splice(index < 0 ? list.length : index, 0, id)
+    ensureChannel(records, to).order = list
+    updateChannels(records)
+  }
+  set(refresh())
   return { section, published: section && doc.visibility !== "private" }
 }
 
@@ -342,24 +391,17 @@ export function moveChannel(path: string, into: string | null) {
   if (into && (into === path || into.startsWith(`${path}/`))) throw new DOMException("A channel can't go inside itself", "DataError")
   if (into && channelRecords.some(c => c.path.startsWith(`${path}/`))) throw new DOMException(`“${name}” holds channels of its own, so it can't go inside another yet`, "DataError")
   if (next === path) return { path, published: 0 }
-  let published = 0
-  for (const p of posts) {
-    if (sectionOf(p) === path) {
-      const [label, sublabel] = next.split("/")
-      p.label = label
-      p.sublabel = sublabel
-      if (p.visibility !== "private") published++
-    }
-    if (p.channels) p.channels = p.channels.map(c => (c === path ? next : c))
-  }
-  // The record moves and keeps its id; into a channel of the same name, the two merge. A channel
-  // only blocks name (say, brought back by a restore) gets its record now.
-  const record = ensureChannel(path)
-  const there = channelByPath(next)
-  if (there) { there.order = [...there.order, ...record.order.filter(id => !there.order.includes(id))]; channelRecords.splice(channelRecords.indexOf(record), 1) }
-  else record.path = next
-  if (into) ensureChannel(into)
-  set(bump())
+  const records = structuredClone(channelRecords)
+  const record = ensureChannel(records, path)
+  const there = records.find(channel => channel.path === next)
+  if (there) {
+    there.order = [...there.order, ...record.order.filter(id => !there.order.includes(id))]
+    records.splice(records.indexOf(record), 1)
+  } else record.path = next
+  if (into) ensureChannel(records, into)
+  const published = refile(path, next, false)
+  updateChannels(records)
+  set(refresh())
   return { path: next, published }
 }
 
@@ -370,9 +412,11 @@ export function moveChannel(path: string, into: string | null) {
 export function createChannel(inside?: string) {
   if (inside?.includes("/")) throw new DOMException("A channel inside a channel can't hold channels yet", "DataError")
   let n = 1, path = inside ? `${inside}/untitled` : "untitled"
-  while (channelByPath(path)) path = `${inside ? `${inside}/` : ""}untitled-${++n}`
-  ensureChannel(path)
-  set(bump())
+  while (channelRecords.some(channel => channel.path === path)) path = `${inside ? `${inside}/` : ""}untitled-${++n}`
+  const records = structuredClone(channelRecords)
+  ensureChannel(records, path)
+  updateChannels(records)
+  set(refresh())
   return path
 }
 
@@ -380,17 +424,17 @@ export function createChannel(inside?: string) {
 export function deleteChannel(path: string) {
   if (posts.some(p => channelsOf(p).some(c => c === path || c.startsWith(`${path}/`))) || channelRecords.some(c => c.path.startsWith(`${path}/`)))
     throw new DOMException(`“${path.replace("/", " › ")}” is not empty: move what is in it out first`, "DataError")
-  const i = channelRecords.findIndex(c => c.path === path)
-  if (i >= 0) channelRecords.splice(i, 1)
-  set(bump())
+  updateChannels(channelRecords.filter(channel => channel.path !== path))
+  set(refresh())
 }
 
 /** Takes a block out of a channel. Its first channel stays: moving it (moveBlock) changes that. */
 export function uncollect(id: string, path: string) {
-  const doc = byId(id)
+  const doc = draftOf(id)
   if (!doc?.channels?.includes(path)) return { removed: false }
   doc.channels = doc.channels.filter(c => c !== path)
-  set(bump())
+  persist(doc)
+  set(refresh())
   return { removed: true }
 }
 
@@ -400,32 +444,35 @@ export function uncollect(id: string, path: string) {
  * other people see is changed through the steps that ask first.
  */
 export function connectDocs(id: string, toId: string, why?: string) {
-  const doc = byId(id), target = byId(toId)
+  const doc = draftOf(id), target = byId(toId)
   if (!doc || !target || doc.kind !== "post" || target.kind !== "post") throw new DOMException("Only blocks connect to blocks", "DataError")
   if (doc.id === target.id) throw new DOMException("A block does not connect to itself", "DataError")
   if (doc.visibility !== "private") throw new DOMException("Connecting changes what others see; it is not part of this wireframe yet", "NotAllowedError")
   if (doc.connect?.some(c => c.to === target.slug)) return { added: false }
   doc.connect = [...(doc.connect ?? []), { to: target.slug, ...(why?.trim() ? { why: why.trim() } : {}) }]
   doc.updated = new Date().toISOString().slice(0, 10)
-  set(bump())
+  persist(doc)
+  set(refresh())
   return { added: true }
 }
 
 /** Says why a connection is there, or clears it. */
 export function setWhy(id: string, toSlug: string, why: string) {
-  const doc = byId(id)
+  const doc = draftOf(id)
   const c = doc?.connect?.find(c => c.to === toSlug)
   if (!doc || !c || doc.visibility !== "private") return
   if (why.trim()) c.why = why.trim(); else delete c.why
-  set(bump())
+  persist(doc)
+  set(refresh())
 }
 
 /** Takes a whole-block connection away. A link in the text is removed by editing the text. */
 export function disconnect(id: string, toSlug: string) {
-  const doc = byId(id)
+  const doc = draftOf(id)
   if (!doc?.connect || doc.visibility !== "private") return
   doc.connect = doc.connect.filter(c => c.to !== toSlug)
-  set(bump())
+  persist(doc)
+  set(refresh())
 }
 
 /** Opens a Markdown or text file as a new private page. */
@@ -452,26 +499,27 @@ export const toggleArchive = (id: string) => {
 
 /** Renames a page and keeps its slug so links and connections still resolve. */
 export function renameDoc(id: string, title: string) {
-  const doc = byId(id)
+  const doc = draftOf(id)
   if (!doc) return
   doc.title = title.trim()
   doc.updated = new Date().toISOString().slice(0, 10)
-  set(bump())
+  persist(doc)
+  set(refresh())
 }
 
 /** Removes a page from the vault. Taking a published one down from the repository is its own step. */
 export function deleteDoc(id: string) {
-  for (const list of [posts, all]) {
-    const i = list.findIndex(d => d.id === id)
-    if (i >= 0) list.splice(i, 1)
-  }
+  const held = blockVersion(id)
+  if (!held) return
+  editable().deleteBlock(held.ref, held.version)
+  bodyReplacements.delete(id)
   for (const s of Object.values(marks)) s.delete(id)
   const wasOpen = state.view.kind === "doc" && state.view.id === id
   // Take it out of history; the position moves back one if it was at or before where we are.
   const idx = state.history.indexOf(id)
   const history = state.history.filter(h => h !== id)
   const at = idx >= 0 && idx <= state.at ? state.at - 1 : state.at
-  set({ ...bump(), history, at, ...(state.reveal?.target === id ? { reveal: null } : {}) })
+  set({ ...refresh(), history, at, ...(state.reveal?.target === id ? { reveal: null } : {}) })
   if (!wasOpen) return
   // Deleting the open page lands on the page before it (or after it), never a blank editor.
   const landing = history[at] ?? history[at + 1]
@@ -487,33 +535,44 @@ export function deleteDoc(id: string) {
  * name. Folders are the owner's words; a published page's address follows on its next publish.
  */
 export function renameFolder(path: string, name: string) {
-  const [label, sublabel] = path.split("/")
   const next = name.trim().toLowerCase().replace(/\s+/g, "-")
-  let published = 0
   const to = [...path.split("/").slice(0, -1), next].join("/")
-  if (to !== path && channelByPath(to)) throw new DOMException(`There is already a channel “${to.replace("/", " › ")}”`, "DataError")
-  // The record keeps its id; the channels inside it follow.
-  for (const c of channelRecords) if (c.path === path || c.path.startsWith(`${path}/`)) c.path = to + c.path.slice(path.length)
-  for (const p of posts) {
-    // A channel of your own is renamed wherever a block was collected into it.
-    if (p.channels) p.channels = p.channels.map(c => (c === path ? to : c.startsWith(`${path}/`) ? to + c.slice(path.length) : c))
-    if (p.label !== label || (sublabel !== undefined && p.sublabel !== sublabel)) continue
-    if (sublabel === undefined) p.label = next
-    else p.sublabel = next
-    if (p.visibility !== "private") published++
-  }
-  set(bump())
+  if (to === path) return { published: 0 }
+  if (channelRecords.some(channel => channel.path === to)) throw new DOMException(`There is already a channel “${to.replace("/", " › ")}”`, "DataError")
+  const records = channelRecords.map(channel => ({ ...channel, path: replacePath(channel.path, path, to, true) }))
+  const published = refile(path, to, true)
+  updateChannels(records)
+  set(refresh())
   return { published }
+}
+
+const replacePath = (value: string, from: string, to: string, descendants: boolean) =>
+  value === from || (descendants && value.startsWith(`${from}/`)) ? to + value.slice(from.length) : value
+
+function refile(from: string, to: string, descendants: boolean) {
+  let published = 0
+  for (const doc of posts) {
+    const home = sectionOf(doc)
+    const next = replacePath(home, from, to, descendants)
+    const channels = doc.channels?.map(path => replacePath(path, from, to, descendants))
+    if (next === home && !channels?.some((path, index) => path !== doc.channels?.[index])) continue
+    const [label, sublabel] = next.split("/")
+    persist({ ...doc, label, sublabel, channels })
+    if (next !== home && doc.visibility !== "private") published++
+  }
+  return published
 }
 
 // ─── History: restore, revert, save, sessions (flows/history.md) ─────────────────────────────
 
-const bodyReplacements = new WeakMap<Doc, number>()
-export const bodyRevision = (doc: Doc) => bodyReplacements.get(doc) ?? 0
+const bodyReplacements = new Map<string, number>()
+let replacementSequence = 0
+let sourceRevision = 0
+export const bodyRevision = (doc: Doc) => bodyReplacements.get(doc.id) ?? sourceRevision
 
 function markRestored(doc: Doc) {
-  bodyReplacements.set(doc, bodyRevision(doc) + 1)
-  set({ ...bump(), restored: { id: doc.id, n: bodyRevision(doc) } })
+  bodyReplacements.set(doc.id, ++replacementSequence)
+  set({ ...refresh(), restored: { id: doc.id, n: bodyRevision(doc) } })
 }
 
 /**
@@ -522,16 +581,21 @@ function markRestored(doc: Doc) {
  * see changes only through the steps that ask first, so it is refused here.
  */
 export function restoreVersion(id: string, version: string, reason?: string) {
-  const doc = byId(id), s = snapshotAt(version)
+  const doc = draftOf(id)
+  const held = blockVersion(id)
   if (!doc) throw new DOMException("There is no such page", "NotFoundError")
-  if (!s) throw new DOMException("There is no such version", "NotFoundError")
   if (doc.visibility !== "private") throw new DOMException("Restoring changes what others see; it asks first, which is not part of this wireframe yet", "NotAllowedError")
-  applySnapshot(doc, s)
-  for (const c of channelsOf(doc)) ensureChannel(c)
+  const source = editable()
+  const entry = held && source.history(held.ref).find(entry => entry.version === version)
+  const snapshot = held
+    ? entry && snap(docOf(held.ref, source.readVersion(held.ref, entry.rev)).doc)
+    : demoJournal().linesFor(id).some(change => change.after === version) && demoJournal().snapshotAt(version)
+  if (!snapshot) throw new DOMException("There is no such version", "NotFoundError")
+  applySnapshot(doc, snapshot)
   doc.updated = new Date().toISOString().slice(0, 10)
-  pendingChange = { op: "restore", reason: reason?.trim() || `Restored version ${version}` }
+  persist(doc, { op: "restore", reason: reason?.trim() || `Restored version ${version}` })
   markRestored(doc)
-  return { id: doc.id, version, by: actor().name }
+  return { id: doc.id, version, by: demoJournal().actor().name }
 }
 
 /**
@@ -540,9 +604,10 @@ export function restoreVersion(id: string, version: string, reason?: string) {
  * restoring a whole version is the way. Like a restore, it is a new change, so it can be undone too.
  */
 export function revertChange(lineId: string) {
+  const { changeById, snapshotAt } = demoJournal()
   const line = changeById(lineId)
   if (!line) throw new DOMException("There is no such change", "NotFoundError")
-  const doc = byId(line.node)
+  const doc = draftOf(line.node)
   if (!doc) throw new DOMException("That page is gone; nothing to revert", "NotFoundError")
   if (doc.visibility !== "private") throw new DOMException("Reverting changes what others see; it asks first, which is not part of this wireframe yet", "NotAllowedError")
   if (!line.before || line.op === "create") throw new DOMException("This change made the page: to undo it, delete the page", "DataError")
@@ -553,9 +618,8 @@ export function revertChange(lineId: string) {
   const named = [...new Set(later.map(f => ({ body: "text", label: "first channel", sublabel: "first channel", connect: "connections" } as Record<string, string>)[f] ?? f))]
   if (later.length) throw new DOMException(`A later change also touched its ${named.join(" and ")}: restore a whole version instead`, "DataError")
   applySnapshot(doc, { ...now, ...Object.fromEntries(fields.map(f => [f, before[f]])) } as Snapshot)
-  for (const c of channelsOf(doc)) ensureChannel(c)
   doc.updated = new Date().toISOString().slice(0, 10)
-  pendingChange = { op: "revert", reason: `Reverted “${line.summary}” (${new Date(line.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })})` }
+  persist(doc, { op: "revert", reason: `Reverted “${line.summary}” (${new Date(line.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })})` })
   markRestored(doc)
   return { id: doc.id, reverted: line.id, fields }
 }
@@ -566,17 +630,18 @@ export const focusHistory = (id: string, line: string) => set({ historyFocus: { 
 /** Names the repository as it is now, so you or an agent can come back to it. It changes nothing. */
 export function saveNow(name: string, note?: string) {
   if (!name.trim()) throw new DOMException("A save needs a name", "DataError")
-  const line = saveJournal(name, note)
+  editable()
+  const line = demoJournal().save(name, note)
   set(bump())
   return { name: line.name, seq: line.seq }
 }
 
 /** An agent finishing a task: what it did, and the dead ends a later agent should not retry. */
 export function finishSession(done: string, deadEnds: DeadEnd[] = []) {
-  const who = actor()
+  const who = demoJournal().actor()
   if (who.kind !== "agent") throw new DOMException("Sessions are written by agents, when they finish a task", "NotAllowedError")
   if (!done.trim()) throw new DOMException("Say in one line what was done", "DataError")
-  const line = recordSession(who, done, deadEnds)
+  const line = demoJournal().recordSession(who, done, deadEnds)
   set(bump())
   return { session: line.id, changes: line.changes.length, deadEnds: line.deadEnds.length }
 }

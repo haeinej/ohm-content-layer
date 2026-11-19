@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 import { FolderGitIcon, InboxIcon } from "lucide-react"
-import { inbox } from "@/data/sample"
+import { inbox } from "@/data/workspace-data"
 import { NotificationCenter } from "./NotificationCenter"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Icon } from "@/components/ui/icon"

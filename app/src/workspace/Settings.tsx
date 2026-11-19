@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { notify } from "@/components/ui/notice"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { cortex, posts } from "@/data/sample"
+import { cortex, posts } from "@/data/workspace-data"
 import { SETTINGS_TABS, type SettingsTab } from "./settings-tabs"
 import { panelTitle } from "./Surface"
 import {

@@ -21,9 +21,13 @@ A light, Obsidian-like workspace, the first flow ([flows/workspace.md](flows/wor
   - **Dropping:** images go into the page; Markdown files open as new pages.
 
   Inbox items and settings open here too.
-- **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, so a real service can be connected behind it with `setSearchProvider`.
+- **Search** as a sheet over the workspace (⌘K). It goes through the `workspace.search` WebMCP tool's handler, and uses the same sample home as the editor and graph.
+
+Renaming a sample channel keeps its record and updates its path throughout the tree and graph.
 
 All data is synthetic. Run the app to explore a sample vault and cortex. Reloading restores the sample.
+
+To try saving and searching, create a block titled “Alder lantern”, add a line of text, and open Search. Search for “Alder lantern” to find the same block you just edited. This workspace uses the sample adapter, so those edits last for the current session. The service adapter is available for integrating signed-in vault access in the app. Private service files require an unlocked device and reach the service as ciphertext.
 
 The editor saves pending typing when you switch blocks. Restoring a version or reverting a change loads the resulting text. Links to a draft keep working after you rename it.
 
@@ -36,6 +40,8 @@ npm --prefix app run dev   # http://localhost:5190
 
 - [flows/paths.md](flows/paths.md): every interaction path, what it is for, its end state, and the WebMCP tool for it
 - [AGENTS.md](AGENTS.md): the rules every flow follows
+- Install the app from the repository root with `npm ci --prefix app`. Run `npm --prefix app run build` to build it and `npm --prefix app test` to run its tests. Both use the app install.
+- The editor, tree, graph, connections and search use the same sample home. Create a private draft and add it to a channel to see it in the tree and find it in search. Sample changes live in memory and reset on reload. [Data sources](docs/agents/home-source.md) describes the sample and service contracts.
 - [docs/design.md](docs/design.md): ohm-ux's design layer: one radius for every surface, density, compact menus
 - [docs/webmcp.md](docs/webmcp.md): the WebMCP API as of the 13 November 2026 draft, and what changed from earlier guides
 - [flows/TEMPLATE.md](flows/TEMPLATE.md): start a new flow by copying this

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 import { FileTextIcon } from "lucide-react"
 import { Icon } from "@/components/ui/icon"
-import { bySlug, titleOf, type Doc } from "@/data/sample"
+import { bySlug, titleOf, type Doc } from "@/data/workspace-data"
 
 // The page under the pointer, for anything that shades it (the tree reads this).
 let linked: string | null = null

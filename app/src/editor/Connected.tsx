@@ -8,7 +8,7 @@ import { ArrowDownLeftIcon, ArrowUpRightIcon, PlusIcon, XIcon } from "lucide-rea
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { notify } from "@/components/ui/notice"
-import { bySlug, incoming, outgoing, titleOf, type Doc, type Outgoing } from "@/data/sample"
+import { bySlug, incoming, outgoing, titleOf, type Doc, type Outgoing } from "@/data/workspace-data"
 import { connectDocs, disconnect, open, setWhy, useWorkspace } from "@/workspace/store"
 import { ConnectPicker } from "./ConnectPicker"
 

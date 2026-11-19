@@ -8,7 +8,7 @@
 // Every edge is the person's own: a link they wrote in a block's text (`[[slug]]`), or a connection
 // they made between whole blocks. Both are evidence, rebuilt from the content. What agents work out
 // about the person stays in the cortex and is not drawn here.
-import { bySlug, channelRecords, channelsOf, mentions, outgoing, owner, personByHandle, posts, sees, type Audience, type Doc, type Person } from "@/data/sample"
+import { channelRecords, channelsOf, docForEvidence, mentions, workspaceEvidence, owner, personByHandle, posts, sees, type Audience, type Doc, type Person } from "@/data/workspace-data"
 
 export type GraphNode = {
   id: string
@@ -92,14 +92,12 @@ export function buildGraph(filters: GraphFilters = {}): Graph {
     if (why && !held.why) held.why = why
     edges.set(key, held)
   }
-  for (const n of nodes.values()) {
-    for (const out of outgoing(n.doc)) {
-      const target = bySlug(out.slug)
-      if (!target) continue
-      if (out.inText && f.links) join(n.id, target.id, "links")
-      const whole = (n.doc.connect ?? []).some(c => c.to === out.slug)
-      if (whole && f.connections) join(n.id, target.id, "connects", out.why)
-    }
+  for (const edge of workspaceEvidence()) {
+    if (edge.kind !== "links") continue
+    const from = docForEvidence(edge.from), target = docForEvidence(edge.to)
+    if (!from || !target) continue
+    if (edge.at !== "connect" && f.links) join(from.id, target.id, "links")
+    if (edge.at === "connect" && f.connections) join(from.id, target.id, "connects", from.connect?.find(link => link.to === target.slug)?.why)
   }
   // How strongly: each way they are joined, and each channel they share.
   for (const e of edges.values()) {

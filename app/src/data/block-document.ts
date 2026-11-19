@@ -1,0 +1,44 @@
+import { isPostId, writeNoteFile } from "../../../vault/vault/file.mjs"
+import { nodeKey } from "../../../vault/vault/node.mjs"
+import { isBlockKind, type BlockKind } from "./block-kind"
+import { blockOf, type BlockRef, type HomeFile } from "./source"
+import { sectionOf, type Doc, type Platform } from "./workspace-model"
+
+export function fileOf(doc: Doc): HomeFile {
+  return {
+    path: `${sectionOf(doc)}/${doc.slug}.md`,
+    text: writeNoteFile({
+      properties: {
+        id: isPostId(doc.id) ? doc.id : undefined, kind: doc.visibility === "private" && (!doc.vaultKind || doc.vaultKind === "post") ? "text" : doc.vaultKind ?? "post",
+        title: doc.title, slug: doc.slug, channels: doc.channels, visibility: doc.visibility,
+        updated: doc.updated, connect: doc.connect?.map(each => each.to), icon: doc.icon, samplePlatform: doc.platform,
+        connectionNotes: doc.connect?.filter(each => each.why).map(each => `${each.to} ${each.why}`),
+      },
+      body: doc.body,
+    }),
+  }
+}
+
+export function docOf(ref: BlockRef, file: HomeFile): { doc: Doc; key: string; kind: BlockKind } {
+  const node = blockOf(file)
+  if (!node || !isBlockKind(node.kind)) throw new DOMException("Give a vault block file.", "DataError")
+  const props = ("post" in node ? node.post.properties : node.properties) as Record<string, unknown>
+  const rawConnections = "post" in node ? node.post.connect : props.connect
+  const notes = Array.isArray(props.connectionNotes) ? props.connectionNotes : []
+  const connect = [rawConnections ?? []].flat().map(String).map(to => {
+    const note = notes.find(value => typeof value === "string" && value.startsWith(`${to} `))
+    return { to, ...(note ? { why: note.slice(to.length + 1) } : {}) }
+  })
+  const [label, sublabel] = node.home.split("/")
+  return {
+    key: nodeKey(node), kind: node.kind,
+    doc: {
+      id: ref.id, kind: "post", vaultKind: node.kind, slug: node.slug, title: node.title ?? "",
+      label, sublabel, body: node.body, channels: node.channels, visibility: ref.layer,
+      connect: connect.length ? connect : undefined,
+      updated: ("post" in node ? typeof props.updated === "string" ? props.updated : node.post.date : node.updated) ?? new Date().toISOString().slice(0, 10),
+      icon: typeof props.icon === "string" ? props.icon : undefined,
+      platform: typeof props.samplePlatform === "string" ? props.samplePlatform as Platform : undefined,
+    },
+  }
+}
