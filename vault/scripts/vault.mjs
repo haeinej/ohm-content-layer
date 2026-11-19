@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { defaultVault } from '../../home/home.mjs';
 
@@ -61,7 +62,7 @@ if (!sqlite) {
     console.error('This Node has no SQLite. Use Node 22.13 or newer.');
     process.exit(1);
   }
-  const again = spawnSync(process.execPath, ['--experimental-sqlite', '--no-warnings=ExperimentalWarning', process.argv[1], ...process.argv.slice(2)], { stdio: 'inherit' });
+  const again = spawnSync(process.execPath, ['--experimental-sqlite', '--no-warnings=ExperimentalWarning', fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit' });
   process.exit(again.status ?? 1);
 }
 const { CONFIG, emptyConfig } = await import('../vault/roots.mjs');
