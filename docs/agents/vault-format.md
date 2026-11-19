@@ -6,7 +6,7 @@ Human guide: [docs/vault-format.md](../vault-format.md). Design and what comes n
 
 [vault/node.mjs](../../vault/node.mjs) reads and writes a vault folder as four kinds of nodes (block, channel, entity, source) and derives evidence edges from their content. It is pure: callers pass `{ path, text }` pairs and write what they get back. It does no I/O, indexing, sync or publishing, and it holds no inference: agent conclusions live in ohm-cortex, which refers to blocks by ID.
 
-**Implemented and tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)); read-only roots and the index ([test/indexer.test.mjs](../../test/indexer.test.mjs), real temporary folders and node:sqlite). Provenance and the cortex contract are tested in [test/provenance.test.mjs](../../test/provenance.test.mjs). **Not built:** two-way roots, the MCP tools, service storage for non-post blocks, and the change in ohm-cortex that would let it open this vault. The service, `syncFolder` and publishing still handle posts only.
+**Implemented and tested:** the format, round-trips, vault-wide checks and evidence ([test/node.test.mjs](../../test/node.test.mjs)); read-only roots and the index ([test/indexer.test.mjs](../../test/indexer.test.mjs), real temporary folders and node:sqlite). Provenance and the cortex contract are tested in [test/provenance.test.mjs](../../test/provenance.test.mjs). **Not built:** two-way roots, the MCP tools, and service storage for non-post blocks. The service, `syncFolder` and publishing still handle posts only.
 
 ## Schemas
 
@@ -106,17 +106,21 @@ How `scan` writes the journal: after walking, and **before** the index transacti
 
 ## Cortex contract
 
-[vault/cortex.mjs](../../vault/cortex.mjs): `cortexVault(vault, { DatabaseSync, fresh = true })` implements ohm-cortex's `src/vault.mjs` contract (`OPERATIONS`: `shape`, `read`, `exists`, `changes`, `profile`, `search`), plus `close()`.
-- With `fresh`, it scans before each answer; only changed files are read.
-- Compatibility with cortex's `folderVault`:
-  - **IDs:** `id ?? 'path:<node path>'`.
-  - **Channel:** `home || 'other'`. A channel counts every block under it.
-  - **Cursor:** the same shape, `{ [id]: { title, channel, hash } }`.
-  - **Hash:** `sha256(text).hex.slice(0,16)` for files with text (identical to cortex). Otherwise the content address, or `size:mtime` for reference-only files.
-  - **Legacy cursors:** `label`/`sublabel` entries are accepted.
-- Only `type = 'block'` nodes are blocks. `profile()` returns `[]`.
-- `search` uses the index ranking and returns at most 50.
-- Cortex cannot open it yet. `vaultFrom` in ohm-cortex knows only `{ kind: 'folder' }`, so a host must pass this object in, or cortex must learn a kind that loads it. That change belongs in ohm-cortex.
+[vault/cortex.mjs](../../vault/cortex.mjs): `openVault({ path })` (what ohm-cortex calls for `{ kind: 'module', module, path }`) and `cortexVault(vault, { home })`. They implement ohm-cortex's `src/vault.mjs` contract (`OPERATIONS`: `shape`, `read`, `exists`, `changes`, `profile` and `search`).
+- **Read-only, as cortex's rule 3 requires.** It never opens the index and writes no journal or cache. It walks the vault (only `.md` files and `_sources/*/source.json`) and each configured root itself, caching file text in memory by stat stamp. Reference-only roots are only `stat`ed. It does not depend on `node:sqlite`, and it loads on Node 22.12 without a flag.
+- **Compatibility with cortex's `folderVault`:**
+  - IDs are `id ?? 'path:<node path>'`.
+  - A block's channel is `home || 'other'`, and a channel counts every block under it.
+  - The cursor has the same shape, `{ [id]: { title, channel, hash } }`.
+  - The hash is `sha256(text).hex.slice(0,16)` (identical to cortex), or `size:mtime` for files whose text is not read.
+  - Legacy `label`/`sublabel` cursor entries are accepted.
+- Only blocks are blocks. `shape().problems` includes config problems, unreadable roots and `readVault` problems.
+- `search` ranks by distinct matched words, then weight: title, slug and tags count 2, body 1. It returns at most 50.
+- `profile()` returns `[]`.
+- **The cortex side** is on ohm-cortex branch `vault-module`.
+  - `vaultFrom` accepts `{ kind: 'module', module: <absolute file>, path: <absolute folder> }`, and `moduleVault` imports the file on first use and checks the vault it returns with `checkVault`.
+  - The CLI form is `cortex vault connect <folder> [dir] --module <file>`.
+- Verified end to end: on a vault holding `writing/_channel.md`, one essay and `_entities/person/ada.md`, cortex's folder reader reported 4 channels and counted the channel file and the entity as blocks. This reader reported 2 channels and the single block, and created no `.vault/`.
 
 ## Use
 

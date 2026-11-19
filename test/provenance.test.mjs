@@ -8,7 +8,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { addToVault, hookEvent } from '../vault/add.mjs';
-import { cortexVault, OPERATIONS } from '../vault/cortex.mjs';
+import { cortexVault, openVault, OPERATIONS } from '../vault/cortex.mjs';
 import { inspect, openIndex, scan } from '../vault/indexer.mjs';
 import { appendEvents, downloadedFrom, eventProblems, JOURNAL, readEvents } from '../vault/journal.mjs';
 import { CONFIG } from '../vault/roots.mjs';
@@ -151,7 +151,7 @@ test('an agent\'s hook journals what it wrote in the vault, and indexing says th
   assert.deepEqual(inspect(db, 'new').history.map(each => [each.op, each.by, each.via]), [['written', 'agent:claude-code', 'hook'], ['added', 'agent:claude-code', 'scan']]);
 });
 
-test('cortex reads this vault through its contract, the same way it read the folder', async t => {
+test('cortex reads this vault through its contract, the same way it read the folder, and writes nothing', async t => {
   const { base, vault, put } = await setup(t);
   await put('Vault/writing/_channel.md', '---\ntitle: Writing\n---\n');
   await put('Vault/writing/essays/long.md', '---\nid: 3mzocqfoc22if\ntitle: A long essay\n---\n\nAbout 서울 and rain.\n');
@@ -159,8 +159,8 @@ test('cortex reads this vault through its contract, the same way it read the fol
   await put('Vault/_entities/person/ada.md', 'Ada.\n');
   await put('queries/churn.sql', 'select 1;\n');
   await writeFile(join(vault, CONFIG), JSON.stringify({ roots: [{ name: 'queries', path: join(base, 'queries') }] }));
-  const cortex = cortexVault(vault, { DatabaseSync });
-  t.after(() => cortex.close());
+  const cortex = openVault({ path: vault });
+  assert.throws(() => openVault({}), /which vault folder/);
   for (const operation of OPERATIONS) assert.equal(typeof cortex[operation], 'function', operation);
 
   const shape = await cortex.shape();
@@ -192,4 +192,15 @@ test('cortex reads this vault through its contract, the same way it read the fol
   const { createHash } = await import('node:crypto');
   const text = await readFile(join(vault, 'writing/rain.md'), 'utf8');
   assert.equal(later.cursor['path:writing/rain.md'].hash, createHash('sha256').update(text).digest('hex').slice(0, 16));
+  // Reading for cortex wrote nothing: no journal, and the index setup made is still empty.
+  await assert.rejects(readFile(join(vault, JOURNAL)));
+  const { DatabaseSync: Database } = await import('node:sqlite');
+  const index = new Database(join(vault, '.vault/index.sqlite'));
+  assert.equal(index.prepare('SELECT COUNT(*) AS n FROM files').get().n, 0);
+  index.close();
+  // A reference-only root is listed without being opened, and an unreadable root is named, not fatal.
+  await writeFile(join(vault, CONFIG), JSON.stringify({ roots: [{ name: 'queries', path: join(base, 'queries'), retain: 'reference' }, { name: 'gone', path: join(base, 'gone') }] }));
+  const later2 = await cortexVault(vault).shape();
+  assert.ok(later2.channels.some(each => each.channel === 'queries'));
+  assert.match(later2.problems.join(), /"gone" .* cannot be read/);
 });

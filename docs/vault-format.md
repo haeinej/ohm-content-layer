@@ -165,9 +165,17 @@ The hook notes each file the agent writes inside the vault, and the next `vault 
 
 ## Using the vault from ohm-cortex
 
-ohm-cortex keeps what agents learn about you, and reads your vault to find what that learning rests on. It reads a vault through a small set of questions: what channels there are, one block, whether blocks still exist, what changed since last time, and a search. This vault answers them from its index (`vault/cortex.mjs`), so cortex sees blocks only (not channel files, entities or sources) and sees the blocks of your roots too. A block is known by its `id`, or by its path when it has none, exactly as cortex's own folder reader knows it, so nothing cortex remembers is lost by switching.
+ohm-cortex keeps what agents learn about you, and reads your vault to find what that learning rests on. It asks a vault a few questions: what channels there are, one block, whether blocks still exist, what changed since last time, and a search. Connect cortex to the vault with this vault's own reader:
 
-Today cortex itself opens only plain folders. Using this reader needs a small change in ohm-cortex: its `vaultFrom` has to accept a vault of this kind. Until then, connecting cortex to the vault folder works with cortex's own reader, which also reads `_channel.md` and entity files as if they were blocks.
+```sh
+cortex vault connect ~/Vault --module /path/to/ohm-vault/vault/cortex.mjs
+```
+
+With it, cortex sees blocks only, not channel files, entities or sources, and it sees the blocks of the folders your vault reads too. Without it, cortex's own reader would count `_channel.md` and entity files as blocks.
+
+**Switching loses nothing.** A block is known by its `id`, or by its path when it has none, exactly as cortex's own reader knows it, so what cortex already remembers still points to the right blocks.
+
+**Reading for cortex changes nothing.** It doesn't write the index, the journal or the cache, and it never opens a file in a reference-only folder. It needs no database, so it works on any Node that cortex runs on.
 
 ## What happens to your files
 

@@ -28,7 +28,7 @@ export const INDEX_VERSION = '2';
 export const TEXT_ENDINGS = new Set(['md', 'txt', 'csv', 'tsv', 'json', 'yaml', 'yml', 'toml', 'xml', 'html', 'css', 'sql', 'py', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'sh', 'rb', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cpp', 'r', 'ipynb']);
 // Of those, the ones that are code: a file of code in a root becomes a block of kind code.
 export const CODE_ENDINGS = new Set(['sql', 'py', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'sh', 'rb', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cpp', 'r', 'ipynb']);
-const ending = path => (/\.([A-Za-z0-9]{1,8})$/.exec(path)?.[1] ?? '').toLowerCase();
+export const ending = path => (/\.([A-Za-z0-9]{1,8})$/.exec(path)?.[1] ?? '').toLowerCase();
 const skipped = name => name.startsWith('.') || name === 'node_modules';
 
 const SCHEMA = `
@@ -107,7 +107,7 @@ export function words(text) {
 
 // ---- Scanning ----
 
-async function walk(root, takes) {
+export async function walk(root, takes) {
   const found = [];
   const visit = async relative => {
     let entries;
@@ -129,7 +129,7 @@ async function walk(root, takes) {
   return found.sort();
 }
 
-const stampOf = info => `${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+export const stampOf = info => `${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
 
 // Bring the index into line with the vault folder and its roots, and say what changed.
 //   vault: the vault's absolute path; db: from openIndex; home: for "~" in the configuration
@@ -280,7 +280,7 @@ async function journal(vault, db, report, lastScan) {
 
 // A file in a read-only root as a block: in the root's channel, under the folders it sits in there,
 // with `origin` saying where it is. A Markdown file whose text is kept is read as the block it is.
-function rootBlocks(root, rows) {
+export function rootBlocks(root, rows) {
   const files = [], nodes = [], where = new Map();
   for (const row of rows) {
     const folders = row.path.split('/').slice(0, -1);
