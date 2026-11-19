@@ -3,12 +3,9 @@
 const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 export const INSTRUCTIONS = [
-  "These tools work in one person's vault: everything they have written and made, as posts in one structure.",
-  'Every post is marked public (for everyone), for friends, or private. Private posts are theirs alone:',
-  'use what they say to help the person, and never put any of it into something other people can see.',
-  'New posts are saved private. A tool that would change a post that is not private, change who a post',
-  'is for, publish, bring posts in from their PDS, or remove one, first answers with what would happen and a confirm value: show that to the',
-  'person and call again only when they agree. Saving never publishes: publishing is a step of its own, public the moment it is done.',
+  "These tools reach the public and friends layers of one person's vault service. Private blocks stay on the person's device.",
+  'When a tool returns a preview and a confirm value, show the preview to the person and call again only when they agree.',
+  'Saving never publishes. A friends-only block is shared as soon as it is saved. The signed-in member manages who can become a friend.',
 ].join(' ');
 
 // `tools` is ready-made, or a function that makes them the first time a tool is used, so that

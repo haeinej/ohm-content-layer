@@ -1,18 +1,18 @@
 ---
 name: vault
-description: How to work in a person's vault with the vault's tools (the `ohm-vault` MCP server) - reading, searching, saving and editing their posts, and changing who one is for. Use whenever someone asks what they have written about something, wants a post saved or changed, or wants a post made public, shared with friends, or made private.
+description: How to work in a person's vault with the ohm-vault MCP tools. Use for local captures, vault search, Friends sharing, editing existing posts and publishing.
 ---
 
 # Working in a vault
 
-A vault is everything a person has written and made, in one structure: labels (the sections of their site), sublabels inside them (a series, an album), and posts inside those. The `ohm-vault` tools work in ohm's working copy of the person's vault, the same one the editor shows, as the person: each request carries a token from their own PDS.
+A vault holds blocks in channels. The service-backed `ohm-vault` tools use a PDS token to work with public and friends-only posts and the Friends layer. Run `ohm vault mcp` in a home for a separate stdio connection to the local vault. See the [local tool reference](../../docs/agents/vault-format.md#mcp-entry-points).
 
 ## Who a post is for
 
 | Visibility | Who it is for |
 | --- | --- |
 | `public` | Everyone |
-| `friends` | The people they follow who follow them back. There is no network for friends yet, so for now only the person |
+| `friends` | The DIDs the member added through their signed-in ohm session |
 | `private` | Only the person |
 
 The post is the same post at every visibility. Changing visibility marks it; it does not rewrite it.
@@ -21,9 +21,9 @@ The post is the same post at every visibility. Changing visibility marks it; it 
 
 ## The rules
 
-1. **Private posts are the person's alone.** You can read them, and they are often the best guide to what the person is thinking. Never put anything from a private post into something other people can see, such as a public post, a message, or a commit, unless the person tells you to use that passage.
-2. **New posts are private.** `vault_save` always creates a private post. Marking it for anyone else is a separate step the person asks for.
-3. **Two calls for anything other people are meant to see, and for bringing posts in.** `vault_set_visibility`, `vault_publish`, `vault_delete`, `vault_mirror`, and `vault_save` on a post that is not private first answer with what would happen and a `confirm` value. Show the person that answer in plain words: which post, and who it is for. Call again with the `confirm` value only when they agree.
+1. **Private reading is device-local.** Use the local tools in a vault the person selected. Never include private content in a post, message or commit unless the person approves the disclosure.
+2. **Capture new work locally.** `vault_capture` adds an HTTP(S) reference or an eligible configured-root file as a proposed block. `vault_save` edits existing public and friends-only posts.
+3. **Show the preview before the write.** `vault_set_visibility`, `vault_publish`, `vault_delete`, `vault_mirror`, `vault_save`, `vault_friends_save`, `vault_friends_delete` and `vault_friends_remove` use two calls when they change something. Show the answer and call with `confirm` only when the person agrees.
 4. **Read before you change.** `vault_read` gives a post's version, and `vault_save` needs it to change the post. If the save is refused because the post changed, read it again and redo the change on the new text; do not retry with the old text.
 5. **Use the person's own labels.** Look at `vault_tree` before filing a new post, and file it under a label they already use. Ask before inventing a new label.
 6. **Never choose a form.** What kind of thing a post is, is identified from its content.
@@ -64,14 +64,14 @@ A mirror copies each post as it was published. It does not file, and it does not
 
 | The person says | Do |
 | --- | --- |
-| "What have I written about X?" | `vault_search`, then `vault_read` the posts that matter. Say which are private |
-| "Save this" | `vault_tree` for the labels, then `vault_save` with a short slug. Tell them it is private |
+| "What have I written about X?" | Use `vault_search` and `vault_read` for shared posts, or `vault_local_search` and `vault_local_read` in the selected local vault |
+| "Save this address or file" | Use `vault_capture` and tell them where the proposed block landed |
 | "Change that post" | `vault_read`, then `vault_save` with the version and only the fields that change |
 | "File this under Y" | `vault_read`, then `vault_save` with the version and the new `label` or `sublabel` |
 | "Make it public" | `vault_set_visibility` to `public`: show what it answers, then confirm. Say that it is marked for everyone and not yet published |
 | "Publish" | `vault_publish`: say what would change, then confirm |
 | "What is not published yet?" | `vault_status` |
-| "Take that down" | `vault_set_visibility` to `private`, then `vault_publish`. Tell them copies others already made stay where they are |
+| "Take that down" | Ask who should still have access. For friends-only, preview and confirm `vault_set_visibility` to `friends`, then preview and confirm `vault_publish`. Moving into private storage requires the person on their device |
 | "Bring in my posts" / "sync from my site" | `vault_mirror`: say what it found, then confirm. Then file what landed under `other` |
 
 ## Setting up

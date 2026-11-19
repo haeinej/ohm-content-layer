@@ -9,7 +9,8 @@
 //          reported by its hook), copied-from (origin: the file it has the same bytes as),
 //          downloaded-from (origin: the address macOS recorded when it was downloaded)
 //   by     me, agent:<name>, or unknown: the vault says who only when it was told
-//   via    add (ohm vault add), hook (an agent's hook), scan (found by indexing), editor, sync
+//   via    add (ohm vault add or vault_capture), collect (vault_collect), hook (an agent's hook),
+//          scan (found by indexing), editor, sync
 import { execFile, spawn } from 'node:child_process';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -17,7 +18,7 @@ import { promisify } from 'node:util';
 
 export const JOURNAL = '.vault/journal.jsonl';
 export const OPS = ['added', 'changed', 'moved', 'removed', 'written', 'copied-from', 'downloaded-from'];
-export const VIAS = ['add', 'hook', 'scan', 'editor', 'sync'];
+export const VIAS = ['add', 'collect', 'hook', 'scan', 'editor', 'sync'];
 const BY = /^(?:me|unknown|agent:[A-Za-z0-9._-]+)$/;
 
 // Why an event cannot go in the journal. Empty when it can.

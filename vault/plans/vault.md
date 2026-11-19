@@ -139,5 +139,5 @@ These replace the `com.ohmmmm.brain.*` names in `personal-brain.md` (namespace d
 4. ~~Implement cortex's vault contract over the index.~~ Done: `vault/cortex.mjs` (read-only, no database, compatible with cortex's folder reader: ids, channels, cursor, hash), opened by ohm-cortex's new `module` vault kind (`cortex vault connect ~/Vault --module …/vault/cortex.mjs`, ohm-cortex branch `vault-module`).
    - Also done: provenance. `.vault/journal.jsonl` (append-only, not derived), `ohm vault add` (files and addresses, with `origin` and `by`), recognising dropped files by content address and by macOS's download record, and `ohm vault hook` for Claude Code's PostToolUse.
    - Next: storage by layer, in [encryption.md](encryption.md). Public on the PDS; friends readable on the vault service; private as ciphertext the server cannot read, with the keys on the member's devices. The editor saves to the layer a block is in, and `ohm vault sync` brings both stores to the folder. A local editor bridge (`ohm vault serve`) is not needed for now.
-5. Local MCP: `vault_search`, `vault_read`, `vault_neighbors`, `vault_capture`, `vault_collect`.
+5. Local MCP shipped in the repository as `ohm vault mcp`. See the [local tool reference](../docs/agents/vault-format.md#mcp-entry-points).
 6. ohm-ux graph reads the index instead of sample data.

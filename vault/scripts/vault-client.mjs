@@ -82,5 +82,13 @@ export function vaultClient({ pds, session, renew, vault, audience, get = fetch 
     get: id => ask('getPost', { query: { id } }),
     put: (post, replaces) => ask('putPost', { body: { post, ...(replaces ? { replaces } : {}) } }),
     remove: (id, replaces) => ask('deletePost', { body: { id, replaces } }),
+    listBlocks: since => ask('listBlocks', since === undefined ? {} : { query: { since } }),
+    getBlock: id => ask('getBlock', { query: { id } }),
+    putBlock: (block, replaces) => ask('putBlock', { body: { block, ...(replaces === undefined ? {} : { replaces }) } }),
+    deleteBlock: (id, replaces) => ask('deleteBlock', { body: { id, replaces } }),
+    listFriends: () => ask('listFriends'),
+    removeFriend: did => ask('removeFriend', { body: { did } }),
+    listShared: owner => ask('listShared', { query: { owner } }),
+    getShared: (owner, id) => ask('getShared', { query: { owner, id } }),
   };
 }

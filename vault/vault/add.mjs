@@ -72,7 +72,11 @@ export async function addToVault({ vault, source, channel = 'inbox', by = 'me', 
   const info = await stat(from).catch(() => null);
   if (!info) refuse(`There is no file at ${from}`);
   if (!info.isFile()) refuse('Add one file at a time. A folder can be read where it is by naming it as a root in .vault/config.json.');
-  const name = await freeName(folder, basename(from));
+  const original = basename(from);
+  // Vault metadata starts with a dot or underscore. A Markdown capture needs a block filename.
+  const name = await freeName(folder, /\.md$/i.test(original)
+    ? original.replace(/^[._]+/, '') || 'block.md'
+    : original);
   const target = join(folder, name);
   const place = async () => {
     if (!move) return copyFile(from, target, constants.COPYFILE_EXCL);
@@ -89,8 +93,9 @@ export async function addToVault({ vault, source, channel = 'inbox', by = 'me', 
   if (/\.md$/i.test(name)) {
     let text = await readFile(from, 'utf8');
     // A note that already says where it came from keeps that; this copy is recorded in the journal.
-    const held = readProperties(splitFile(text).head).properties.origin;
-    if (held === undefined || held === null || held === '') text = setProperty(text, 'origin', from);
+    const held = readProperties(splitFile(text).head).properties;
+    if (held.origin === undefined || held.origin === null || held.origin === '') text = setProperty(text, 'origin', from);
+    if (!move && held.id !== undefined) text = setProperty(text, 'id', newNodeId(now.valueOf()));
     for (const [key, value] of Object.entries({ ...(title ? { title } : {}), ...marks })) text = setProperty(text, key, value);
     await writeFile(target, text, { flag: 'wx' });
     if (move) await unlink(from);

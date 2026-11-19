@@ -15,14 +15,17 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { blobCid, FILE_TYPES, kindOf as mediaKind } from './core.mjs';
 import { slugOf } from './file.mjs';
-import { evidence, nodeKey, originKind, readVault } from './node.mjs';
+import { evidence, nodeKey, originKind, readVault, SOURCES } from './node.mjs';
 import { appendEvents, downloadedFrom, readEvents } from './journal.mjs';
 import { CANONICAL, CONFIG, readConfig } from './roots.mjs';
+import { words } from './words.mjs';
+
+export { words } from './words.mjs';
 
 export const INDEX = '.vault/index.sqlite';
 export const CACHE = '.vault/cache';
-// Raise this when the tables change; an index of another version is rebuilt from the files.
-export const INDEX_VERSION = '2';
+// Raise this when the tables or stored file content change.
+export const INDEX_VERSION = '3';
 
 // Endings whose files are text: their words are searchable when a root keeps text.
 export const TEXT_ENDINGS = new Set(['md', 'txt', 'csv', 'tsv', 'json', 'yaml', 'yml', 'toml', 'xml', 'html', 'css', 'sql', 'py', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'sh', 'rb', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cpp', 'r', 'ipynb']);
@@ -78,31 +81,6 @@ export async function openIndex(vault, { DatabaseSync }) {
     await rename(file, `${file}.damaged-${Date.now()}`).catch(() => {});
     return fresh();
   }
-}
-
-// ---- Words ----
-
-const CJK = /[ᄀ-ᇿ぀-ヿ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿]/u;
-// The words of a text, lower case. Korean, Japanese and Chinese have no spaces to split on, so a run
-// of them is taken two characters at a time, as the cortex does.
-export function words(text) {
-  const out = [];
-  for (const run of String(text ?? '').toLowerCase().normalize('NFKC').match(/[\p{L}\p{N}_]+/gu) ?? []) {
-    let plain = '';
-    const chars = [...run];
-    for (let at = 0; at < chars.length; at++) {
-      if (!CJK.test(chars[at])) { plain += chars[at]; continue; }
-      if (plain) { out.push(plain); plain = ''; }
-      let end = at;
-      while (end < chars.length && CJK.test(chars[end])) end++;
-      const cjk = chars.slice(at, end);
-      if (cjk.length === 1) out.push(cjk[0]);
-      for (let pair = 0; pair + 1 < cjk.length; pair++) out.push(cjk[pair] + cjk[pair + 1]);
-      at = end - 1;
-    }
-    if (plain) out.push(plain);
-  }
-  return out;
 }
 
 // ---- Scanning ----
@@ -191,7 +169,8 @@ export async function scan({ vault, db, home = homedir(), now = new Date() }) {
           const bytes = await readFile(abs);
           report.opened++;
           hash = await blobCid(bytes);
-          if (textual && (place.name === CANONICAL ? ending(path) === 'md' : true)) content = bytes.toString('utf8');
+          const ownNode = ending(path) === 'md' || (path.startsWith(`${SOURCES}/`) && path.endsWith('/source.json'));
+          if (textual && (place.name !== CANONICAL || ownNode)) content = bytes.toString('utf8');
           if (place.retain === 'full' && place.name !== CANONICAL) {
             const target = join(vault, CACHE, hash);
             if (!(await lstat(target).catch(() => null))) {

@@ -124,9 +124,9 @@ export function capabilitiesPage() {
     '',
     'Three rules hold for every tool that changes something:',
     '',
-    '1. A new post is always private.',
-    '2. Changing a post that is not private, changing who a post is for, publishing, bringing posts in from the PDS, and removing a post each take two calls. The first answers with what would happen and a `confirm` value; only a second call carrying that value does it.',
-    '3. A post is changed from the version that was read. If it has changed since, the tool says so and nothing is saved.',
+    '1. Create private blocks on the person\'s device. Service-backed tools expose only the public and friends layers.',
+    '2. Changing a post, publishing, bringing posts in from the PDS, saving or removing a friends block, and removing a friend each take two calls. The first gives a preview and a `confirm` value for the second call.',
+    '3. A post or friends block is changed from the version that was read. If it has changed since, the tool refuses the write.',
     '',
     '### Requests with no tool',
     '',
@@ -138,7 +138,7 @@ export function capabilitiesPage() {
     '',
     '## Not here yet',
     '',
-    'Attachments held by the vault, serving friends-only posts to friends, earlier versions of a post and bringing a removed one back, and a key a person can give an agent and take away again. Until there is such a key, an agent signs in with an app password from the person\'s PDS.',
+    'Attachments held by the vault, earlier versions of a post and bringing a removed one back, and a key a person can give an agent and take away again. Until there is such a key, an agent signs in with an app password from the person\'s PDS.',
     '',
   );
   return lines.join('\n');
@@ -147,7 +147,8 @@ export function capabilitiesPage() {
 const NO_TOOL = {
   'com.ohmmmm.vault.listPosts': 'It is for keeping a copy in step: every post\'s version, and what changed since. The tools read the structure instead',
   Export: 'The command line and the editor write the vault out. An agent reads posts one at a time',
-  Friends: 'Agents reach the friends layer through the local vault folder and its sync, which are not built for it yet; adding a friend stays with the member in the editor',
+  'com.ohmmmm.vault.addFriend': 'Only the member can widen who can read the friends layer, through their ohm session',
+  Private: 'Private contents never reach the service readable. Agents read them only on the person\'s device, after unlock',
   Account: 'It rides on an ohm session, which an agent does not have',
   Identity: 'It is part of signing in',
 };
