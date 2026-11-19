@@ -1,56 +1,27 @@
 {
-  "name": "ohm",
-  "version": "0.1.0",
-  "description": "Build your own home on AT Protocol from the website you already have: your own PDS, one post schema shared by every site, and your own optional schemas, readable by other AT Protocol applications.",
+  "name": "ohmmmm",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/haeinej/ohm-vault.git"
-  },
+  "description": "A person's home, ohmmmm.<handle>: their vault (blocks and channels) and their cortex (what an agent knows about them), side by side, under one contract.",
   "bin": {
-    "ohm": "bin/ohm.mjs"
-  },
-  "files": [
-    "bin",
-    "scripts",
-    "feed",
-    "vault",
-    "service/public/vault/publish.js",
-    "mcp",
-    ".mcp.json",
-    "mirror",
-    "lexicons",
-    "site",
-    "skills",
-    "docs",
-    ".claude-plugin",
-    "AGENTS.md"
-  ],
-  "engines": {
-    "node": ">=22"
+    "ohm": "vault/bin/ohm.mjs",
+    "cortex": "cortex/bin/cortex.mjs",
+    "ohmmmm": "bin/ohmmmm.mjs"
   },
   "scripts": {
-    "configure": "node scripts/configure.mjs",
-    "lexicon": "node scripts/lexicon.mjs",
-    "import": "node scripts/import.mjs",
-    "sync": "node scripts/sync.mjs",
-    "capabilities": "node scripts/capabilities.mjs --write",
-    "migrate": "node scripts/migrate.mjs",
-    "publish:post": "node scripts/publish.mjs",
-    "identity": "node scripts/identity.mjs",
-    "posts": "node scripts/posts.mjs",
-    "profile": "node scripts/profile.mjs",
-    "snapshot": "node scripts/snapshot.mjs",
-    "test": "node --experimental-sqlite --test",
-    "render": "node scripts/render.mjs"
+    "test": "npm run test:home && npm --prefix vault test && npm --prefix cortex test",
+    "test:home": "node --experimental-sqlite --no-warnings=ExperimentalWarning --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.13"
   },
   "dependencies": {
     "markdown-it": "15.0.3",
     "markdown-it-footnote": "4.0.0"
   },
-  "devDependencies": {
-    "parse5": "^8.1.1",
-    "wrangler": "^4.161.0"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haeinej/ohm-vault.git"
   }
 }

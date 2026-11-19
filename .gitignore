@@ -1,14 +1,2 @@
 node_modules/
-dist/
-.wrangler/
-.wrangler-auth/
-.dev.vars*
-.env*
-!.env.example
-.account-password
-*.secrets.json
-worker-configuration.d.ts
 .DS_Store
-feed/wrangler.site.jsonc
-service/wrangler.deploy.jsonc
-.claude/
