@@ -1,6 +1,6 @@
-# Design decisions in ohm-ux
+# Design decisions in the app
 
-ohm-ux uses ohm-ui as it is (its `DESIGN.md` outranks this file) and adds one layer of its own, `src/theme.css`. This file says what that layer decides and why.
+The app uses ohm-ui as it is (its `DESIGN.md` outranks this file) and adds one layer of its own, `src/theme.css`. This file says what that layer decides and why.
 
 ## One radius for every surface
 
@@ -47,7 +47,7 @@ The cortex and vault rows and every tree row under them share one shade (`.ux-ro
 
 ## Cortex and vault
 
-They have their own icons, drawn in ohm-ux (`src/workspace/PrimeIcon.tsx`), not folders and not Lucide's:
+They have their own icons, drawn in the app (`src/workspace/PrimeIcon.tsx`), not folders and not Lucide's:
 - **Cortex:** a minimal brain, two lobes with a seam.
 - **Vault:** a minimal rounded box with a dot.
 
