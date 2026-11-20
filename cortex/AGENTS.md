@@ -43,5 +43,5 @@ docs/guide.md      the words, evidence and history, explained for people and age
 - Run `npm test` after every change, and add a test for every rule you enforce. A test names the behaviour in plain words.
 - Errors an agent may see are `Refused` with a code and a message that says what to do next.
 - Keep the plan true: when you build a step, update its row in "What exists now" and mark it done in the build order.
-- Work on a branch and open a pull request. Do not push to `main`. CI runs `npm test` on Node 20 and 22 for every pull request.
+- Work on a branch and open a pull request. Do not push to `main`. CI runs `npm test` on Node 22 for every pull request; the cortex itself still runs on Node 20 or newer.
 - If you were given a brief in [docs/handoff/](docs/handoff/), work only on it, and follow its rules for the files shared with other agents.

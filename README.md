@@ -48,6 +48,8 @@ npx github:haeinej/ohmmmm cortex status             # the cortex finds ./cortex,
 
 Inside a home, or with `OHMMMM_HOME` set, the vault and the cortex each find their own folder, and a cortex reads its sibling vault through the vault's reader unless `.cortex/vault.json` names another. Either folder still works on its own.
 
+Two MCP servers, both named `ohm-vault`, give agents the vault. `ohmmmm mcp` serves the service-backed tools for public posts and the Friends layer; it has no tool that adds a friend, and never returns private content. `ohmmmm vault mcp` serves the local vault in a home over stdio: search, read, neighbors, capture, collect and index ([vault/docs/agents/vault-format.md](vault/docs/agents/vault-format.md#mcp-entry-points)).
+
 To use it from Claude Code, add this repository as a plugin marketplace; the plugin is the vault's ([vault/.claude-plugin/](vault/.claude-plugin/plugin.json)).
 
 ## How the parts meet
@@ -61,7 +63,7 @@ To use it from Claude Code, add this repository as a plugin marketplace; the plu
 
 ```sh
 npm ci --prefix vault && npm ci --prefix vault/service && npm ci --prefix app
-npm test            # home, vault and cortex tests, followed by app typecheck and build
+npm test            # home, vault and cortex tests, then the app typecheck, build and tests
 npm --prefix app run dev  # open http://localhost:5190
 ```
 

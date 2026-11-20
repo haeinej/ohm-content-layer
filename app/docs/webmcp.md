@@ -1,4 +1,4 @@
-# WebMCP, as ohm-ux uses it
+# WebMCP, as the app uses it
 
 Source: [WebMCP, Draft Community Group Report, 13 November 2026](https://webmachinelearning.github.io/webmcp/), W3C Web Machine Learning Community Group. It is not a W3C Standard. The API has changed between drafts, so check the draft before changing [src/webmcp.ts](../src/webmcp.ts).
 
@@ -61,6 +61,6 @@ dictionary ModelContextRegisterToolOptions {
 
 ## What the spec leaves to us
 
-The spec says annotations are hints, and that a hostile or careless page can leave them out. It does not require the browser to ask the person before a consequential tool runs. So ohm-ux makes approval part of the tool itself (rules 11 and 12 in [AGENTS.md](../AGENTS.md)): the page asks the person, whatever the agent does.
+The spec says annotations are hints, and that a hostile or careless page can leave them out. It does not require the browser to ask the person before a consequential tool runs. So the app makes approval part of the tool itself (rules 11 and 12 in [AGENTS.md](../AGENTS.md)): the page asks the person, whatever the agent does.
 
 Its security section names these risks: prompt injection through tool metadata and results, tools that do something other than what they say, and privacy leaks through tools that ask for more input than they need. Rules 6, 9, 15 and 17 answer them.
